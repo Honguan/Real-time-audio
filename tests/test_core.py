@@ -8,7 +8,7 @@ from realtime_audio_translator.audio import device_name_from_label
 from realtime_audio_translator.commands import parse_help_options
 from realtime_audio_translator.config import DEFAULT_CONFIG, ensure_app_dirs, load_config, save_config
 from realtime_audio_translator.engine import RealtimeEngine
-from realtime_audio_translator.gui import format_overlay_line
+from realtime_audio_translator.gui import format_overlay_line, swap_language_values
 from realtime_audio_translator.logbook import ConversationLog
 from realtime_audio_translator.models import recommend_model
 from realtime_audio_translator.providers import build_google_translate_request, build_openai_translation_request
@@ -77,6 +77,9 @@ class CoreTests(unittest.TestCase):
     def test_format_overlay_line_can_show_language(self):
         self.assertEqual(format_overlay_line("hello", "en", True), "en: hello")
         self.assertEqual(format_overlay_line("hello", "en", False), "hello")
+
+    def test_swap_language_values(self):
+        self.assertEqual(swap_language_values("zh", "en"), ("en", "zh"))
 
     def test_engine_reports_segment_latency(self):
         statuses = []

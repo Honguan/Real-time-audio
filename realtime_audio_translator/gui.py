@@ -19,6 +19,10 @@ def format_overlay_line(text: str, language: str, show_language: bool) -> str:
     return f"{language}: {text}" if show_language and text else text
 
 
+def swap_language_values(source_language: str, target_language: str) -> tuple[str, str]:
+    return target_language, source_language
+
+
 class Overlay(tk.Toplevel):
     def __init__(self, master: tk.Tk, topmost: bool):
         super().__init__(master)
@@ -118,6 +122,7 @@ class TranslatorApp(tk.Tk):
         buttons.grid(row=next_row + 3, column=0, columnspan=3, sticky="ew", pady=12)
         for text, command in (
             ("Refresh", self._refresh_lists),
+            ("Swap languages", self._swap_languages),
             ("Recommend model", self._recommend),
             ("Update command config", self._refresh_commands),
             ("API test", self._test_api),
@@ -138,6 +143,12 @@ class TranslatorApp(tk.Tk):
         for key, widget in self.comboboxes.items():
             widget.configure(values=models if key == "model" else devices)
         self._refresh_runtime_status()
+
+    def _swap_languages(self) -> None:
+        source, target = swap_language_values(self.vars["source_language"].get(), self.vars["target_language"].get())
+        self.vars["source_language"].set(source)
+        self.vars["target_language"].set(target)
+        self._save()
 
     def _config_from_vars(self) -> dict:
         config = self.config.copy()
