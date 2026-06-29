@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+build/
+dist/
+*.spec
+installer-output/
+.pytest_cache/
+
+/.realtime-audio/
+/_models/
+/_xxl_data/
+/cuBLAS and cuDNN/
+/faster-whisper-xxl.exe
+/ffmpeg.exe
+/help.txt
+/One Click Transcribe*.bat
