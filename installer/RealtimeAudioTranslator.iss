@@ -12,8 +12,10 @@ DefaultDirName={autopf}\Realtime Audio Translator
 DefaultGroupName={#MyAppName}
 OutputDir=..\installer-output
 OutputBaseFilename=RealtimeAudioTranslatorSetup
-Compression=lzma
-SolidCompression=yes
+Compression=none
+SolidCompression=no
+DiskSpanning=yes
+DiskSliceSize=2000000000
 WizardStyle=modern
 SetupIconFile=..\assets\icon.ico
 
