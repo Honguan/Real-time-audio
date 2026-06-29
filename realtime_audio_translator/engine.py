@@ -40,6 +40,7 @@ class RealtimeEngine:
             APP_DIR / "models",
             self.config["device"],
             self.config["compute_type"],
+            self.config,
         )
         self._start_direction("speaker", self.config.get("speaker_device", ""), True)
         self._start_direction("me", self.config.get("microphone_device", ""), False)

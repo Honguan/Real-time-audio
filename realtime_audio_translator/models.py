@@ -26,6 +26,8 @@ def recommend_model(cuda_devices: int, vram_gb: int, prefer_quality: bool = Fals
 
 
 def download_model(exe_path: Path, model: str, model_dir: Path) -> int:
+    if not exe_path.exists():
+        raise FileNotFoundError(exe_path)
     model_dir.mkdir(parents=True, exist_ok=True)
     probe = model_dir / "probe.wav"
     if not probe.exists():

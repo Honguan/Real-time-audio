@@ -11,7 +11,10 @@ py -3.10 -m PyInstaller `
   --windowed `
   --name RealtimeAudioTranslator `
   --icon assets\icon.ico `
-  --add-data "_xxl_data;_xxl_data" `
-  --add-binary "faster-whisper-xxl.exe;." `
-  --add-binary "ffmpeg.exe;." `
+  --hidden-import numpy `
+  --hidden-import sounddevice `
+  --hidden-import cffi `
+  --hidden-import google.auth `
+  --hidden-import google.oauth2.service_account `
+  --hidden-import google.auth.transport.requests `
   realtime_audio_translator\__main__.py

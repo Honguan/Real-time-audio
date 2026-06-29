@@ -5,18 +5,39 @@ Windows 即時雙向語音翻譯工具。它擷取目前喇叭與麥克風聲音
 ## 需求
 
 - Windows 10/11
-- Python 3.10 launcher：`py -3.10`
 - VB-Audio Virtual Cable
 - Google Cloud 服務帳戶 JSON，並啟用 Cloud Translation 與 Text-to-Speech
 - 可選：`OPENAI_API_KEY`
 - 可選打包：Inno Setup，需可執行 `iscc.exe`
 
+## Runtime
+
+精簡安裝包不內建 Whisper runtime、CUDA DLL 或模型。
+
+1. 下載 Faster-Whisper-XXL：<https://github.com/Purfview/whisper-standalone-win/releases>
+2. 下載 Windows CUDA12 套件：`cuBLAS.and.cuDNN_CUDA12_win_v3.7z`
+3. 解壓後把 `faster-whisper-xxl.exe` 與 CUDA12 DLL 放到：
+
+```text
+%USERPROFILE%\.realtime-audio\runtime
+```
+
+模型仍由工具下載或放到：
+
+```text
+%USERPROFILE%\.realtime-audio\models
+```
+
 ## 使用
+
+開發模式：
 
 ```powershell
 py -3.10 -m pip install -r requirements.txt
 py -3.10 -m realtime_audio_translator
 ```
+
+發布版安裝後直接從開始選單啟動。
 
 第一次啟動會建立：
 
@@ -35,7 +56,7 @@ py -3.10 -m realtime_audio_translator
 
 ## 模型
 
-工具會優先使用 `%USERPROFILE%\.realtime-audio\models`，也會讀取目前資料夾的 `_models`。推薦模式在 RTX 4060 Laptop 4GB VRAM 這類硬體上預設選 `large-v3-turbo`；CPU 或低 VRAM 則選 `medium`。
+工具會優先使用 `%USERPROFILE%\.realtime-audio\models`，開發模式也會讀取目前資料夾的 `_models`。推薦模式在 RTX 4060 Laptop 4GB VRAM 這類硬體上預設選 `large-v3-turbo`；CPU 或低 VRAM 則選 `medium`。
 
 ## 打包
 
@@ -51,11 +72,11 @@ py -3.10 -m realtime_audio_translator
 .\scripts\package.ps1
 ```
 
-缺少 Inno Setup 時，腳本會提示安裝 `iscc.exe`，不會自動修改系統。
+缺少 Inno Setup 時，腳本會提示安裝 `iscc.exe`，不會自動修改系統。精簡版只輸出單一 `RealtimeAudioTranslatorSetup.exe`。
 
 ## 限制
 
 - 第一版只支援 Windows。
 - 接近即時代表約 1.5 到 3 秒延遲，取決於模型、GPU、API 與網路。
 - Google TTS 與翻譯需要網路與有效憑證。
-- `faster-whisper-xxl.exe --help` 用於產生 `commands.json` 與備援；主即時路徑直接載入 `_xxl_data` 內的套件。
+- 開發模式會優先載入本資料夾 `_xxl_data`；發布版使用 `%USERPROFILE%\.realtime-audio\runtime\faster-whisper-xxl.exe` 備援辨識。
