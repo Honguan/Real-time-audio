@@ -80,6 +80,7 @@ class TranslatorApp(tk.Tk):
             ("TTS output", "tts_output_device"),
             ("Google project", "google_project_id"),
             ("Google JSON", "google_service_account_json"),
+            ("Segment seconds", "segment_seconds"),
             ("Runtime dir", "runtime_dir"),
         ]
         for row, (label, key) in enumerate(rows):
@@ -95,19 +96,20 @@ class TranslatorApp(tk.Tk):
             if key == "runtime_dir":
                 ttk.Button(frame, text="Select", command=self._pick_runtime_dir).grid(row=row, column=2, sticky="ew")
 
-        ttk.Label(frame, textvariable=self.runtime_text, foreground="#a94442").grid(row=12, column=0, columnspan=3, sticky="ew", pady=4)
+        next_row = len(rows)
+        ttk.Label(frame, textvariable=self.runtime_text, foreground="#a94442").grid(row=next_row, column=0, columnspan=3, sticky="ew", pady=4)
 
         runtime_buttons = ttk.Frame(frame)
-        runtime_buttons.grid(row=13, column=0, columnspan=3, sticky="ew", pady=4)
+        runtime_buttons.grid(row=next_row + 1, column=0, columnspan=3, sticky="ew", pady=4)
         ttk.Button(runtime_buttons, text="Open runtime folder", command=self._open_runtime_dir).pack(side="left", padx=3)
         ttk.Button(runtime_buttons, text="Import extracted runtime", command=self._import_runtime).pack(side="left", padx=3)
         ttk.Button(runtime_buttons, text="Download Faster-Whisper-XXL", command=lambda: webbrowser.open(RUNTIME_RELEASE_URL)).pack(side="left", padx=3)
 
-        ttk.Checkbutton(frame, text="Overlay topmost", variable=self.overlay_topmost, command=self._apply_overlay).grid(row=14, column=0, sticky="w")
-        ttk.Checkbutton(frame, text="Record logs", variable=self.record_logs).grid(row=14, column=1, sticky="w")
+        ttk.Checkbutton(frame, text="Overlay topmost", variable=self.overlay_topmost, command=self._apply_overlay).grid(row=next_row + 2, column=0, sticky="w")
+        ttk.Checkbutton(frame, text="Record logs", variable=self.record_logs).grid(row=next_row + 2, column=1, sticky="w")
 
         buttons = ttk.Frame(frame)
-        buttons.grid(row=15, column=0, columnspan=3, sticky="ew", pady=12)
+        buttons.grid(row=next_row + 3, column=0, columnspan=3, sticky="ew", pady=12)
         for text, command in (
             ("Refresh", self._refresh_lists),
             ("Recommend model", self._recommend),
@@ -121,7 +123,7 @@ class TranslatorApp(tk.Tk):
         ):
             ttk.Button(buttons, text=text, command=command).pack(side="left", padx=3)
 
-        ttk.Label(frame, textvariable=self.status).grid(row=16, column=0, columnspan=3, sticky="ew")
+        ttk.Label(frame, textvariable=self.status).grid(row=next_row + 4, column=0, columnspan=3, sticky="ew")
         frame.grid_columnconfigure(1, weight=1)
 
     def _refresh_lists(self) -> None:
