@@ -51,6 +51,8 @@ class RealtimeEngine:
         self.running = False
         for worker in self.workers:
             worker.stop()
+        self.workers.clear()
+        self.threads.clear()
         self.status("stopped")
 
     def set_paused(self, paused: bool) -> None:

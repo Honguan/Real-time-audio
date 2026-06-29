@@ -123,11 +123,14 @@ class CoreTests(unittest.TestCase):
         worker = Worker()
         engine.running = True
         engine.workers = [worker]
+        engine.threads = [object()]
 
         engine.stop()
 
         self.assertFalse(engine.running)
         self.assertTrue(worker.stopped)
+        self.assertEqual(engine.workers, [])
+        self.assertEqual(engine.threads, [])
 
 
 if __name__ == "__main__":
