@@ -16,7 +16,8 @@ Windows 即時雙向語音翻譯工具。它擷取目前喇叭與麥克風聲音
 
 1. 下載 Faster-Whisper-XXL：<https://github.com/Purfview/whisper-standalone-win/releases>
 2. 下載 Windows CUDA12 套件：`cuBLAS.and.cuDNN_CUDA12_win_v3.7z`
-3. 解壓後把 `faster-whisper-xxl.exe` 與 CUDA12 DLL 放到：
+3. 解壓 Faster-Whisper-XXL 與 CUDA12 套件。
+4. 在 GUI 按 `Import extracted runtime` 選擇解壓後含 `faster-whisper-xxl.exe` 的資料夾，工具會複製到：
 
 ```text
 %USERPROFILE%\.realtime-audio\runtime

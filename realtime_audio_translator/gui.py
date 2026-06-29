@@ -12,7 +12,7 @@ from .engine import RealtimeEngine
 from .models import list_models, recommend_model
 from .paths import resource_root
 from .providers import Translator, google_access_token
-from .runtime import RUNTIME_RELEASE_URL, runtime_dir, runtime_status, whisper_exe
+from .runtime import DEFAULT_RUNTIME_DIR, RUNTIME_RELEASE_URL, install_runtime_from, runtime_dir, runtime_status, whisper_exe
 
 
 class Overlay(tk.Toplevel):
@@ -100,6 +100,7 @@ class TranslatorApp(tk.Tk):
         runtime_buttons = ttk.Frame(frame)
         runtime_buttons.grid(row=13, column=0, columnspan=3, sticky="ew", pady=4)
         ttk.Button(runtime_buttons, text="Open runtime folder", command=self._open_runtime_dir).pack(side="left", padx=3)
+        ttk.Button(runtime_buttons, text="Import extracted runtime", command=self._import_runtime).pack(side="left", padx=3)
         ttk.Button(runtime_buttons, text="Download Faster-Whisper-XXL", command=lambda: webbrowser.open(RUNTIME_RELEASE_URL)).pack(side="left", padx=3)
 
         ttk.Checkbutton(frame, text="Overlay topmost", variable=self.overlay_topmost, command=self._apply_overlay).grid(row=14, column=0, sticky="w")
@@ -166,6 +167,20 @@ class TranslatorApp(tk.Tk):
         path = runtime_dir(self._config_from_vars())
         path.mkdir(parents=True, exist_ok=True)
         subprocess.Popen(["explorer", str(path)])
+
+    def _import_runtime(self) -> None:
+        source = filedialog.askdirectory(title="Select extracted Faster-Whisper-XXL folder")
+        if not source:
+            return
+        try:
+            target = install_runtime_from(Path(source), DEFAULT_RUNTIME_DIR)
+        except Exception as exc:
+            messagebox.showerror("Runtime import failed", str(exc))
+            return
+        self.vars["runtime_dir"].set(str(target))
+        self._save()
+        self._refresh_runtime_status()
+        self.status.set("runtime imported")
 
     def _refresh_runtime_status(self) -> None:
         status = runtime_status(runtime_dir(self._config_from_vars()))

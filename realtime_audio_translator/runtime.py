@@ -1,3 +1,4 @@
+import shutil
 from pathlib import Path
 
 from .config import APP_DIR
@@ -35,3 +36,16 @@ def runtime_status(root: Path = DEFAULT_RUNTIME_DIR) -> dict:
         "release_url": RUNTIME_RELEASE_URL,
         "cuda_package": CUDA_PACKAGE_NAME,
     }
+
+
+def install_runtime_from(source: Path, target: Path = DEFAULT_RUNTIME_DIR) -> Path:
+    if not whisper_exe(source).exists():
+        raise FileNotFoundError(whisper_exe(source))
+    target.mkdir(parents=True, exist_ok=True)
+    for child in source.iterdir():
+        destination = target / child.name
+        if child.is_dir():
+            shutil.copytree(child, destination, dirs_exist_ok=True)
+        else:
+            shutil.copy2(child, destination)
+    return target
