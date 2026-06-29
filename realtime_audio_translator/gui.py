@@ -9,7 +9,7 @@ from .audio import find_device, format_device_label, list_audio_devices
 from .commands import refresh_commands
 from .config import APP_DIR, load_config, save_config
 from .engine import RealtimeEngine
-from .models import list_models, recommend_model
+from .models import download_model, list_models, recommend_model
 from .paths import resource_root
 from .providers import Translator, google_access_token
 from .runtime import DEFAULT_RUNTIME_DIR, RUNTIME_RELEASE_URL, install_runtime_from, runtime_dir, runtime_status, whisper_exe
@@ -124,6 +124,7 @@ class TranslatorApp(tk.Tk):
             ("Refresh", self._refresh_lists),
             ("Swap languages", self._swap_languages),
             ("Recommend model", self._recommend),
+            ("Download model", self._download_model),
             ("Update command config", self._refresh_commands),
             ("API test", self._test_api),
             ("Device tone", self._test_tone),
@@ -221,6 +222,22 @@ class TranslatorApp(tk.Tk):
         cuda = subprocess.run([str(exe), "--checkcuda"], capture_output=True, text=True, check=False)
         devices = 1 if "CUDA device" in (cuda.stdout + cuda.stderr) else 0
         self.vars["model"].set(recommend_model(devices, 4, False))
+
+    def _download_model(self) -> None:
+        self._save()
+        exe = whisper_exe(runtime_dir(self.config))
+        if not exe.exists():
+            messagebox.showerror("Runtime missing", f"Put faster-whisper-xxl.exe in {exe.parent}")
+            return
+        model = self.config["model"]
+        self.status.set(f"downloading model {model}")
+
+        def run() -> None:
+            code = download_model(exe, model, APP_DIR / "models")
+            self.after(0, self.status.set, "model downloaded" if code == 0 else f"model download failed: {code}")
+            self.after(0, self._refresh_lists)
+
+        threading.Thread(target=run, daemon=True).start()
 
     def _refresh_commands(self) -> None:
         exe = whisper_exe(runtime_dir(self._config_from_vars()))

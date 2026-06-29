@@ -10,7 +10,7 @@ from realtime_audio_translator.config import DEFAULT_CONFIG, ensure_app_dirs, lo
 from realtime_audio_translator.engine import RealtimeEngine
 from realtime_audio_translator.gui import format_overlay_line, swap_language_values
 from realtime_audio_translator.logbook import ConversationLog
-from realtime_audio_translator.models import recommend_model
+from realtime_audio_translator.models import model_download_command, recommend_model
 from realtime_audio_translator.providers import build_google_translate_request, build_openai_translation_request
 
 
@@ -70,6 +70,12 @@ class CoreTests(unittest.TestCase):
     def test_model_recommendation_prefers_turbo_on_small_cuda_vram(self):
         self.assertEqual(recommend_model(cuda_devices=1, vram_gb=4, prefer_quality=False), "large-v3-turbo")
         self.assertEqual(recommend_model(cuda_devices=0, vram_gb=0, prefer_quality=False), "medium")
+
+    def test_model_download_command_uses_app_model_dir(self):
+        command = model_download_command(Path("fw.exe"), Path("probe.wav"), "medium", Path("models"))
+        self.assertEqual(command[0], "fw.exe")
+        self.assertIn("--model_dir", command)
+        self.assertIn("models", command)
 
     def test_device_label_strips_hostapi_suffix(self):
         self.assertEqual(device_name_from_label("CABLE Input (VB-Audio Virtual Cable) [Windows WASAPI]"), "CABLE Input (VB-Audio Virtual Cable)")

@@ -25,6 +25,20 @@ def recommend_model(cuda_devices: int, vram_gb: int, prefer_quality: bool = Fals
     return "large-v3-turbo" if vram_gb >= 4 else "medium"
 
 
+def model_download_command(exe_path: Path, probe: Path, model: str, model_dir: Path) -> list[str]:
+    return [
+        str(exe_path),
+        str(probe),
+        "--model",
+        model,
+        "--model_dir",
+        str(model_dir),
+        "--output_format",
+        "txt",
+        "--beep_off",
+    ]
+
+
 def download_model(exe_path: Path, model: str, model_dir: Path) -> int:
     if not exe_path.exists():
         raise FileNotFoundError(exe_path)
@@ -36,15 +50,4 @@ def download_model(exe_path: Path, model: str, model_dir: Path) -> int:
             handle.setsampwidth(2)
             handle.setframerate(16000)
             handle.writeframes(b"\0\0" * 16000)
-    command = [
-        str(exe_path),
-        str(probe),
-        "--model",
-        model,
-        "--model_dir",
-        str(model_dir),
-        "--output_format",
-        "txt",
-        "--beep_off",
-    ]
-    return subprocess.run(command, check=False).returncode
+    return subprocess.run(model_download_command(exe_path, probe, model, model_dir), check=False).returncode
