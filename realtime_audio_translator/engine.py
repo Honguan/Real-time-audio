@@ -25,6 +25,7 @@ class RealtimeEngine:
         self.paused = False
         self.muted = False
         self.threads: list[threading.Thread] = []
+        self.workers: list[SegmentWorker] = []
         self.log = ConversationLog(APP_DIR / "logs") if config.get("record_logs") else None
         self.translator = Translator(config)
         self.tts = TextToSpeech(config)
@@ -48,6 +49,8 @@ class RealtimeEngine:
 
     def stop(self) -> None:
         self.running = False
+        for worker in self.workers:
+            worker.stop()
         self.status("stopped")
 
     def set_paused(self, paused: bool) -> None:
@@ -66,6 +69,7 @@ class RealtimeEngine:
             self.status(f"{direction}: no device")
             return
         worker = SegmentWorker(APP_DIR / "cache" / "audio", device, float(self.config["segment_seconds"]), loopback)
+        self.workers.append(worker)
         capture_thread = threading.Thread(target=worker.run, args=(direction,), daemon=True)
         process_thread = threading.Thread(target=self._process_segments, args=(direction, worker), daemon=True)
         self.threads.extend([capture_thread, process_thread])

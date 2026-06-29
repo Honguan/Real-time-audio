@@ -108,6 +108,27 @@ class CoreTests(unittest.TestCase):
 
         self.assertTrue(any(status.startswith("speaker latency ") for status in statuses))
 
+    def test_engine_stop_stops_workers(self):
+        config = DEFAULT_CONFIG.copy()
+        config["record_logs"] = False
+        engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, lambda status: None)
+
+        class Worker:
+            def __init__(self):
+                self.stopped = False
+
+            def stop(self):
+                self.stopped = True
+
+        worker = Worker()
+        engine.running = True
+        engine.workers = [worker]
+
+        engine.stop()
+
+        self.assertFalse(engine.running)
+        self.assertTrue(worker.stopped)
+
 
 if __name__ == "__main__":
     unittest.main()
