@@ -17,6 +17,7 @@ DEFAULT_CONFIG = {
     "microphone_device": "",
     "tts_output_device": "CABLE Input",
     "overlay_topmost": True,
+    "show_language_labels": True,
     "record_logs": True,
     "google_project_id": "",
     "google_service_account_json": "",

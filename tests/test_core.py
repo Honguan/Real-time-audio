@@ -8,6 +8,7 @@ from realtime_audio_translator.audio import device_name_from_label
 from realtime_audio_translator.commands import parse_help_options
 from realtime_audio_translator.config import DEFAULT_CONFIG, ensure_app_dirs, load_config, save_config
 from realtime_audio_translator.engine import RealtimeEngine
+from realtime_audio_translator.gui import format_overlay_line
 from realtime_audio_translator.logbook import ConversationLog
 from realtime_audio_translator.models import recommend_model
 from realtime_audio_translator.providers import build_google_translate_request, build_openai_translation_request
@@ -72,6 +73,10 @@ class CoreTests(unittest.TestCase):
 
     def test_device_label_strips_hostapi_suffix(self):
         self.assertEqual(device_name_from_label("CABLE Input (VB-Audio Virtual Cable) [Windows WASAPI]"), "CABLE Input (VB-Audio Virtual Cable)")
+
+    def test_format_overlay_line_can_show_language(self):
+        self.assertEqual(format_overlay_line("hello", "en", True), "en: hello")
+        self.assertEqual(format_overlay_line("hello", "en", False), "hello")
 
     def test_engine_reports_segment_latency(self):
         statuses = []

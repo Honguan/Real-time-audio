@@ -15,6 +15,10 @@ from .providers import Translator, google_access_token
 from .runtime import DEFAULT_RUNTIME_DIR, RUNTIME_RELEASE_URL, install_runtime_from, runtime_dir, runtime_status, whisper_exe
 
 
+def format_overlay_line(text: str, language: str, show_language: bool) -> str:
+    return f"{language}: {text}" if show_language and text else text
+
+
 class Overlay(tk.Toplevel):
     def __init__(self, master: tk.Tk, topmost: bool):
         super().__init__(master)
@@ -65,6 +69,7 @@ class TranslatorApp(tk.Tk):
         frame.pack(fill="both", expand=True)
         self.vars = {key: tk.StringVar(value=str(value)) for key, value in self.config.items()}
         self.overlay_topmost = tk.BooleanVar(value=bool(self.config["overlay_topmost"]))
+        self.show_language_labels = tk.BooleanVar(value=bool(self.config["show_language_labels"]))
         self.record_logs = tk.BooleanVar(value=bool(self.config["record_logs"]))
         self.comboboxes: dict[str, ttk.Combobox] = {}
 
@@ -106,7 +111,8 @@ class TranslatorApp(tk.Tk):
         ttk.Button(runtime_buttons, text="Download Faster-Whisper-XXL", command=lambda: webbrowser.open(RUNTIME_RELEASE_URL)).pack(side="left", padx=3)
 
         ttk.Checkbutton(frame, text="Overlay topmost", variable=self.overlay_topmost, command=self._apply_overlay).grid(row=next_row + 2, column=0, sticky="w")
-        ttk.Checkbutton(frame, text="Record logs", variable=self.record_logs).grid(row=next_row + 2, column=1, sticky="w")
+        ttk.Checkbutton(frame, text="Show language", variable=self.show_language_labels, command=self._save).grid(row=next_row + 2, column=1, sticky="w")
+        ttk.Checkbutton(frame, text="Record logs", variable=self.record_logs).grid(row=next_row + 2, column=2, sticky="w")
 
         buttons = ttk.Frame(frame)
         buttons.grid(row=next_row + 3, column=0, columnspan=3, sticky="ew", pady=12)
@@ -138,6 +144,7 @@ class TranslatorApp(tk.Tk):
         for key, variable in self.vars.items():
             config[key] = variable.get()
         config["overlay_topmost"] = self.overlay_topmost.get()
+        config["show_language_labels"] = self.show_language_labels.get()
         config["record_logs"] = self.record_logs.get()
         try:
             config["segment_seconds"] = float(config["segment_seconds"])
@@ -252,6 +259,8 @@ class TranslatorApp(tk.Tk):
             self.engine.set_muted(not self.engine.muted)
 
     def _overlay_update(self, speaker: str, mine: str) -> None:
+        speaker = format_overlay_line(speaker, self.config["source_language"], self.show_language_labels.get())
+        mine = format_overlay_line(mine, self.config["target_language"], self.show_language_labels.get())
         self.after(0, self.overlay.update_lines, speaker, mine)
 
 
