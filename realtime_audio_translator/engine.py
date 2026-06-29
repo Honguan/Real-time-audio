@@ -97,8 +97,9 @@ class RealtimeEngine:
                     if not self.muted and translated:
                         audio = self.tts.synthesize_google_linear16(translated, target)
                         play_linear16(audio, self.config.get("tts_output_device", "CABLE Input"))
+                latency = time.perf_counter() - started
                 if self.log:
-                    self.log.append(direction, source, target, text, translated, self.config["provider"])
-                self.status(f"{direction} latency {time.perf_counter() - started:.2f}s")
+                    self.log.append(direction, source, target, text, translated, self.config["provider"], latency_seconds=latency)
+                self.status(f"{direction} latency {latency:.2f}s")
             except Exception as exc:
                 self.status(f"{direction}: {exc}")

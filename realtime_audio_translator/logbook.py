@@ -12,7 +12,16 @@ class ConversationLog:
         if not self.md_path.exists():
             self.md_path.write_text(f"# Conversation {self.session_id}\n\n", encoding="utf-8", newline="\n")
 
-    def append(self, direction: str, source_language: str, target_language: str, text: str, translated_text: str, provider: str) -> None:
+    def append(
+        self,
+        direction: str,
+        source_language: str,
+        target_language: str,
+        text: str,
+        translated_text: str,
+        provider: str,
+        latency_seconds: float | None = None,
+    ) -> None:
         row = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "direction": direction,
@@ -22,9 +31,13 @@ class ConversationLog:
             "translated_text": translated_text,
             "provider": provider,
         }
+        if latency_seconds is not None:
+            row["latency_seconds"] = latency_seconds
         with self.jsonl_path.open("a", encoding="utf-8", newline="\n") as handle:
             handle.write(json.dumps(row, ensure_ascii=False) + "\n")
         with self.md_path.open("a", encoding="utf-8", newline="\n") as handle:
             handle.write(f"## {row['timestamp']} {direction}\n\n")
             handle.write(f"- {source_language}: {text}\n")
             handle.write(f"- {target_language}: {translated_text}\n\n")
+            if latency_seconds is not None:
+                handle.write(f"- latency: {latency_seconds:.2f}s\n\n")

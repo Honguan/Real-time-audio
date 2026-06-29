@@ -59,6 +59,13 @@ class CoreTests(unittest.TestCase):
             self.assertIn("speaker", md)
             self.assertIn("你好", md)
 
+    def test_conversation_log_can_write_latency(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = ConversationLog(Path(tmp), "session")
+            log.append("speaker", "en", "zh-TW", "hello", "hi", "google", latency_seconds=1.25)
+            row = json.loads((Path(tmp) / "session.jsonl").read_text(encoding="utf-8").splitlines()[0])
+            self.assertEqual(row["latency_seconds"], 1.25)
+
     def test_model_recommendation_prefers_turbo_on_small_cuda_vram(self):
         self.assertEqual(recommend_model(cuda_devices=1, vram_gb=4, prefer_quality=False), "large-v3-turbo")
         self.assertEqual(recommend_model(cuda_devices=0, vram_gb=0, prefer_quality=False), "medium")
