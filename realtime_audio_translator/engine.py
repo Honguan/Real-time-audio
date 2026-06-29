@@ -85,6 +85,7 @@ class RealtimeEngine:
             except Exception:
                 continue
             try:
+                started = time.perf_counter()
                 text = self.transcriber.transcribe(wav, source)
                 if not text:
                     continue
@@ -98,5 +99,6 @@ class RealtimeEngine:
                         play_linear16(audio, self.config.get("tts_output_device", "CABLE Input"))
                 if self.log:
                     self.log.append(direction, source, target, text, translated, self.config["provider"])
+                self.status(f"{direction} latency {time.perf_counter() - started:.2f}s")
             except Exception as exc:
                 self.status(f"{direction}: {exc}")
