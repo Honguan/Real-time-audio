@@ -39,8 +39,12 @@ def runtime_status(root: Path = DEFAULT_RUNTIME_DIR) -> dict:
 
 
 def install_runtime_from(source: Path, target: Path = DEFAULT_RUNTIME_DIR) -> Path:
-    if not whisper_exe(source).exists():
-        raise FileNotFoundError(whisper_exe(source))
+    exe = whisper_exe(source)
+    if not exe.exists():
+        matches = list(source.rglob(WHISPER_EXE))
+        if not matches:
+            raise FileNotFoundError(exe)
+        source = matches[0].parent
     target.mkdir(parents=True, exist_ok=True)
     for child in source.iterdir():
         destination = target / child.name

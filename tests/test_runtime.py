@@ -33,6 +33,19 @@ class RuntimeTests(unittest.TestCase):
             self.assertTrue((target / "faster-whisper-xxl.exe").exists())
             self.assertTrue((target / "cublas64_12.dll").exists())
 
+    def test_install_runtime_from_accepts_parent_folder(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "download"
+            nested = source / "Faster-Whisper-XXL"
+            target = root / "target"
+            nested.mkdir(parents=True)
+            (nested / "faster-whisper-xxl.exe").write_text("exe", encoding="utf-8")
+
+            install_runtime_from(source, target)
+
+            self.assertTrue((target / "faster-whisper-xxl.exe").exists())
+
 
 if __name__ == "__main__":
     unittest.main()
