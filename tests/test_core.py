@@ -361,6 +361,36 @@ class CoreTests(unittest.TestCase):
 
         self.assertEqual(overlays[0][0], "hello\n你好")
 
+    def test_engine_shows_original_when_translation_fails(self):
+        overlays = []
+        config = DEFAULT_CONFIG.copy()
+        config["record_logs"] = False
+        engine = RealtimeEngine(Path("."), config, lambda speaker, mine: overlays.append((speaker, mine)), lambda status: None)
+
+        class Transcriber:
+            def transcribe(self, wav, source_language):
+                return "hello"
+
+        class Translator:
+            def translate(self, text, source_language, target_language):
+                engine.running = False
+                raise RuntimeError("translation down")
+
+        class Worker:
+            def __init__(self, wav):
+                self.queue = queue.Queue()
+                self.queue.put(wav)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            wav = Path(tmp) / "clip.wav"
+            self._write_wav(wav, 12000)
+            engine.running = True
+            engine.transcriber = Transcriber()
+            engine.translator = Translator()
+            engine._process_segments("speaker", Worker(wav))
+
+        self.assertEqual(overlays[0][0], "hello")
+
     def test_engine_uses_openai_tts_provider_for_mic_output(self):
         import realtime_audio_translator.engine as engine_module
 

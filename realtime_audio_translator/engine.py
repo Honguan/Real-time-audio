@@ -104,13 +104,19 @@ class RealtimeEngine:
                 text = self.transcriber.transcribe(wav, source)
                 if not text:
                     continue
-                translated = self.translator.translate(text, source, target)
+                translation_failed = False
+                try:
+                    translated = self.translator.translate(text, source, target)
+                except Exception as exc:
+                    translated = text
+                    translation_failed = True
+                    self.status(f"{direction}: translation failed: {exc}")
                 overlay_text = f"{text}\n{translated}" if self.config.get("show_original_text") else translated
                 if direction == "speaker":
                     self.overlay(overlay_text, "")
                 else:
                     self.overlay("", overlay_text)
-                    if self.config.get("tts_enabled", True) and not self.muted and translated:
+                    if self.config.get("tts_enabled", True) and not self.muted and translated and not translation_failed:
                         tts_device = self.config.get("tts_output_device", "CABLE Input")
                         if self.config.get("tts_provider") == "local":
                             self.tts.speak_local(translated, tts_device)
@@ -123,6 +129,7 @@ class RealtimeEngine:
                 latency = time.perf_counter() - started
                 if self.log:
                     self.log.append(direction, source, target, text, translated, self.config["provider"], latency_seconds=latency)
-                self.status(f"{direction} latency {latency:.2f}s")
+                if not translation_failed:
+                    self.status(f"{direction} latency {latency:.2f}s")
             except Exception as exc:
                 self.status(f"{direction}: {exc}")

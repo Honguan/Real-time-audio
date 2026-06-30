@@ -33,6 +33,7 @@ Windows 即時雙向語音翻譯工具。它擷取目前喇叭與麥克風聲音
 `Source language` 與 `Target language` 提供 `zh`、`en`、`ja`、`ko` 快速選項，也可手動輸入其他語言代碼。
 Provider 預設為 `local`，不呼叫雲端翻譯，字幕會保留原文，適合離線檢查 ASR 與字幕流程。
 若要使用本機 LibreTranslate，請把 `Local translate URL` 設為例如 `http://127.0.0.1:5000/translate`。
+翻譯失敗時字幕會保留原文，避免單次 API 或本機翻譯服務錯誤讓字幕消失。
 `Speech threshold` 可設定語音靈敏度，較高會忽略更多背景聲。
 勾選 `Show original` 可在字幕同時顯示原文與譯文。
 取消勾選 `Speak translations` 可只顯示字幕、不播放翻譯語音。
