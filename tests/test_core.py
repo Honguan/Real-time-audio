@@ -8,7 +8,7 @@ from realtime_audio_translator.audio import device_name_from_label
 from realtime_audio_translator.commands import parse_help_options
 from realtime_audio_translator.config import DEFAULT_CONFIG, ensure_app_dirs, load_config, save_config
 from realtime_audio_translator.engine import RealtimeEngine
-from realtime_audio_translator.gui import format_overlay_line, swap_language_values
+from realtime_audio_translator.gui import PROVIDER_CHOICES, format_overlay_line, swap_language_values
 from realtime_audio_translator.logbook import ConversationLog
 from realtime_audio_translator.models import list_models, model_download_command, recommend_model
 from realtime_audio_translator.providers import build_google_translate_request, build_openai_translation_request
@@ -96,6 +96,9 @@ class CoreTests(unittest.TestCase):
 
     def test_swap_language_values(self):
         self.assertEqual(swap_language_values("zh", "en"), ("en", "zh"))
+
+    def test_provider_choices_are_fixed(self):
+        self.assertEqual(PROVIDER_CHOICES, ("google", "openai"))
 
     def test_engine_reports_segment_latency(self):
         statuses = []

@@ -15,6 +15,9 @@ from .providers import Translator, google_access_token
 from .runtime import DEFAULT_RUNTIME_DIR, RUNTIME_RELEASE_URL, install_runtime_from, runtime_dir, runtime_status, whisper_exe
 
 
+PROVIDER_CHOICES = ("google", "openai")
+
+
 def format_overlay_line(text: str, language: str, show_language: bool) -> str:
     return f"{language}: {text}" if show_language and text else text
 
@@ -94,7 +97,9 @@ class TranslatorApp(tk.Tk):
         ]
         for row, (label, key) in enumerate(rows):
             ttk.Label(frame, text=label).grid(row=row, column=0, sticky="w", pady=4)
-            if key.endswith("device") or key == "model":
+            if key == "provider":
+                widget = ttk.Combobox(frame, textvariable=self.vars[key], values=PROVIDER_CHOICES, state="readonly")
+            elif key.endswith("device") or key == "model":
                 widget = ttk.Combobox(frame, textvariable=self.vars[key], values=[])
                 self.comboboxes[key] = widget
             else:
