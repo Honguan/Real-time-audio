@@ -26,7 +26,7 @@ class RealtimeEngine:
         self.muted = False
         self.threads: list[threading.Thread] = []
         self.workers: list[SegmentWorker] = []
-        self.log = ConversationLog(APP_DIR / "logs") if config.get("record_logs") else None
+        self.log = ConversationLog(Path(config.get("log_dir") or APP_DIR / "logs")) if config.get("record_logs") else None
         self.translator = Translator(config)
         self.tts = TextToSpeech(config)
         self.transcriber: AudioTranscriber | None = None

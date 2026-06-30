@@ -27,6 +27,7 @@ DEFAULT_CONFIG = {
     "show_original_text": False,
     "tts_enabled": True,
     "record_logs": False,
+    "log_dir": str(APP_DIR / "logs"),
     "advanced_mode": False,
     "google_project_id": "",
     "google_service_account_json": "",
@@ -65,8 +66,8 @@ def save_config(root: Path, config: dict) -> None:
         json.dump(config, handle, ensure_ascii=False, indent=2)
 
 
-def clear_logs(root: Path = APP_DIR) -> None:
-    shutil.rmtree(root / "logs", ignore_errors=True)
+def clear_logs(root: Path = APP_DIR, log_dir: Path | None = None) -> None:
+    shutil.rmtree(log_dir or root / "logs", ignore_errors=True)
     ensure_app_dirs(root)
 
 

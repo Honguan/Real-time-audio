@@ -40,6 +40,7 @@ SETTING_ROWS = (
     ("Overlay opacity", "overlay_opacity"),
     ("Overlay font size", "overlay_font_size"),
     ("Overlay hold seconds", "overlay_hold_seconds"),
+    ("Log dir", "log_dir"),
     ("Runtime dir", "runtime_dir"),
 )
 BASIC_SETTING_KEYS = {
@@ -233,6 +234,10 @@ class TranslatorApp(tk.Tk):
                 button = ttk.Button(frame, text="Select", command=self._pick_runtime_dir)
                 button.grid(row=row, column=2, sticky="ew")
                 row_widgets.append(button)
+            if key == "log_dir":
+                button = ttk.Button(frame, text="Select", command=self._pick_log_dir)
+                button.grid(row=row, column=2, sticky="ew")
+                row_widgets.append(button)
             self.setting_widgets[key] = row_widgets
 
         next_row = len(SETTING_ROWS)
@@ -372,6 +377,12 @@ class TranslatorApp(tk.Tk):
             self._save()
             self._refresh_runtime_status()
 
+    def _pick_log_dir(self) -> None:
+        path = filedialog.askdirectory(initialdir=self.vars["log_dir"].get())
+        if path:
+            self.vars["log_dir"].set(path)
+            self._save()
+
     def _open_runtime_dir(self) -> None:
         path = runtime_dir(self._config_from_vars())
         path.mkdir(parents=True, exist_ok=True)
@@ -494,7 +505,8 @@ class TranslatorApp(tk.Tk):
         self.status.set("cache cleared")
 
     def _clear_logs(self) -> None:
-        clear_logs(APP_DIR)
+        self._save()
+        clear_logs(APP_DIR, Path(self.config.get("log_dir") or APP_DIR / "logs"))
         self.status.set("logs cleared")
 
     def _overlay_update(self, speaker: str, mine: str) -> None:

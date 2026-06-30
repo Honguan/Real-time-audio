@@ -39,6 +39,7 @@ Provider 預設為 `local`，不呼叫雲端翻譯，字幕會保留原文，適
 `Speech threshold` 可設定語音靈敏度，較高會忽略更多背景聲。
 勾選 `Show original` 可在字幕同時顯示原文與譯文。
 取消勾選 `Speak translations` 可只顯示字幕、不播放翻譯語音。
+開啟 `Record logs` 時，`Log dir` 可選擇對話紀錄保存資料夾。
 `Overlay opacity` 可設定字幕透明度，範圍 0.2 到 1.0。
 `Overlay font size` 可設定字幕字體大小，範圍 12 到 48。
 `Overlay hold seconds` 可設定字幕停留秒數，範圍 1 到 60。

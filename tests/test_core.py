@@ -32,6 +32,18 @@ class CoreTests(unittest.TestCase):
 
     def test_conversation_logs_are_off_by_default(self):
         self.assertFalse(DEFAULT_CONFIG["record_logs"])
+        self.assertEqual(DEFAULT_CONFIG["log_dir"], str(Path.home() / ".realtime-audio" / "logs"))
+
+    def test_engine_uses_configured_log_dir(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log_dir = Path(tmp) / "custom-logs"
+            config = DEFAULT_CONFIG.copy()
+            config["record_logs"] = True
+            config["log_dir"] = str(log_dir)
+
+            engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, lambda status: None)
+
+            self.assertEqual(engine.log.jsonl_path.parent, log_dir)
 
     def test_default_mode_uses_free_local_providers(self):
         self.assertEqual(DEFAULT_CONFIG["provider"], "local")
