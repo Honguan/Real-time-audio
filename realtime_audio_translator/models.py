@@ -7,14 +7,14 @@ KNOWN_MODELS = ("medium", "large-v3-turbo", "large-v2")
 
 
 def list_models(local_models: Path, app_models: Path) -> list[str]:
-    found: set[str] = set()
+    found: set[str] = set(KNOWN_MODELS)
     for root in (local_models, app_models):
         if not root.exists():
             continue
         for path in root.iterdir():
             if path.is_dir():
                 found.add(path.name.replace("faster-whisper-", ""))
-    return sorted(found or KNOWN_MODELS)
+    return sorted(found)
 
 
 def recommend_model(cuda_devices: int, vram_gb: int, prefer_quality: bool = False) -> str:

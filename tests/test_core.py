@@ -10,7 +10,7 @@ from realtime_audio_translator.config import DEFAULT_CONFIG, ensure_app_dirs, lo
 from realtime_audio_translator.engine import RealtimeEngine
 from realtime_audio_translator.gui import format_overlay_line, swap_language_values
 from realtime_audio_translator.logbook import ConversationLog
-from realtime_audio_translator.models import model_download_command, recommend_model
+from realtime_audio_translator.models import list_models, model_download_command, recommend_model
 from realtime_audio_translator.providers import build_google_translate_request, build_openai_translation_request
 
 
@@ -76,6 +76,16 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(command[0], "fw.exe")
         self.assertIn("--model_dir", command)
         self.assertIn("models", command)
+
+    def test_list_models_keeps_known_download_choices(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            app_models = Path(tmp) / "models"
+            (app_models / "faster-whisper-medium").mkdir(parents=True)
+
+            models = list_models(Path(tmp) / "missing", app_models)
+
+            self.assertIn("medium", models)
+            self.assertIn("large-v3-turbo", models)
 
     def test_device_label_strips_hostapi_suffix(self):
         self.assertEqual(device_name_from_label("CABLE Input (VB-Audio Virtual Cable) [Windows WASAPI]"), "CABLE Input (VB-Audio Virtual Cable)")
