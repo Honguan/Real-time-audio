@@ -58,13 +58,25 @@ class Translator:
         if cache_key in self.cache:
             return self.cache[cache_key]
         if provider == "local":
-            translated = text
+            translated = self._local_translate(text, source_language, target_language)
         elif provider == "openai":
             translated = self._openai_translate(text, source_language, target_language)
         else:
             translated = self._google_translate(text, source_language, target_language)
         self.cache[cache_key] = translated
         return translated
+
+    def _local_translate(self, text: str, source_language: str, target_language: str) -> str:
+        url = self.config.get("local_translate_url", "").strip()
+        if not url:
+            return text
+        response = requests.post(
+            url,
+            json={"q": text, "source": source_language, "target": target_language, "format": "text"},
+            timeout=30,
+        )
+        response.raise_for_status()
+        return html.unescape(response.json().get("translatedText", ""))
 
     def _openai_translate(self, text: str, source_language: str, target_language: str) -> str:
         request = build_openai_translation_request(text, target_language, source_language, self.config["openai_model"])

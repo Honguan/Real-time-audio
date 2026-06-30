@@ -28,6 +28,7 @@ DEFAULT_CONFIG = {
     "record_logs": False,
     "google_project_id": "",
     "google_service_account_json": "",
+    "local_translate_url": "",
     "openai_model": "gpt-4.1-mini",
     "openai_tts_model": "gpt-4o-mini-tts",
     "openai_tts_voice": "alloy",

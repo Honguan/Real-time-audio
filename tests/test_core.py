@@ -111,6 +111,35 @@ class CoreTests(unittest.TestCase):
 
         self.assertEqual(translator.translate("hello", "en", "zh-TW"), "hello")
 
+    def test_local_provider_can_call_libretranslate_endpoint(self):
+        import realtime_audio_translator.providers as providers_module
+
+        calls = []
+
+        class Response:
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return {"translatedText": "你好"}
+
+        original_post = providers_module.requests.post
+        providers_module.requests.post = lambda *args, **kwargs: calls.append((args, kwargs)) or Response()
+        try:
+            config = DEFAULT_CONFIG.copy()
+            config["provider"] = "local"
+            config["local_translate_url"] = "http://127.0.0.1:5000/translate"
+            translator = Translator(config)
+
+            self.assertEqual(translator.translate("hello", "en", "zh-TW"), "你好")
+        finally:
+            providers_module.requests.post = original_post
+
+        self.assertEqual(calls[0][0][0], "http://127.0.0.1:5000/translate")
+        self.assertEqual(calls[0][1]["json"]["q"], "hello")
+        self.assertEqual(calls[0][1]["json"]["source"], "en")
+        self.assertEqual(calls[0][1]["json"]["target"], "zh-TW")
+
     def test_openai_tts_requests_pcm_audio(self):
         import os
         import realtime_audio_translator.providers as providers_module

@@ -151,6 +151,7 @@ class TranslatorApp(tk.Tk):
             ("Target language", "target_language"),
             ("Provider", "provider"),
             ("TTS provider", "tts_provider"),
+            ("Local translate URL", "local_translate_url"),
             ("Model", "model"),
             ("ASR device", "device"),
             ("Compute type", "compute_type"),
