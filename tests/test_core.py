@@ -115,6 +115,12 @@ class CoreTests(unittest.TestCase):
             self.assertIn("medium", models)
             self.assertIn("large-v3-turbo", models)
 
+    def test_package_script_builds_release_zip_with_readme(self):
+        script = Path("scripts/package.ps1").read_text(encoding="utf-8")
+        self.assertIn("RealtimeAudioTranslator-0.1.0-win-x64.zip", script)
+        self.assertIn("README.md", script)
+        self.assertIn("RUNTIME_DOWNLOADS.txt", script)
+
     def test_device_label_strips_hostapi_suffix(self):
         self.assertEqual(device_name_from_label("CABLE Input (VB-Audio Virtual Cable) [Windows WASAPI]"), "CABLE Input (VB-Audio Virtual Cable)")
 
