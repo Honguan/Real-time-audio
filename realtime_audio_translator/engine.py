@@ -103,10 +103,11 @@ class RealtimeEngine:
                 if not text:
                     continue
                 translated = self.translator.translate(text, source, target)
+                overlay_text = f"{text}\n{translated}" if self.config.get("show_original_text") else translated
                 if direction == "speaker":
-                    self.overlay(translated, "")
+                    self.overlay(overlay_text, "")
                 else:
-                    self.overlay("", translated)
+                    self.overlay("", overlay_text)
                     if not self.muted and translated:
                         if self.config.get("tts_provider") == "openai":
                             audio = self.tts.synthesize_openai_linear16(translated)

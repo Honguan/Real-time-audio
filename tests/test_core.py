@@ -222,6 +222,34 @@ class CoreTests(unittest.TestCase):
 
         self.assertTrue(any(status.startswith("speaker latency ") for status in statuses))
 
+    def test_engine_can_overlay_original_and_translation(self):
+        overlays = []
+        config = DEFAULT_CONFIG.copy()
+        config["record_logs"] = False
+        config["show_original_text"] = True
+        engine = RealtimeEngine(Path("."), config, lambda speaker, mine: overlays.append((speaker, mine)), lambda status: None)
+
+        class Transcriber:
+            def transcribe(self, wav, source_language):
+                return "hello"
+
+        class Translator:
+            def translate(self, text, source_language, target_language):
+                engine.running = False
+                return "你好"
+
+        class Worker:
+            def __init__(self):
+                self.queue = queue.Queue()
+                self.queue.put(Path("clip.wav"))
+
+        engine.running = True
+        engine.transcriber = Transcriber()
+        engine.translator = Translator()
+        engine._process_segments("speaker", Worker())
+
+        self.assertEqual(overlays[0][0], "hello\n你好")
+
     def test_engine_uses_openai_tts_provider_for_mic_output(self):
         import realtime_audio_translator.engine as engine_module
 

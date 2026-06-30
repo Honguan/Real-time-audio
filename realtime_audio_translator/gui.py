@@ -87,6 +87,7 @@ class TranslatorApp(tk.Tk):
         self.vars = {key: tk.StringVar(value=str(value)) for key, value in self.config.items()}
         self.overlay_topmost = tk.BooleanVar(value=bool(self.config["overlay_topmost"]))
         self.show_language_labels = tk.BooleanVar(value=bool(self.config["show_language_labels"]))
+        self.show_original_text = tk.BooleanVar(value=bool(self.config["show_original_text"]))
         self.record_logs = tk.BooleanVar(value=bool(self.config["record_logs"]))
         self.comboboxes: dict[str, ttk.Combobox] = {}
 
@@ -135,10 +136,11 @@ class TranslatorApp(tk.Tk):
 
         ttk.Checkbutton(frame, text="Overlay topmost", variable=self.overlay_topmost, command=self._apply_overlay).grid(row=next_row + 3, column=0, sticky="w")
         ttk.Checkbutton(frame, text="Show language", variable=self.show_language_labels, command=self._save).grid(row=next_row + 3, column=1, sticky="w")
-        ttk.Checkbutton(frame, text="Record logs", variable=self.record_logs).grid(row=next_row + 3, column=2, sticky="w")
+        ttk.Checkbutton(frame, text="Show original", variable=self.show_original_text, command=self._save).grid(row=next_row + 3, column=2, sticky="w")
+        ttk.Checkbutton(frame, text="Record logs", variable=self.record_logs).grid(row=next_row + 4, column=0, sticky="w")
 
         buttons = ttk.Frame(frame)
-        buttons.grid(row=next_row + 4, column=0, columnspan=3, sticky="ew", pady=12)
+        buttons.grid(row=next_row + 5, column=0, columnspan=3, sticky="ew", pady=12)
         for text, command in (
             ("Refresh", self._refresh_lists),
             ("Swap languages", self._swap_languages),
@@ -156,7 +158,7 @@ class TranslatorApp(tk.Tk):
         ):
             ttk.Button(buttons, text=text, command=command).pack(side="left", padx=3)
 
-        ttk.Label(frame, textvariable=self.status).grid(row=next_row + 5, column=0, columnspan=3, sticky="ew")
+        ttk.Label(frame, textvariable=self.status).grid(row=next_row + 6, column=0, columnspan=3, sticky="ew")
         frame.grid_columnconfigure(1, weight=1)
 
     def _refresh_lists(self) -> None:
@@ -178,6 +180,7 @@ class TranslatorApp(tk.Tk):
             config[key] = variable.get()
         config["overlay_topmost"] = self.overlay_topmost.get()
         config["show_language_labels"] = self.show_language_labels.get()
+        config["show_original_text"] = self.show_original_text.get()
         config["record_logs"] = self.record_logs.get()
         try:
             config["segment_seconds"] = float(config["segment_seconds"])

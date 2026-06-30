@@ -19,6 +19,7 @@ DEFAULT_CONFIG = {
     "tts_output_device": "CABLE Input",
     "overlay_topmost": True,
     "show_language_labels": True,
+    "show_original_text": False,
     "record_logs": False,
     "google_project_id": "",
     "google_service_account_json": "",
