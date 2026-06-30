@@ -40,6 +40,14 @@ def overlay_font_size_value(value) -> int:
     return min(48, max(12, size))
 
 
+def overlay_hold_seconds_value(value) -> float:
+    try:
+        seconds = float(value)
+    except Exception:
+        return 8.0
+    return min(60.0, max(1.0, seconds))
+
+
 def overlay_visibility_action(visible: bool) -> str:
     return "show" if visible else "hide"
 
@@ -87,6 +95,10 @@ class Overlay(tk.Toplevel):
         if mine:
             self.mine.set(mine)
 
+    def clear_lines(self) -> None:
+        self.speaker.set("")
+        self.mine.set("")
+
     def set_font_size(self, font_size: int) -> None:
         for label in self.labels:
             label.configure(font=("Microsoft JhengHei UI", font_size))
@@ -103,6 +115,7 @@ class TranslatorApp(tk.Tk):
         self.status = tk.StringVar(value="ready")
         self.runtime_text = tk.StringVar(value="")
         self.mode_text = tk.StringVar(value=mode_notice(self.config["provider"], self.config["tts_provider"]))
+        self.overlay_generation = 0
         self.overlay = Overlay(
             self,
             self.config["overlay_topmost"],
@@ -140,6 +153,7 @@ class TranslatorApp(tk.Tk):
             ("Segment seconds", "segment_seconds"),
             ("Overlay opacity", "overlay_opacity"),
             ("Overlay font size", "overlay_font_size"),
+            ("Overlay hold seconds", "overlay_hold_seconds"),
             ("Runtime dir", "runtime_dir"),
         ]
         for row, (label, key) in enumerate(rows):
@@ -156,7 +170,7 @@ class TranslatorApp(tk.Tk):
             widget.grid(row=row, column=1, sticky="ew", pady=4, padx=8)
             if key == "google_service_account_json":
                 ttk.Button(frame, text="Select", command=self._pick_google_json).grid(row=row, column=2, sticky="ew")
-            if key in ("overlay_opacity", "overlay_font_size"):
+            if key in ("overlay_opacity", "overlay_font_size", "overlay_hold_seconds"):
                 ttk.Button(frame, text="Apply", command=self._apply_overlay).grid(row=row, column=2, sticky="ew")
             if key == "runtime_dir":
                 ttk.Button(frame, text="Select", command=self._pick_runtime_dir).grid(row=row, column=2, sticky="ew")
@@ -223,6 +237,7 @@ class TranslatorApp(tk.Tk):
         config["record_logs"] = self.record_logs.get()
         config["overlay_opacity"] = overlay_opacity_value(config["overlay_opacity"])
         config["overlay_font_size"] = overlay_font_size_value(config["overlay_font_size"])
+        config["overlay_hold_seconds"] = overlay_hold_seconds_value(config["overlay_hold_seconds"])
         try:
             config["segment_seconds"] = float(config["segment_seconds"])
         except Exception:
@@ -370,9 +385,17 @@ class TranslatorApp(tk.Tk):
         self.status.set("logs cleared")
 
     def _overlay_update(self, speaker: str, mine: str) -> None:
+        self.overlay_generation += 1
+        generation = self.overlay_generation
         speaker = format_overlay_line(speaker, self.config["source_language"], self.show_language_labels.get())
         mine = format_overlay_line(mine, self.config["target_language"], self.show_language_labels.get())
         self.after(0, self.overlay.update_lines, speaker, mine)
+        hold_ms = int(overlay_hold_seconds_value(self.config.get("overlay_hold_seconds", 8.0)) * 1000)
+        self.after(hold_ms, self._clear_overlay_if_current, generation)
+
+    def _clear_overlay_if_current(self, generation: int) -> None:
+        if generation == self.overlay_generation:
+            self.overlay.clear_lines()
 
 
 def main() -> None:

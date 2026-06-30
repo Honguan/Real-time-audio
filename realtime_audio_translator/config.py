@@ -21,6 +21,7 @@ DEFAULT_CONFIG = {
     "overlay_topmost": True,
     "overlay_opacity": 0.86,
     "overlay_font_size": 18,
+    "overlay_hold_seconds": 8.0,
     "show_language_labels": True,
     "show_original_text": False,
     "record_logs": False,
