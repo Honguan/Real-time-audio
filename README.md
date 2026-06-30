@@ -1,13 +1,13 @@
 # Realtime Audio Translator
 
-Windows 即時雙向語音翻譯工具。它擷取目前喇叭與麥克風聲音，使用本資料夾的 Whisper 環境做近即時辨識，透過 OpenAI 或 Google 翻譯文字，並用 Google 或 OpenAI TTS 將我方翻譯語音播放到 VB-CABLE。
+Windows 即時雙向語音翻譯工具。它擷取目前喇叭與麥克風聲音，使用本資料夾的 Whisper 環境做近即時辨識，透過 OpenAI 或 Google 翻譯文字，並用 Windows 內建語音或 Google/OpenAI TTS 將我方翻譯語音播放到 VB-CABLE。
 
 ## 需求
 
 - Windows 10/11
 - VB-Audio Virtual Cable
 - Google Cloud 服務帳戶 JSON，並啟用 Cloud Translation 與 Text-to-Speech
-- 可選：`OPENAI_API_KEY`，用於 OpenAI 翻譯或 OpenAI TTS
+- 可選：`OPENAI_API_KEY`，用於 OpenAI 翻譯或 OpenAI TTS；本機 TTS 不需要 API key
 - 可選打包：Inno Setup，需可執行 `iscc.exe`
 
 ## Runtime
@@ -93,5 +93,5 @@ py -3.10 -m realtime_audio_translator
 - 對話紀錄預設關閉；需要保存 Markdown/JSONL 紀錄時，請手動勾選 `Record logs`。
 - 可在主視窗按 `Clear cache` 或 `Clear logs` 清除暫存音訊與對話紀錄。
 - 主視窗會顯示目前是本機 ASR 或雲端 API，以及 API 使用是否可能產生費用。
-- Google TTS、Google 翻譯、OpenAI 翻譯與 OpenAI TTS 都需要網路與有效憑證。
+- Google TTS、Google 翻譯、OpenAI 翻譯與 OpenAI TTS 都需要網路與有效憑證；TTS provider 選 `local` 時使用 Windows 內建語音。
 - 開發模式會優先載入本資料夾 `_xxl_data`；發布版使用 `%USERPROFILE%\.realtime-audio\runtime\faster-whisper-xxl.exe` 備援辨識。

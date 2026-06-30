@@ -5,6 +5,8 @@ from dataclasses import dataclass, field
 
 import requests
 
+from .tts import speak_windows_sapi
+
 
 OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
 OPENAI_SPEECH_URL = "https://api.openai.com/v1/audio/speech"
@@ -100,6 +102,9 @@ class Translator:
 @dataclass
 class TextToSpeech:
     config: dict
+
+    def speak_local(self, text: str, device_name: str) -> None:
+        speak_windows_sapi(text, device_name)
 
     def synthesize_google_linear16(self, text: str, language_code: str) -> bytes:
         token = google_access_token(self.config.get("google_service_account_json", ""))

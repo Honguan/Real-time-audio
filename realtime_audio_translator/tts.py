@@ -1,3 +1,5 @@
+import os
+import subprocess
 import wave
 from pathlib import Path
 
@@ -21,3 +23,29 @@ def play_linear16(audio: bytes, device_name: str = "CABLE Input", samplerate: in
     device = find_device(device_name, want_output=True)
     data = np.frombuffer(audio, dtype="int16")
     sd.play(data, samplerate=samplerate, device=device, blocking=True)
+
+
+def speak_windows_sapi(text: str, device_name: str = "CABLE Input") -> None:
+    script = r"""
+$voice = New-Object -ComObject SAPI.SpVoice
+$device = $env:RAT_TTS_DEVICE
+if ($device) {
+    foreach ($output in $voice.GetAudioOutputs()) {
+        if ($output.GetDescription() -like "*$device*") {
+            $voice.AudioOutput = $output
+            break
+        }
+    }
+}
+[void]$voice.Speak($env:RAT_TTS_TEXT)
+"""
+    env = os.environ.copy()
+    env["RAT_TTS_TEXT"] = text
+    env["RAT_TTS_DEVICE"] = device_name
+    creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    subprocess.run(
+        ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script],
+        check=True,
+        env=env,
+        creationflags=creationflags,
+    )

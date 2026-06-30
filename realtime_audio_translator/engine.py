@@ -111,11 +111,15 @@ class RealtimeEngine:
                 else:
                     self.overlay("", overlay_text)
                     if self.config.get("tts_enabled", True) and not self.muted and translated:
-                        if self.config.get("tts_provider") == "openai":
+                        tts_device = self.config.get("tts_output_device", "CABLE Input")
+                        if self.config.get("tts_provider") == "local":
+                            self.tts.speak_local(translated, tts_device)
+                        elif self.config.get("tts_provider") == "openai":
                             audio = self.tts.synthesize_openai_linear16(translated)
+                            play_linear16(audio, tts_device)
                         else:
                             audio = self.tts.synthesize_google_linear16(translated, target)
-                        play_linear16(audio, self.config.get("tts_output_device", "CABLE Input"))
+                            play_linear16(audio, tts_device)
                 latency = time.perf_counter() - started
                 if self.log:
                     self.log.append(direction, source, target, text, translated, self.config["provider"], latency_seconds=latency)

@@ -16,7 +16,7 @@ from .runtime import DEFAULT_RUNTIME_DIR, RUNTIME_RELEASE_URL, install_runtime_f
 
 
 PROVIDER_CHOICES = ("local", "google", "openai")
-TTS_PROVIDER_CHOICES = ("google", "openai")
+TTS_PROVIDER_CHOICES = ("local", "google", "openai")
 CLOUD_PROVIDERS = ("google", "openai")
 
 

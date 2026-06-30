@@ -10,7 +10,7 @@ DEFAULT_CONFIG = {
     "source_language": "zh",
     "target_language": "en",
     "provider": "google",
-    "tts_provider": "google",
+    "tts_provider": "local",
     "model": "large-v3-turbo",
     "compute_type": "auto",
     "device": "cuda",

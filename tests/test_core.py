@@ -134,6 +134,19 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(audio, b"pcm")
         self.assertEqual(calls[0][1]["json"]["response_format"], "pcm")
 
+    def test_local_tts_uses_windows_sapi(self):
+        import realtime_audio_translator.providers as providers_module
+
+        calls = []
+        original_speak = providers_module.speak_windows_sapi
+        providers_module.speak_windows_sapi = lambda text, device: calls.append((text, device))
+        try:
+            TextToSpeech(DEFAULT_CONFIG.copy()).speak_local("hello", "CABLE Input")
+        finally:
+            providers_module.speak_windows_sapi = original_speak
+
+        self.assertEqual(calls, [("hello", "CABLE Input")])
+
     def test_conversation_log_writes_markdown_and_jsonl(self):
         with tempfile.TemporaryDirectory() as tmp:
             log = ConversationLog(Path(tmp), "session")
@@ -238,7 +251,7 @@ class CoreTests(unittest.TestCase):
 
     def test_provider_choices_are_fixed(self):
         self.assertEqual(PROVIDER_CHOICES, ("local", "google", "openai"))
-        self.assertEqual(TTS_PROVIDER_CHOICES, ("google", "openai"))
+        self.assertEqual(TTS_PROVIDER_CHOICES, ("local", "google", "openai"))
 
     def test_mode_notice_discloses_cloud_api_cost_risk(self):
         self.assertIn("cloud API", mode_notice("google", "openai"))
@@ -351,6 +364,55 @@ class CoreTests(unittest.TestCase):
             engine_module.play_linear16 = original_play
 
         self.assertEqual(played, [(b"\0\0", "CABLE Input")])
+
+    def test_engine_uses_local_tts_provider_for_mic_output(self):
+        import realtime_audio_translator.engine as engine_module
+
+        config = DEFAULT_CONFIG.copy()
+        config["record_logs"] = False
+        config["tts_provider"] = "local"
+        spoken = []
+        engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, lambda status: None)
+
+        class Transcriber:
+            def transcribe(self, wav, source_language):
+                return "hello"
+
+        class Translator:
+            def translate(self, text, source_language, target_language):
+                engine.running = False
+                return "hi"
+
+        class TTS:
+            def speak_local(self, text, device):
+                spoken.append((text, device))
+
+            def synthesize_google_linear16(self, text, language_code):
+                raise AssertionError("cloud tts should not be used")
+
+            def synthesize_openai_linear16(self, text):
+                raise AssertionError("cloud tts should not be used")
+
+        class Worker:
+            def __init__(self, wav):
+                self.queue = queue.Queue()
+                self.queue.put(wav)
+
+        original_play = engine_module.play_linear16
+        engine_module.play_linear16 = lambda audio, device: (_ for _ in ()).throw(AssertionError("pcm playback should not be used"))
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                wav = Path(tmp) / "clip.wav"
+                self._write_wav(wav, 12000)
+                engine.running = True
+                engine.transcriber = Transcriber()
+                engine.translator = Translator()
+                engine.tts = TTS()
+                engine._process_segments("me", Worker(wav))
+        finally:
+            engine_module.play_linear16 = original_play
+
+        self.assertEqual(spoken, [("hi", "CABLE Input")])
 
     def test_engine_can_disable_tts_output(self):
         import realtime_audio_translator.engine as engine_module
