@@ -8,7 +8,7 @@ from realtime_audio_translator.audio import device_name_from_label
 from realtime_audio_translator.commands import parse_help_options
 from realtime_audio_translator.config import DEFAULT_CONFIG, clear_cache, clear_logs, ensure_app_dirs, load_config, save_config
 from realtime_audio_translator.engine import RealtimeEngine
-from realtime_audio_translator.gui import PROVIDER_CHOICES, format_overlay_line, mode_notice, swap_language_values
+from realtime_audio_translator.gui import PROVIDER_CHOICES, TTS_PROVIDER_CHOICES, format_overlay_line, mode_notice, swap_language_values
 from realtime_audio_translator.logbook import ConversationLog
 from realtime_audio_translator.models import list_models, model_download_command, recommend_model
 from realtime_audio_translator.providers import TextToSpeech, Translator, build_google_translate_request, build_openai_translation_request
@@ -98,6 +98,13 @@ class CoreTests(unittest.TestCase):
 
         self.assertEqual(len(calls), 1)
 
+    def test_local_provider_returns_text_without_cloud_request(self):
+        config = DEFAULT_CONFIG.copy()
+        config["provider"] = "local"
+        translator = Translator(config)
+
+        self.assertEqual(translator.translate("hello", "en", "zh-TW"), "hello")
+
     def test_openai_tts_requests_pcm_audio(self):
         import os
         import realtime_audio_translator.providers as providers_module
@@ -180,7 +187,8 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(swap_language_values("zh", "en"), ("en", "zh"))
 
     def test_provider_choices_are_fixed(self):
-        self.assertEqual(PROVIDER_CHOICES, ("google", "openai"))
+        self.assertEqual(PROVIDER_CHOICES, ("local", "google", "openai"))
+        self.assertEqual(TTS_PROVIDER_CHOICES, ("google", "openai"))
 
     def test_mode_notice_discloses_cloud_api_cost_risk(self):
         self.assertIn("cloud API", mode_notice("google", "openai"))

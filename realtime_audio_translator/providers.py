@@ -55,7 +55,9 @@ class Translator:
         cache_key = (provider, source_language, target_language, text.strip())
         if cache_key in self.cache:
             return self.cache[cache_key]
-        if provider == "openai":
+        if provider == "local":
+            translated = text
+        elif provider == "openai":
             translated = self._openai_translate(text, source_language, target_language)
         else:
             translated = self._google_translate(text, source_language, target_language)
