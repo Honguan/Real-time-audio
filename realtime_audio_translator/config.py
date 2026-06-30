@@ -26,6 +26,7 @@ DEFAULT_CONFIG = {
     "show_original_text": False,
     "tts_enabled": True,
     "record_logs": False,
+    "advanced_mode": False,
     "google_project_id": "",
     "google_service_account_json": "",
     "local_translate_url": "",

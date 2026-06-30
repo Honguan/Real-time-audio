@@ -19,6 +19,43 @@ LANGUAGE_CHOICES = ("zh", "en", "ja", "ko")
 PROVIDER_CHOICES = ("local", "google", "openai")
 TTS_PROVIDER_CHOICES = ("local", "google", "openai")
 CLOUD_PROVIDERS = ("google", "openai")
+SETTING_ROWS = (
+    ("Source language", "source_language"),
+    ("Target language", "target_language"),
+    ("Provider", "provider"),
+    ("TTS provider", "tts_provider"),
+    ("Local translate URL", "local_translate_url"),
+    ("Model", "model"),
+    ("ASR device", "device"),
+    ("Compute type", "compute_type"),
+    ("Speaker device", "speaker_device"),
+    ("Microphone device", "microphone_device"),
+    ("TTS output", "tts_output_device"),
+    ("Google project", "google_project_id"),
+    ("Google JSON", "google_service_account_json"),
+    ("Segment seconds", "segment_seconds"),
+    ("Speech threshold", "speech_threshold"),
+    ("Overlay opacity", "overlay_opacity"),
+    ("Overlay font size", "overlay_font_size"),
+    ("Overlay hold seconds", "overlay_hold_seconds"),
+    ("Runtime dir", "runtime_dir"),
+)
+BASIC_SETTING_KEYS = {
+    "source_language",
+    "target_language",
+    "provider",
+    "tts_provider",
+    "model",
+    "speaker_device",
+    "microphone_device",
+    "tts_output_device",
+    "runtime_dir",
+}
+ADVANCED_SETTING_KEYS = {key for _label, key in SETTING_ROWS} - BASIC_SETTING_KEYS
+
+
+def visible_setting_keys(advanced: bool) -> list[str]:
+    return [key for _label, key in SETTING_ROWS if advanced or key in BASIC_SETTING_KEYS]
 
 
 def format_overlay_line(text: str, language: str, show_language: bool) -> str:
@@ -154,31 +191,15 @@ class TranslatorApp(tk.Tk):
         self.show_original_text = tk.BooleanVar(value=bool(self.config["show_original_text"]))
         self.tts_enabled = tk.BooleanVar(value=bool(self.config.get("tts_enabled", True)))
         self.record_logs = tk.BooleanVar(value=bool(self.config["record_logs"]))
+        self.advanced_mode = tk.BooleanVar(value=bool(self.config.get("advanced_mode", False)))
         self.comboboxes: dict[str, ttk.Combobox] = {}
+        self.setting_widgets: dict[str, list[tk.Widget]] = {}
 
-        rows = [
-            ("Source language", "source_language"),
-            ("Target language", "target_language"),
-            ("Provider", "provider"),
-            ("TTS provider", "tts_provider"),
-            ("Local translate URL", "local_translate_url"),
-            ("Model", "model"),
-            ("ASR device", "device"),
-            ("Compute type", "compute_type"),
-            ("Speaker device", "speaker_device"),
-            ("Microphone device", "microphone_device"),
-            ("TTS output", "tts_output_device"),
-            ("Google project", "google_project_id"),
-            ("Google JSON", "google_service_account_json"),
-            ("Segment seconds", "segment_seconds"),
-            ("Speech threshold", "speech_threshold"),
-            ("Overlay opacity", "overlay_opacity"),
-            ("Overlay font size", "overlay_font_size"),
-            ("Overlay hold seconds", "overlay_hold_seconds"),
-            ("Runtime dir", "runtime_dir"),
-        ]
-        for row, (label, key) in enumerate(rows):
-            ttk.Label(frame, text=label).grid(row=row, column=0, sticky="w", pady=4)
+        for row, (label, key) in enumerate(SETTING_ROWS):
+            row_widgets: list[tk.Widget] = []
+            label_widget = ttk.Label(frame, text=label)
+            label_widget.grid(row=row, column=0, sticky="w", pady=4)
+            row_widgets.append(label_widget)
             if key in ("source_language", "target_language"):
                 widget = ttk.Combobox(frame, textvariable=self.vars[key], values=LANGUAGE_CHOICES)
                 widget.bind("<<ComboboxSelected>>", lambda _event: self._save())
@@ -192,14 +213,22 @@ class TranslatorApp(tk.Tk):
             else:
                 widget = ttk.Entry(frame, textvariable=self.vars[key])
             widget.grid(row=row, column=1, sticky="ew", pady=4, padx=8)
+            row_widgets.append(widget)
             if key == "google_service_account_json":
-                ttk.Button(frame, text="Select", command=self._pick_google_json).grid(row=row, column=2, sticky="ew")
+                button = ttk.Button(frame, text="Select", command=self._pick_google_json)
+                button.grid(row=row, column=2, sticky="ew")
+                row_widgets.append(button)
             if key in ("overlay_opacity", "overlay_font_size", "overlay_hold_seconds"):
-                ttk.Button(frame, text="Apply", command=self._apply_overlay).grid(row=row, column=2, sticky="ew")
+                button = ttk.Button(frame, text="Apply", command=self._apply_overlay)
+                button.grid(row=row, column=2, sticky="ew")
+                row_widgets.append(button)
             if key == "runtime_dir":
-                ttk.Button(frame, text="Select", command=self._pick_runtime_dir).grid(row=row, column=2, sticky="ew")
+                button = ttk.Button(frame, text="Select", command=self._pick_runtime_dir)
+                button.grid(row=row, column=2, sticky="ew")
+                row_widgets.append(button)
+            self.setting_widgets[key] = row_widgets
 
-        next_row = len(rows)
+        next_row = len(SETTING_ROWS)
         ttk.Label(frame, textvariable=self.runtime_text, foreground="#a94442").grid(row=next_row, column=0, columnspan=3, sticky="ew", pady=4)
         ttk.Label(frame, textvariable=self.mode_text, foreground="#7a4b00").grid(row=next_row + 1, column=0, columnspan=3, sticky="ew", pady=4)
 
@@ -215,9 +244,10 @@ class TranslatorApp(tk.Tk):
         ttk.Checkbutton(frame, text="Show original", variable=self.show_original_text, command=self._save).grid(row=next_row + 4, column=0, sticky="w")
         ttk.Checkbutton(frame, text="Speak translations", variable=self.tts_enabled, command=self._save).grid(row=next_row + 4, column=1, sticky="w")
         ttk.Checkbutton(frame, text="Record logs", variable=self.record_logs).grid(row=next_row + 4, column=2, sticky="w")
+        ttk.Checkbutton(frame, text="Advanced settings", variable=self.advanced_mode, command=self._apply_mode).grid(row=next_row + 5, column=0, sticky="w")
 
         buttons = ttk.Frame(frame)
-        buttons.grid(row=next_row + 5, column=0, columnspan=3, sticky="ew", pady=12)
+        buttons.grid(row=next_row + 6, column=0, columnspan=3, sticky="ew", pady=12)
         def copy_overlay() -> None:
             text = overlay_clipboard_text(self.overlay.speaker.get(), self.overlay.mine.get())
             if not text:
@@ -248,8 +278,9 @@ class TranslatorApp(tk.Tk):
         ):
             ttk.Button(buttons, text=text, command=command).pack(side="left", padx=3)
 
-        ttk.Label(frame, textvariable=self.status).grid(row=next_row + 6, column=0, columnspan=3, sticky="ew")
+        ttk.Label(frame, textvariable=self.status).grid(row=next_row + 7, column=0, columnspan=3, sticky="ew")
         frame.grid_columnconfigure(1, weight=1)
+        self._apply_mode(save=False)
 
     def _refresh_lists(self) -> None:
         devices = [format_device_label(d) for d in list_audio_devices()]
@@ -274,6 +305,7 @@ class TranslatorApp(tk.Tk):
         config["show_original_text"] = self.show_original_text.get()
         config["tts_enabled"] = self.tts_enabled.get()
         config["record_logs"] = self.record_logs.get()
+        config["advanced_mode"] = self.advanced_mode.get()
         config["overlay_opacity"] = overlay_opacity_value(config["overlay_opacity"])
         config["overlay_font_size"] = overlay_font_size_value(config["overlay_font_size"])
         config["overlay_hold_seconds"] = overlay_hold_seconds_value(config["overlay_hold_seconds"])
@@ -291,6 +323,16 @@ class TranslatorApp(tk.Tk):
         self.config = self._config_from_vars()
         self.mode_text.set(mode_notice(self.config["provider"], self.config["tts_provider"]))
         save_config(APP_DIR, self.config)
+
+    def _apply_mode(self, save: bool = True) -> None:
+        for key in ADVANCED_SETTING_KEYS:
+            for widget in self.setting_widgets.get(key, []):
+                if self.advanced_mode.get():
+                    widget.grid()
+                else:
+                    widget.grid_remove()
+        if save:
+            self._save()
 
     def _apply_overlay(self) -> None:
         self._set_overlay_visible(self.overlay_visible.get())
