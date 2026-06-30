@@ -123,3 +123,21 @@ class TextToSpeech:
         )
         response.raise_for_status()
         return response.content
+
+    def synthesize_openai_linear16(self, text: str) -> bytes:
+        api_key = os.environ.get("OPENAI_API_KEY", "")
+        if not api_key:
+            raise RuntimeError("OPENAI_API_KEY is not set")
+        response = requests.post(
+            OPENAI_SPEECH_URL,
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json={
+                "model": self.config["openai_tts_model"],
+                "voice": self.config["openai_tts_voice"],
+                "input": text,
+                "response_format": "pcm",
+            },
+            timeout=30,
+        )
+        response.raise_for_status()
+        return response.content

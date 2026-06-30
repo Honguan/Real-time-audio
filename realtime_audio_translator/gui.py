@@ -84,6 +84,7 @@ class TranslatorApp(tk.Tk):
             ("Source language", "source_language"),
             ("Target language", "target_language"),
             ("Provider", "provider"),
+            ("TTS provider", "tts_provider"),
             ("Model", "model"),
             ("ASR device", "device"),
             ("Compute type", "compute_type"),
@@ -97,7 +98,7 @@ class TranslatorApp(tk.Tk):
         ]
         for row, (label, key) in enumerate(rows):
             ttk.Label(frame, text=label).grid(row=row, column=0, sticky="w", pady=4)
-            if key == "provider":
+            if key in ("provider", "tts_provider"):
                 widget = ttk.Combobox(frame, textvariable=self.vars[key], values=PROVIDER_CHOICES, state="readonly")
             elif key.endswith("device") or key == "model":
                 widget = ttk.Combobox(frame, textvariable=self.vars[key], values=[])

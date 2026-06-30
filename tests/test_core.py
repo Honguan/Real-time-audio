@@ -11,7 +11,7 @@ from realtime_audio_translator.engine import RealtimeEngine
 from realtime_audio_translator.gui import PROVIDER_CHOICES, format_overlay_line, swap_language_values
 from realtime_audio_translator.logbook import ConversationLog
 from realtime_audio_translator.models import list_models, model_download_command, recommend_model
-from realtime_audio_translator.providers import build_google_translate_request, build_openai_translation_request
+from realtime_audio_translator.providers import TextToSpeech, build_google_translate_request, build_openai_translation_request
 
 
 class CoreTests(unittest.TestCase):
@@ -49,6 +49,34 @@ class CoreTests(unittest.TestCase):
         google = build_google_translate_request("hello", "zh-TW", "en", "project-1")
         self.assertIn("/projects/project-1:translateText", google["url"])
         self.assertEqual(google["json"]["targetLanguageCode"], "zh-TW")
+
+    def test_openai_tts_requests_pcm_audio(self):
+        import os
+        import realtime_audio_translator.providers as providers_module
+
+        calls = []
+
+        class Response:
+            content = b"pcm"
+
+            def raise_for_status(self):
+                return None
+
+        original_key = os.environ.get("OPENAI_API_KEY")
+        original_post = providers_module.requests.post
+        os.environ["OPENAI_API_KEY"] = "test-key"
+        providers_module.requests.post = lambda *args, **kwargs: calls.append((args, kwargs)) or Response()
+        try:
+            audio = TextToSpeech(DEFAULT_CONFIG.copy()).synthesize_openai_linear16("hello")
+        finally:
+            providers_module.requests.post = original_post
+            if original_key is None:
+                os.environ.pop("OPENAI_API_KEY", None)
+            else:
+                os.environ["OPENAI_API_KEY"] = original_key
+
+        self.assertEqual(audio, b"pcm")
+        self.assertEqual(calls[0][1]["json"]["response_format"], "pcm")
 
     def test_conversation_log_writes_markdown_and_jsonl(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -126,6 +154,49 @@ class CoreTests(unittest.TestCase):
         engine._process_segments("speaker", Worker())
 
         self.assertTrue(any(status.startswith("speaker latency ") for status in statuses))
+
+    def test_engine_uses_openai_tts_provider_for_mic_output(self):
+        import realtime_audio_translator.engine as engine_module
+
+        config = DEFAULT_CONFIG.copy()
+        config["record_logs"] = False
+        config["tts_provider"] = "openai"
+        played = []
+        engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, lambda status: None)
+
+        class Transcriber:
+            def transcribe(self, wav, source_language):
+                return "hello"
+
+        class Translator:
+            def translate(self, text, source_language, target_language):
+                engine.running = False
+                return "hi"
+
+        class TTS:
+            def synthesize_google_linear16(self, text, language_code):
+                raise AssertionError("google tts should not be used")
+
+            def synthesize_openai_linear16(self, text):
+                return b"\0\0"
+
+        class Worker:
+            def __init__(self):
+                self.queue = queue.Queue()
+                self.queue.put(Path("clip.wav"))
+
+        original_play = engine_module.play_linear16
+        engine_module.play_linear16 = lambda audio, device: played.append((audio, device))
+        try:
+            engine.running = True
+            engine.transcriber = Transcriber()
+            engine.translator = Translator()
+            engine.tts = TTS()
+            engine._process_segments("me", Worker())
+        finally:
+            engine_module.play_linear16 = original_play
+
+        self.assertEqual(played, [(b"\0\0", "CABLE Input")])
 
     def test_engine_stop_stops_workers(self):
         config = DEFAULT_CONFIG.copy()
