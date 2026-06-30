@@ -24,6 +24,10 @@ def format_overlay_line(text: str, language: str, show_language: bool) -> str:
     return f"{language}: {text}" if show_language and text else text
 
 
+def overlay_clipboard_text(speaker: str, mine: str) -> str:
+    return "\n".join(line for line in (speaker, mine) if line)
+
+
 def overlay_opacity_value(value) -> float:
     try:
         opacity = float(value)
@@ -50,6 +54,10 @@ def overlay_hold_seconds_value(value) -> float:
 
 def overlay_visibility_action(visible: bool) -> str:
     return "show" if visible else "hide"
+
+
+def subtitle_updates_allowed(paused: bool) -> bool:
+    return not paused
 
 
 def swap_language_values(source_language: str, target_language: str) -> tuple[str, str]:
@@ -193,6 +201,15 @@ class TranslatorApp(tk.Tk):
 
         buttons = ttk.Frame(frame)
         buttons.grid(row=next_row + 5, column=0, columnspan=3, sticky="ew", pady=12)
+        def copy_overlay() -> None:
+            text = overlay_clipboard_text(self.overlay.speaker.get(), self.overlay.mine.get())
+            if not text:
+                self.status.set("no subtitles to copy")
+                return
+            self.clipboard_clear()
+            self.clipboard_append(text)
+            self.status.set("subtitles copied")
+
         for text, command in (
             ("Refresh", self._refresh_lists),
             ("Swap languages", self._swap_languages),
@@ -205,6 +222,7 @@ class TranslatorApp(tk.Tk):
             ("Stop", self._stop),
             ("Pause/resume", self._toggle_pause),
             ("Mute/unmute", self._toggle_mute),
+            ("Copy subtitles", copy_overlay),
             ("Clear cache", self._clear_cache),
             ("Clear logs", self._clear_logs),
         ):
@@ -385,6 +403,8 @@ class TranslatorApp(tk.Tk):
         self.status.set("logs cleared")
 
     def _overlay_update(self, speaker: str, mine: str) -> None:
+        if self.engine and not subtitle_updates_allowed(self.engine.paused):
+            return
         self.overlay_generation += 1
         generation = self.overlay_generation
         speaker = format_overlay_line(speaker, self.config["source_language"], self.show_language_labels.get())

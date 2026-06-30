@@ -8,7 +8,7 @@ from realtime_audio_translator.audio import device_name_from_label
 from realtime_audio_translator.commands import parse_help_options
 from realtime_audio_translator.config import DEFAULT_CONFIG, clear_cache, clear_logs, ensure_app_dirs, load_config, save_config
 from realtime_audio_translator.engine import RealtimeEngine
-from realtime_audio_translator.gui import PROVIDER_CHOICES, TTS_PROVIDER_CHOICES, format_overlay_line, mode_notice, overlay_font_size_value, overlay_hold_seconds_value, overlay_opacity_value, overlay_visibility_action, swap_language_values
+from realtime_audio_translator.gui import PROVIDER_CHOICES, TTS_PROVIDER_CHOICES, format_overlay_line, mode_notice, overlay_clipboard_text, overlay_font_size_value, overlay_hold_seconds_value, overlay_opacity_value, overlay_visibility_action, subtitle_updates_allowed, swap_language_values
 from realtime_audio_translator.logbook import ConversationLog
 from realtime_audio_translator.models import list_models, model_download_command, recommend_model
 from realtime_audio_translator.providers import TextToSpeech, Translator, build_google_translate_request, build_openai_translation_request
@@ -183,6 +183,11 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(format_overlay_line("hello", "en", True), "en: hello")
         self.assertEqual(format_overlay_line("hello", "en", False), "hello")
 
+    def test_overlay_clipboard_text_joins_visible_lines(self):
+        self.assertEqual(overlay_clipboard_text("speaker", "mine"), "speaker\nmine")
+        self.assertEqual(overlay_clipboard_text("", "mine"), "mine")
+        self.assertEqual(overlay_clipboard_text("speaker", ""), "speaker")
+
     def test_overlay_opacity_value_is_bounded(self):
         self.assertEqual(overlay_opacity_value("0.7"), 0.7)
         self.assertEqual(overlay_opacity_value("bad"), 0.86)
@@ -204,6 +209,10 @@ class CoreTests(unittest.TestCase):
     def test_overlay_visibility_action(self):
         self.assertEqual(overlay_visibility_action(True), "show")
         self.assertEqual(overlay_visibility_action(False), "hide")
+
+    def test_subtitle_updates_allowed_respects_pause(self):
+        self.assertTrue(subtitle_updates_allowed(False))
+        self.assertFalse(subtitle_updates_allowed(True))
 
     def test_swap_language_values(self):
         self.assertEqual(swap_language_values("zh", "en"), ("en", "zh"))
