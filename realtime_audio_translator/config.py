@@ -9,7 +9,7 @@ APP_DIR = Path(os.environ.get("REALTIME_AUDIO_HOME", Path.home() / ".realtime-au
 DEFAULT_CONFIG = {
     "source_language": "zh",
     "target_language": "en",
-    "provider": "google",
+    "provider": "local",
     "tts_provider": "local",
     "model": "large-v3-turbo",
     "compute_type": "auto",

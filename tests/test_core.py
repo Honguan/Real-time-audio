@@ -32,6 +32,11 @@ class CoreTests(unittest.TestCase):
     def test_conversation_logs_are_off_by_default(self):
         self.assertFalse(DEFAULT_CONFIG["record_logs"])
 
+    def test_default_mode_uses_free_local_providers(self):
+        self.assertEqual(DEFAULT_CONFIG["provider"], "local")
+        self.assertEqual(DEFAULT_CONFIG["tts_provider"], "local")
+        self.assertIn("local/offline", mode_notice(DEFAULT_CONFIG["provider"], DEFAULT_CONFIG["tts_provider"]))
+
     def test_clear_logs_and_cache_keep_app_dirs(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

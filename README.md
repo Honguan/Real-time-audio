@@ -1,12 +1,12 @@
 # Realtime Audio Translator
 
-Windows 即時雙向語音翻譯工具。它擷取目前喇叭與麥克風聲音，使用本資料夾的 Whisper 環境做近即時辨識，透過 OpenAI 或 Google 翻譯文字，並用 Windows 內建語音或 Google/OpenAI TTS 將我方翻譯語音播放到 VB-CABLE。
+Windows 即時雙向語音翻譯工具。它擷取目前喇叭與麥克風聲音，使用本資料夾的 Whisper 環境做近即時辨識，預設使用本機模式，並可切換 OpenAI 或 Google 翻譯；TTS 可用 Windows 內建語音或 Google/OpenAI TTS 播放到 VB-CABLE。
 
 ## 需求
 
 - Windows 10/11
 - VB-Audio Virtual Cable
-- Google Cloud 服務帳戶 JSON，並啟用 Cloud Translation 與 Text-to-Speech
+- 可選：Google Cloud 服務帳戶 JSON，並啟用 Cloud Translation 與 Text-to-Speech
 - 可選：`OPENAI_API_KEY`，用於 OpenAI 翻譯或 OpenAI TTS；本機 TTS 不需要 API key
 - 可選打包：Inno Setup，需可執行 `iscc.exe`
 
@@ -30,7 +30,7 @@ Windows 即時雙向語音翻譯工具。它擷取目前喇叭與麥克風聲音
 ```
 
 翻譯快取只保留在同一次執行期間；重複短句會減少延遲與 API 請求。
-Provider 選 `local` 時不呼叫雲端翻譯，字幕會保留原文，適合離線檢查 ASR 與字幕流程。
+Provider 預設為 `local`，不呼叫雲端翻譯，字幕會保留原文，適合離線檢查 ASR 與字幕流程。
 `Speech threshold` 可設定語音靈敏度，較高會忽略更多背景聲。
 勾選 `Show original` 可在字幕同時顯示原文與譯文。
 取消勾選 `Speak translations` 可只顯示字幕、不播放翻譯語音。
