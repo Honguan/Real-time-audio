@@ -29,6 +29,8 @@ Windows 即時雙向語音翻譯工具。它擷取目前喇叭與麥克風聲音
 %USERPROFILE%\.realtime-audio\models
 ```
 
+翻譯快取只保留在同一次執行期間；重複短句會減少延遲與 API 請求。
+
 ## 使用
 
 開發模式：

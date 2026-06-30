@@ -11,7 +11,7 @@ from realtime_audio_translator.engine import RealtimeEngine
 from realtime_audio_translator.gui import PROVIDER_CHOICES, format_overlay_line, mode_notice, swap_language_values
 from realtime_audio_translator.logbook import ConversationLog
 from realtime_audio_translator.models import list_models, model_download_command, recommend_model
-from realtime_audio_translator.providers import TextToSpeech, build_google_translate_request, build_openai_translation_request
+from realtime_audio_translator.providers import TextToSpeech, Translator, build_google_translate_request, build_openai_translation_request
 
 
 class CoreTests(unittest.TestCase):
@@ -65,6 +65,38 @@ class CoreTests(unittest.TestCase):
         google = build_google_translate_request("hello", "zh-TW", "en", "project-1")
         self.assertIn("/projects/project-1:translateText", google["url"])
         self.assertEqual(google["json"]["targetLanguageCode"], "zh-TW")
+
+    def test_translator_caches_repeated_requests(self):
+        import os
+        import realtime_audio_translator.providers as providers_module
+
+        calls = []
+
+        class Response:
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return {"output_text": "你好"}
+
+        original_key = os.environ.get("OPENAI_API_KEY")
+        original_post = providers_module.requests.post
+        os.environ["OPENAI_API_KEY"] = "test-key"
+        providers_module.requests.post = lambda *args, **kwargs: calls.append((args, kwargs)) or Response()
+        try:
+            config = DEFAULT_CONFIG.copy()
+            config["provider"] = "openai"
+            translator = Translator(config)
+            self.assertEqual(translator.translate("hello", "en", "zh-TW"), "你好")
+            self.assertEqual(translator.translate("hello", "en", "zh-TW"), "你好")
+        finally:
+            providers_module.requests.post = original_post
+            if original_key is None:
+                os.environ.pop("OPENAI_API_KEY", None)
+            else:
+                os.environ["OPENAI_API_KEY"] = original_key
+
+        self.assertEqual(len(calls), 1)
 
     def test_openai_tts_requests_pcm_audio(self):
         import os

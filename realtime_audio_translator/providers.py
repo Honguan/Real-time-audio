@@ -1,7 +1,7 @@
 import base64
 import html
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import requests
 
@@ -46,13 +46,21 @@ def google_access_token(service_account_json: str) -> str:
 @dataclass
 class Translator:
     config: dict
+    cache: dict[tuple[str, str, str, str], str] = field(default_factory=dict)
 
     def translate(self, text: str, source_language: str, target_language: str) -> str:
         if not text.strip():
             return ""
-        if self.config.get("provider") == "openai":
-            return self._openai_translate(text, source_language, target_language)
-        return self._google_translate(text, source_language, target_language)
+        provider = self.config.get("provider", "google")
+        cache_key = (provider, source_language, target_language, text.strip())
+        if cache_key in self.cache:
+            return self.cache[cache_key]
+        if provider == "openai":
+            translated = self._openai_translate(text, source_language, target_language)
+        else:
+            translated = self._google_translate(text, source_language, target_language)
+        self.cache[cache_key] = translated
+        return translated
 
     def _openai_translate(self, text: str, source_language: str, target_language: str) -> str:
         request = build_openai_translation_request(text, target_language, source_language, self.config["openai_model"])
