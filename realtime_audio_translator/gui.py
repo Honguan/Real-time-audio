@@ -15,6 +15,7 @@ from .providers import Translator, google_access_token
 from .runtime import DEFAULT_RUNTIME_DIR, RUNTIME_RELEASE_URL, install_runtime_from, runtime_dir, runtime_status, whisper_exe
 
 
+LANGUAGE_CHOICES = ("zh", "en", "ja", "ko")
 PROVIDER_CHOICES = ("local", "google", "openai")
 TTS_PROVIDER_CHOICES = ("local", "google", "openai")
 CLOUD_PROVIDERS = ("google", "openai")
@@ -178,7 +179,10 @@ class TranslatorApp(tk.Tk):
         ]
         for row, (label, key) in enumerate(rows):
             ttk.Label(frame, text=label).grid(row=row, column=0, sticky="w", pady=4)
-            if key in ("provider", "tts_provider"):
+            if key in ("source_language", "target_language"):
+                widget = ttk.Combobox(frame, textvariable=self.vars[key], values=LANGUAGE_CHOICES)
+                widget.bind("<<ComboboxSelected>>", lambda _event: self._save())
+            elif key in ("provider", "tts_provider"):
                 values = TTS_PROVIDER_CHOICES if key == "tts_provider" else PROVIDER_CHOICES
                 widget = ttk.Combobox(frame, textvariable=self.vars[key], values=values, state="readonly")
                 widget.bind("<<ComboboxSelected>>", lambda _event: self._save())
