@@ -17,6 +17,7 @@ DEFAULT_CONFIG = {
     "speaker_device": "",
     "microphone_device": "",
     "tts_output_device": "CABLE Input",
+    "overlay_visible": True,
     "overlay_topmost": True,
     "overlay_opacity": 0.86,
     "overlay_font_size": 18,

@@ -40,6 +40,10 @@ def overlay_font_size_value(value) -> int:
     return min(48, max(12, size))
 
 
+def overlay_visibility_action(visible: bool) -> str:
+    return "show" if visible else "hide"
+
+
 def swap_language_values(source_language: str, target_language: str) -> tuple[str, str]:
     return target_language, source_language
 
@@ -106,12 +110,14 @@ class TranslatorApp(tk.Tk):
             overlay_font_size_value(self.config.get("overlay_font_size", 18)),
         )
         self._build()
+        self._set_overlay_visible(bool(self.config.get("overlay_visible", True)))
         self._refresh_lists()
 
     def _build(self) -> None:
         frame = ttk.Frame(self, padding=12)
         frame.pack(fill="both", expand=True)
         self.vars = {key: tk.StringVar(value=str(value)) for key, value in self.config.items()}
+        self.overlay_visible = tk.BooleanVar(value=bool(self.config["overlay_visible"]))
         self.overlay_topmost = tk.BooleanVar(value=bool(self.config["overlay_topmost"]))
         self.show_language_labels = tk.BooleanVar(value=bool(self.config["show_language_labels"]))
         self.show_original_text = tk.BooleanVar(value=bool(self.config["show_original_text"]))
@@ -165,10 +171,11 @@ class TranslatorApp(tk.Tk):
         ttk.Button(runtime_buttons, text="Import extracted runtime", command=self._import_runtime).pack(side="left", padx=3)
         ttk.Button(runtime_buttons, text="Download Faster-Whisper-XXL", command=lambda: webbrowser.open(RUNTIME_RELEASE_URL)).pack(side="left", padx=3)
 
-        ttk.Checkbutton(frame, text="Overlay topmost", variable=self.overlay_topmost, command=self._apply_overlay).grid(row=next_row + 3, column=0, sticky="w")
-        ttk.Checkbutton(frame, text="Show language", variable=self.show_language_labels, command=self._save).grid(row=next_row + 3, column=1, sticky="w")
-        ttk.Checkbutton(frame, text="Show original", variable=self.show_original_text, command=self._save).grid(row=next_row + 3, column=2, sticky="w")
-        ttk.Checkbutton(frame, text="Record logs", variable=self.record_logs).grid(row=next_row + 4, column=0, sticky="w")
+        ttk.Checkbutton(frame, text="Show overlay", variable=self.overlay_visible, command=self._apply_overlay).grid(row=next_row + 3, column=0, sticky="w")
+        ttk.Checkbutton(frame, text="Overlay topmost", variable=self.overlay_topmost, command=self._apply_overlay).grid(row=next_row + 3, column=1, sticky="w")
+        ttk.Checkbutton(frame, text="Show language", variable=self.show_language_labels, command=self._save).grid(row=next_row + 3, column=2, sticky="w")
+        ttk.Checkbutton(frame, text="Show original", variable=self.show_original_text, command=self._save).grid(row=next_row + 4, column=0, sticky="w")
+        ttk.Checkbutton(frame, text="Record logs", variable=self.record_logs).grid(row=next_row + 4, column=1, sticky="w")
 
         buttons = ttk.Frame(frame)
         buttons.grid(row=next_row + 5, column=0, columnspan=3, sticky="ew", pady=12)
@@ -209,6 +216,7 @@ class TranslatorApp(tk.Tk):
         config = self.config.copy()
         for key, variable in self.vars.items():
             config[key] = variable.get()
+        config["overlay_visible"] = self.overlay_visible.get()
         config["overlay_topmost"] = self.overlay_topmost.get()
         config["show_language_labels"] = self.show_language_labels.get()
         config["show_original_text"] = self.show_original_text.get()
@@ -227,10 +235,17 @@ class TranslatorApp(tk.Tk):
         save_config(APP_DIR, self.config)
 
     def _apply_overlay(self) -> None:
+        self._set_overlay_visible(self.overlay_visible.get())
         self.overlay.attributes("-topmost", self.overlay_topmost.get())
         self.overlay.attributes("-alpha", overlay_opacity_value(self.vars["overlay_opacity"].get()))
         self.overlay.set_font_size(overlay_font_size_value(self.vars["overlay_font_size"].get()))
         self._save()
+
+    def _set_overlay_visible(self, visible: bool) -> None:
+        if overlay_visibility_action(visible) == "show":
+            self.overlay.deiconify()
+        else:
+            self.overlay.withdraw()
 
     def _pick_google_json(self) -> None:
         path = filedialog.askopenfilename(filetypes=[("JSON", "*.json"), ("All files", "*.*")])
