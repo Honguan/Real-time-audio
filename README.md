@@ -30,7 +30,7 @@ Windows 即時雙向語音翻譯工具。它擷取目前喇叭與麥克風聲音
 ```
 
 翻譯快取只保留在同一次執行期間；重複短句會減少延遲與 API 請求。
-`Source language` 與 `Target language` 提供 `zh`、`en`、`ja`、`ko` 快速選項，也可手動輸入其他語言代碼。
+`Source language` 與 `Target language` 提供 `auto`、`zh`、`en`、`ja`、`ko` 快速選項，也可手動輸入其他語言代碼；`auto` 會讓 Whisper 與支援的翻譯服務自行偵測來源語言。
 Provider 預設為 `local`，不呼叫雲端翻譯，字幕會保留原文，適合離線檢查 ASR 與字幕流程。
 預設只顯示常用設定；勾選 `Advanced settings` 可展開雲端憑證、靈敏度與字幕調校欄位。
 若要使用本機 LibreTranslate，請把 `Local translate URL` 設為例如 `http://127.0.0.1:5000/translate`。

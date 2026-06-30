@@ -24,14 +24,16 @@ def build_openai_translation_request(text: str, target_language: str, source_lan
 
 
 def build_google_translate_request(text: str, target_language: str, source_language: str, project_id: str) -> dict:
+    payload = {
+        "contents": [text],
+        "mimeType": "text/plain",
+        "targetLanguageCode": target_language,
+    }
+    if source_language != "auto":
+        payload["sourceLanguageCode"] = source_language
     return {
         "url": GOOGLE_TRANSLATE_URL.format(project=project_id),
-        "json": {
-            "contents": [text],
-            "mimeType": "text/plain",
-            "sourceLanguageCode": source_language,
-            "targetLanguageCode": target_language,
-        },
+        "json": payload,
     }
 
 

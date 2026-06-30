@@ -6,6 +6,7 @@ import wave
 from pathlib import Path
 
 from realtime_audio_translator.audio import audio_segment_active, device_name_from_label
+from realtime_audio_translator.asr import AudioTranscriber
 from realtime_audio_translator.commands import parse_help_options
 from realtime_audio_translator.config import DEFAULT_CONFIG, clear_cache, clear_logs, ensure_app_dirs, load_config, save_config
 from realtime_audio_translator.engine import RealtimeEngine
@@ -292,7 +293,32 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(swap_language_values("zh", "en"), ("en", "zh"))
 
     def test_language_choices_cover_mvp_languages(self):
-        self.assertEqual(LANGUAGE_CHOICES, ("zh", "en", "ja", "ko"))
+        self.assertEqual(LANGUAGE_CHOICES, ("auto", "zh", "en", "ja", "ko"))
+
+    def test_google_translate_auto_source_omits_source_language(self):
+        request = build_google_translate_request("hello", "zh", "auto", "project")
+        self.assertNotIn("sourceLanguageCode", request["json"])
+        self.assertEqual(request["json"]["targetLanguageCode"], "zh")
+
+    def test_whisper_auto_language_omits_language_flag(self):
+        import realtime_audio_translator.asr as asr_module
+
+        calls = []
+        original_run = asr_module.subprocess.run
+        asr_module.subprocess.run = lambda command, **kwargs: calls.append(command) or type("Result", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                out = Path(tmp) / "out"
+                out.mkdir()
+                transcriber = AudioTranscriber.__new__(AudioTranscriber)
+                transcriber.exe_path = Path("fw.exe")
+                transcriber.model_name = "medium"
+                transcriber.model_dir = Path("models")
+                transcriber._transcribe_with_exe(out / "clip.wav", "auto")
+        finally:
+            asr_module.subprocess.run = original_run
+
+        self.assertNotIn("--language", calls[0])
 
     def test_troubleshooting_actions_cover_common_setup_issues(self):
         self.assertEqual(troubleshooting_action("speaker_audio"), ("open", "ms-settings:sound"))

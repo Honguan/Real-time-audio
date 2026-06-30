@@ -35,6 +35,8 @@ class AudioTranscriber:
         return self.model_name
 
     def transcribe(self, wav_path: Path, language: str | None = None) -> str:
+        if language == "auto":
+            language = None
         if self.model is None:
             return self._transcribe_with_exe(wav_path, language)
         segments, _ = self.model.transcribe(
@@ -48,6 +50,8 @@ class AudioTranscriber:
         return " ".join(segment.text.strip() for segment in segments).strip()
 
     def _transcribe_with_exe(self, wav_path: Path, language: str | None = None) -> str:
+        if language == "auto":
+            language = None
         with tempfile.TemporaryDirectory() as tmp:
             out_dir = Path(tmp)
             command = [

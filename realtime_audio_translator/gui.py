@@ -15,7 +15,7 @@ from .providers import Translator, google_access_token
 from .runtime import DEFAULT_RUNTIME_DIR, RUNTIME_RELEASE_URL, install_runtime_from, runtime_dir, runtime_status, whisper_exe
 
 
-LANGUAGE_CHOICES = ("zh", "en", "ja", "ko")
+LANGUAGE_CHOICES = ("auto", "zh", "en", "ja", "ko")
 PROVIDER_CHOICES = ("local", "google", "openai")
 TTS_PROVIDER_CHOICES = ("local", "google", "openai")
 CLOUD_PROVIDERS = ("google", "openai")
