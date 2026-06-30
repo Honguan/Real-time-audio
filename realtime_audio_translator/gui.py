@@ -7,7 +7,7 @@ from tkinter import filedialog, messagebox, ttk
 
 from .audio import find_device, format_device_label, list_audio_devices
 from .commands import refresh_commands
-from .config import APP_DIR, load_config, save_config
+from .config import APP_DIR, clear_cache, clear_logs, load_config, save_config
 from .engine import RealtimeEngine
 from .models import download_model, list_models, recommend_model
 from .paths import resource_root
@@ -138,6 +138,8 @@ class TranslatorApp(tk.Tk):
             ("Stop", self._stop),
             ("Pause/resume", self._toggle_pause),
             ("Mute/unmute", self._toggle_mute),
+            ("Clear cache", self._clear_cache),
+            ("Clear logs", self._clear_logs),
         ):
             ttk.Button(buttons, text=text, command=command).pack(side="left", padx=3)
 
@@ -291,6 +293,14 @@ class TranslatorApp(tk.Tk):
     def _toggle_mute(self) -> None:
         if self.engine:
             self.engine.set_muted(not self.engine.muted)
+
+    def _clear_cache(self) -> None:
+        clear_cache(APP_DIR)
+        self.status.set("cache cleared")
+
+    def _clear_logs(self) -> None:
+        clear_logs(APP_DIR)
+        self.status.set("logs cleared")
 
     def _overlay_update(self, speaker: str, mine: str) -> None:
         speaker = format_overlay_line(speaker, self.config["source_language"], self.show_language_labels.get())

@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 from pathlib import Path
 
 
@@ -52,3 +53,13 @@ def save_config(root: Path, config: dict) -> None:
     ensure_app_dirs(root)
     with (root / "config.json").open("w", encoding="utf-8", newline="\n") as handle:
         json.dump(config, handle, ensure_ascii=False, indent=2)
+
+
+def clear_logs(root: Path = APP_DIR) -> None:
+    shutil.rmtree(root / "logs", ignore_errors=True)
+    ensure_app_dirs(root)
+
+
+def clear_cache(root: Path = APP_DIR) -> None:
+    shutil.rmtree(root / "cache" / "audio", ignore_errors=True)
+    ensure_app_dirs(root)

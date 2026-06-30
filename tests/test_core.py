@@ -6,7 +6,7 @@ from pathlib import Path
 
 from realtime_audio_translator.audio import device_name_from_label
 from realtime_audio_translator.commands import parse_help_options
-from realtime_audio_translator.config import DEFAULT_CONFIG, ensure_app_dirs, load_config, save_config
+from realtime_audio_translator.config import DEFAULT_CONFIG, clear_cache, clear_logs, ensure_app_dirs, load_config, save_config
 from realtime_audio_translator.engine import RealtimeEngine
 from realtime_audio_translator.gui import PROVIDER_CHOICES, format_overlay_line, swap_language_values
 from realtime_audio_translator.logbook import ConversationLog
@@ -30,6 +30,19 @@ class CoreTests(unittest.TestCase):
 
     def test_conversation_logs_are_off_by_default(self):
         self.assertFalse(DEFAULT_CONFIG["record_logs"])
+
+    def test_clear_logs_and_cache_keep_app_dirs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ensure_app_dirs(root)
+            (root / "logs" / "session.jsonl").write_text("secret", encoding="utf-8")
+            (root / "cache" / "audio" / "clip.wav").write_bytes(b"audio")
+
+            clear_logs(root)
+            clear_cache(root)
+
+            self.assertEqual(list((root / "logs").iterdir()), [])
+            self.assertEqual(list((root / "cache" / "audio").iterdir()), [])
 
     def test_parse_help_options_extracts_choices_and_flags(self):
         help_text = """
