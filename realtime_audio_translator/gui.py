@@ -18,12 +18,14 @@ from .runtime import DEFAULT_RUNTIME_DIR, RUNTIME_RELEASE_URL, install_runtime_f
 LANGUAGE_CHOICES = ("auto", "zh", "en", "ja", "ko")
 PROVIDER_CHOICES = ("local", "google", "openai")
 TTS_PROVIDER_CHOICES = ("local", "google", "openai")
+PERFORMANCE_CHOICES = ("low_latency", "balanced", "quality")
 CLOUD_PROVIDERS = ("google", "openai")
 SETTING_ROWS = (
     ("Source language", "source_language"),
     ("Target language", "target_language"),
     ("Provider", "provider"),
     ("TTS provider", "tts_provider"),
+    ("Performance mode", "performance_mode"),
     ("Local translate URL", "local_translate_url"),
     ("Model", "model"),
     ("ASR device", "device"),
@@ -45,6 +47,7 @@ BASIC_SETTING_KEYS = {
     "target_language",
     "provider",
     "tts_provider",
+    "performance_mode",
     "model",
     "speaker_device",
     "microphone_device",
@@ -56,6 +59,10 @@ ADVANCED_SETTING_KEYS = {key for _label, key in SETTING_ROWS} - BASIC_SETTING_KE
 
 def visible_setting_keys(advanced: bool) -> list[str]:
     return [key for _label, key in SETTING_ROWS if advanced or key in BASIC_SETTING_KEYS]
+
+
+def performance_segment_seconds(mode: str) -> float:
+    return {"low_latency": 1.5, "balanced": 2.0, "quality": 3.0}.get(mode, 2.0)
 
 
 def format_overlay_line(text: str, language: str, show_language: bool) -> str:
@@ -203,10 +210,10 @@ class TranslatorApp(tk.Tk):
             if key in ("source_language", "target_language"):
                 widget = ttk.Combobox(frame, textvariable=self.vars[key], values=LANGUAGE_CHOICES)
                 widget.bind("<<ComboboxSelected>>", lambda _event: self._save())
-            elif key in ("provider", "tts_provider"):
-                values = TTS_PROVIDER_CHOICES if key == "tts_provider" else PROVIDER_CHOICES
+            elif key in ("provider", "tts_provider", "performance_mode"):
+                values = PERFORMANCE_CHOICES if key == "performance_mode" else TTS_PROVIDER_CHOICES if key == "tts_provider" else PROVIDER_CHOICES
                 widget = ttk.Combobox(frame, textvariable=self.vars[key], values=values, state="readonly")
-                widget.bind("<<ComboboxSelected>>", lambda _event: self._save())
+                widget.bind("<<ComboboxSelected>>", lambda _event, name=key: self._apply_performance_mode() if name == "performance_mode" else self._save())
             elif key.endswith("device") or key == "model":
                 widget = ttk.Combobox(frame, textvariable=self.vars[key], values=[])
                 self.comboboxes[key] = widget
@@ -306,6 +313,8 @@ class TranslatorApp(tk.Tk):
         config["tts_enabled"] = self.tts_enabled.get()
         config["record_logs"] = self.record_logs.get()
         config["advanced_mode"] = self.advanced_mode.get()
+        if config.get("performance_mode") not in PERFORMANCE_CHOICES:
+            config["performance_mode"] = "balanced"
         config["overlay_opacity"] = overlay_opacity_value(config["overlay_opacity"])
         config["overlay_font_size"] = overlay_font_size_value(config["overlay_font_size"])
         config["overlay_hold_seconds"] = overlay_hold_seconds_value(config["overlay_hold_seconds"])
@@ -333,6 +342,10 @@ class TranslatorApp(tk.Tk):
                     widget.grid_remove()
         if save:
             self._save()
+
+    def _apply_performance_mode(self) -> None:
+        self.vars["segment_seconds"].set(str(performance_segment_seconds(self.vars["performance_mode"].get())))
+        self._save()
 
     def _apply_overlay(self) -> None:
         self._set_overlay_visible(self.overlay_visible.get())
@@ -396,7 +409,9 @@ class TranslatorApp(tk.Tk):
             return
         cuda = subprocess.run([str(exe), "--checkcuda"], capture_output=True, text=True, check=False)
         devices = 1 if "CUDA device" in (cuda.stdout + cuda.stderr) else 0
-        self.vars["model"].set(recommend_model(devices, 4, False))
+        prefer_quality = self.vars["performance_mode"].get() == "quality"
+        self.vars["model"].set(recommend_model(devices, 4, prefer_quality))
+        self._apply_performance_mode()
 
     def _download_model(self) -> None:
         self._save()

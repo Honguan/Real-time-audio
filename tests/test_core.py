@@ -10,7 +10,7 @@ from realtime_audio_translator.asr import AudioTranscriber
 from realtime_audio_translator.commands import parse_help_options
 from realtime_audio_translator.config import DEFAULT_CONFIG, clear_cache, clear_logs, ensure_app_dirs, load_config, save_config
 from realtime_audio_translator.engine import RealtimeEngine
-from realtime_audio_translator.gui import LANGUAGE_CHOICES, PROVIDER_CHOICES, TTS_PROVIDER_CHOICES, format_overlay_line, mode_notice, overlay_clipboard_text, overlay_font_size_value, overlay_hold_seconds_value, overlay_opacity_value, overlay_visibility_action, subtitle_updates_allowed, swap_language_values, troubleshooting_action, visible_setting_keys
+from realtime_audio_translator.gui import LANGUAGE_CHOICES, PERFORMANCE_CHOICES, PROVIDER_CHOICES, TTS_PROVIDER_CHOICES, format_overlay_line, mode_notice, overlay_clipboard_text, overlay_font_size_value, overlay_hold_seconds_value, overlay_opacity_value, overlay_visibility_action, performance_segment_seconds, subtitle_updates_allowed, swap_language_values, troubleshooting_action, visible_setting_keys
 from realtime_audio_translator.logbook import ConversationLog
 from realtime_audio_translator.models import list_models, model_download_command, recommend_model
 from realtime_audio_translator.providers import TextToSpeech, Translator, build_google_translate_request, build_openai_translation_request
@@ -37,7 +37,13 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(DEFAULT_CONFIG["provider"], "local")
         self.assertEqual(DEFAULT_CONFIG["tts_provider"], "local")
         self.assertFalse(DEFAULT_CONFIG["advanced_mode"])
+        self.assertEqual(DEFAULT_CONFIG["performance_mode"], "balanced")
         self.assertIn("local/offline", mode_notice(DEFAULT_CONFIG["provider"], DEFAULT_CONFIG["tts_provider"]))
+
+    def test_performance_mode_controls_segment_seconds(self):
+        self.assertEqual(PERFORMANCE_CHOICES, ("low_latency", "balanced", "quality"))
+        self.assertLess(performance_segment_seconds("low_latency"), performance_segment_seconds("quality"))
+        self.assertEqual(performance_segment_seconds("bad"), performance_segment_seconds("balanced"))
 
     def test_simple_mode_hides_advanced_settings(self):
         simple = visible_setting_keys(False)

@@ -11,6 +11,7 @@ DEFAULT_CONFIG = {
     "target_language": "en",
     "provider": "local",
     "tts_provider": "local",
+    "performance_mode": "balanced",
     "model": "large-v3-turbo",
     "compute_type": "auto",
     "device": "cuda",
