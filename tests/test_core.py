@@ -9,7 +9,7 @@ from realtime_audio_translator.audio import audio_segment_active, device_name_fr
 from realtime_audio_translator.commands import parse_help_options
 from realtime_audio_translator.config import DEFAULT_CONFIG, clear_cache, clear_logs, ensure_app_dirs, load_config, save_config
 from realtime_audio_translator.engine import RealtimeEngine
-from realtime_audio_translator.gui import PROVIDER_CHOICES, TTS_PROVIDER_CHOICES, format_overlay_line, mode_notice, overlay_clipboard_text, overlay_font_size_value, overlay_hold_seconds_value, overlay_opacity_value, overlay_visibility_action, subtitle_updates_allowed, swap_language_values
+from realtime_audio_translator.gui import PROVIDER_CHOICES, TTS_PROVIDER_CHOICES, format_overlay_line, mode_notice, overlay_clipboard_text, overlay_font_size_value, overlay_hold_seconds_value, overlay_opacity_value, overlay_visibility_action, subtitle_updates_allowed, swap_language_values, troubleshooting_action
 from realtime_audio_translator.logbook import ConversationLog
 from realtime_audio_translator.models import list_models, model_download_command, recommend_model
 from realtime_audio_translator.providers import TextToSpeech, Translator, build_google_translate_request, build_openai_translation_request
@@ -282,6 +282,11 @@ class CoreTests(unittest.TestCase):
 
     def test_swap_language_values(self):
         self.assertEqual(swap_language_values("zh", "en"), ("en", "zh"))
+
+    def test_troubleshooting_actions_cover_common_setup_issues(self):
+        self.assertEqual(troubleshooting_action("speaker_audio"), ("open", "ms-settings:sound"))
+        self.assertEqual(troubleshooting_action("mic_output"), ("open", "https://vb-audio.com/Cable/"))
+        self.assertEqual(troubleshooting_action("subtitles"), ("overlay", "show"))
 
     def test_provider_choices_are_fixed(self):
         self.assertEqual(PROVIDER_CHOICES, ("local", "google", "openai"))

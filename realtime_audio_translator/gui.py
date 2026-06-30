@@ -64,6 +64,15 @@ def swap_language_values(source_language: str, target_language: str) -> tuple[st
     return target_language, source_language
 
 
+def troubleshooting_action(issue: str) -> tuple[str, str]:
+    actions = {
+        "speaker_audio": ("open", "ms-settings:sound"),
+        "mic_output": ("open", "https://vb-audio.com/Cable/"),
+        "subtitles": ("overlay", "show"),
+    }
+    return actions[issue]
+
+
 def mode_notice(provider: str, tts_provider: str) -> str:
     cloud = [name for name in dict.fromkeys((provider, tts_provider)) if name in CLOUD_PROVIDERS]
     if cloud:
@@ -227,6 +236,9 @@ class TranslatorApp(tk.Tk):
             ("Pause/resume", self._toggle_pause),
             ("Mute/unmute", self._toggle_mute),
             ("Copy subtitles", copy_overlay),
+            ("Fix speaker audio", lambda: self._troubleshoot("speaker_audio")),
+            ("Fix mic output", lambda: self._troubleshoot("mic_output")),
+            ("Fix subtitles", lambda: self._troubleshoot("subtitles")),
             ("Clear cache", self._clear_cache),
             ("Clear logs", self._clear_logs),
         ):
@@ -385,6 +397,19 @@ class TranslatorApp(tk.Tk):
         samplerate = 24000
         data = np.array([math.sin(2 * math.pi * 440 * i / samplerate) * 0.2 for i in range(samplerate // 4)], dtype="float32")
         sd.play(data, samplerate=samplerate, device=device, blocking=True)
+
+    def _troubleshoot(self, issue: str) -> None:
+        action, target = troubleshooting_action(issue)
+        if action == "overlay":
+            self.overlay_visible.set(True)
+            self._apply_overlay()
+            self.status.set("subtitles shown")
+            return
+        if target.startswith("ms-settings:"):
+            subprocess.Popen(["cmd", "/c", "start", "", target], shell=False)
+        else:
+            webbrowser.open(target)
+        self.status.set("repair help opened")
 
     def _start(self) -> None:
         self._save()
