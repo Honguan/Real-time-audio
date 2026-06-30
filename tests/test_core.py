@@ -204,6 +204,31 @@ class CoreTests(unittest.TestCase):
 
         self.assertEqual(played, [(b"\0\0", "CABLE Input")])
 
+    def test_engine_start_stops_when_no_audio_devices_start(self):
+        import realtime_audio_translator.engine as engine_module
+
+        statuses = []
+        config = DEFAULT_CONFIG.copy()
+        config["record_logs"] = False
+        engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, statuses.append)
+
+        class Transcriber:
+            def __init__(self, *args, **kwargs):
+                return None
+
+        original_transcriber = engine_module.AudioTranscriber
+        original_find_device = engine_module.find_device
+        engine_module.AudioTranscriber = Transcriber
+        engine_module.find_device = lambda *args, **kwargs: None
+        try:
+            engine.start()
+        finally:
+            engine_module.AudioTranscriber = original_transcriber
+            engine_module.find_device = original_find_device
+
+        self.assertFalse(engine.running)
+        self.assertEqual(statuses[-1], "no audio devices")
+
     def test_engine_stop_stops_workers(self):
         config = DEFAULT_CONFIG.copy()
         config["record_logs"] = False

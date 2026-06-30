@@ -43,9 +43,15 @@ class RealtimeEngine:
             self.config["compute_type"],
             self.config,
         )
-        self._start_direction("speaker", self.config.get("speaker_device", ""), True)
-        self._start_direction("me", self.config.get("microphone_device", ""), False)
-        self.status("running")
+        started = [
+            self._start_direction("speaker", self.config.get("speaker_device", ""), True),
+            self._start_direction("me", self.config.get("microphone_device", ""), False),
+        ]
+        if any(started):
+            self.status("running")
+        else:
+            self.running = False
+            self.status("no audio devices")
 
     def stop(self) -> None:
         self.running = False
@@ -63,13 +69,13 @@ class RealtimeEngine:
         self.muted = muted
         self.status("muted" if muted else "running")
 
-    def _start_direction(self, direction: str, device_hint: str, loopback: bool) -> None:
+    def _start_direction(self, direction: str, device_hint: str, loopback: bool) -> bool:
         device = find_device(device_hint, want_output=loopback) if device_hint else None
         if device is None:
             device = find_device("CABLE Output" if not loopback else "Speakers", want_output=loopback)
         if device is None:
             self.status(f"{direction}: no device")
-            return
+            return False
         worker = SegmentWorker(APP_DIR / "cache" / "audio", device, float(self.config["segment_seconds"]), loopback)
         self.workers.append(worker)
         capture_thread = threading.Thread(target=worker.run, args=(direction,), daemon=True)
@@ -77,6 +83,7 @@ class RealtimeEngine:
         self.threads.extend([capture_thread, process_thread])
         capture_thread.start()
         process_thread.start()
+        return True
 
     def _process_segments(self, direction: str, worker: SegmentWorker) -> None:
         assert self.transcriber is not None
