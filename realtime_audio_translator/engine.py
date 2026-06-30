@@ -110,7 +110,7 @@ class RealtimeEngine:
                     self.overlay(overlay_text, "")
                 else:
                     self.overlay("", overlay_text)
-                    if not self.muted and translated:
+                    if self.config.get("tts_enabled", True) and not self.muted and translated:
                         if self.config.get("tts_provider") == "openai":
                             audio = self.tts.synthesize_openai_linear16(translated)
                         else:

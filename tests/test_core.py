@@ -352,6 +352,52 @@ class CoreTests(unittest.TestCase):
 
         self.assertEqual(played, [(b"\0\0", "CABLE Input")])
 
+    def test_engine_can_disable_tts_output(self):
+        import realtime_audio_translator.engine as engine_module
+
+        config = DEFAULT_CONFIG.copy()
+        config["record_logs"] = False
+        config["tts_enabled"] = False
+        played = []
+        engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, lambda status: None)
+
+        class Transcriber:
+            def transcribe(self, wav, source_language):
+                return "hello"
+
+        class Translator:
+            def translate(self, text, source_language, target_language):
+                engine.running = False
+                return "hi"
+
+        class TTS:
+            def synthesize_google_linear16(self, text, language_code):
+                return b"\0\0"
+
+            def synthesize_openai_linear16(self, text):
+                return b"\0\0"
+
+        class Worker:
+            def __init__(self, wav):
+                self.queue = queue.Queue()
+                self.queue.put(wav)
+
+        original_play = engine_module.play_linear16
+        engine_module.play_linear16 = lambda audio, device: played.append((audio, device))
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                wav = Path(tmp) / "clip.wav"
+                self._write_wav(wav, 12000)
+                engine.running = True
+                engine.transcriber = Transcriber()
+                engine.translator = Translator()
+                engine.tts = TTS()
+                engine._process_segments("me", Worker(wav))
+        finally:
+            engine_module.play_linear16 = original_play
+
+        self.assertEqual(played, [])
+
     def test_engine_start_stops_when_no_audio_devices_start(self):
         import realtime_audio_translator.engine as engine_module
 

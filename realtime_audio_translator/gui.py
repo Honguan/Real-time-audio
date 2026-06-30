@@ -142,6 +142,7 @@ class TranslatorApp(tk.Tk):
         self.overlay_topmost = tk.BooleanVar(value=bool(self.config["overlay_topmost"]))
         self.show_language_labels = tk.BooleanVar(value=bool(self.config["show_language_labels"]))
         self.show_original_text = tk.BooleanVar(value=bool(self.config["show_original_text"]))
+        self.tts_enabled = tk.BooleanVar(value=bool(self.config.get("tts_enabled", True)))
         self.record_logs = tk.BooleanVar(value=bool(self.config["record_logs"]))
         self.comboboxes: dict[str, ttk.Combobox] = {}
 
@@ -198,7 +199,8 @@ class TranslatorApp(tk.Tk):
         ttk.Checkbutton(frame, text="Overlay topmost", variable=self.overlay_topmost, command=self._apply_overlay).grid(row=next_row + 3, column=1, sticky="w")
         ttk.Checkbutton(frame, text="Show language", variable=self.show_language_labels, command=self._save).grid(row=next_row + 3, column=2, sticky="w")
         ttk.Checkbutton(frame, text="Show original", variable=self.show_original_text, command=self._save).grid(row=next_row + 4, column=0, sticky="w")
-        ttk.Checkbutton(frame, text="Record logs", variable=self.record_logs).grid(row=next_row + 4, column=1, sticky="w")
+        ttk.Checkbutton(frame, text="Speak translations", variable=self.tts_enabled, command=self._save).grid(row=next_row + 4, column=1, sticky="w")
+        ttk.Checkbutton(frame, text="Record logs", variable=self.record_logs).grid(row=next_row + 4, column=2, sticky="w")
 
         buttons = ttk.Frame(frame)
         buttons.grid(row=next_row + 5, column=0, columnspan=3, sticky="ew", pady=12)
@@ -253,6 +255,7 @@ class TranslatorApp(tk.Tk):
         config["overlay_topmost"] = self.overlay_topmost.get()
         config["show_language_labels"] = self.show_language_labels.get()
         config["show_original_text"] = self.show_original_text.get()
+        config["tts_enabled"] = self.tts_enabled.get()
         config["record_logs"] = self.record_logs.get()
         config["overlay_opacity"] = overlay_opacity_value(config["overlay_opacity"])
         config["overlay_font_size"] = overlay_font_size_value(config["overlay_font_size"])
