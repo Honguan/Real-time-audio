@@ -18,6 +18,7 @@ DEFAULT_CONFIG = {
     "microphone_device": "",
     "tts_output_device": "CABLE Input",
     "overlay_topmost": True,
+    "overlay_opacity": 0.86,
     "show_language_labels": True,
     "show_original_text": False,
     "record_logs": False,

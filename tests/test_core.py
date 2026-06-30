@@ -8,7 +8,7 @@ from realtime_audio_translator.audio import device_name_from_label
 from realtime_audio_translator.commands import parse_help_options
 from realtime_audio_translator.config import DEFAULT_CONFIG, clear_cache, clear_logs, ensure_app_dirs, load_config, save_config
 from realtime_audio_translator.engine import RealtimeEngine
-from realtime_audio_translator.gui import PROVIDER_CHOICES, TTS_PROVIDER_CHOICES, format_overlay_line, mode_notice, swap_language_values
+from realtime_audio_translator.gui import PROVIDER_CHOICES, TTS_PROVIDER_CHOICES, format_overlay_line, mode_notice, overlay_opacity_value, swap_language_values
 from realtime_audio_translator.logbook import ConversationLog
 from realtime_audio_translator.models import list_models, model_download_command, recommend_model
 from realtime_audio_translator.providers import TextToSpeech, Translator, build_google_translate_request, build_openai_translation_request
@@ -182,6 +182,12 @@ class CoreTests(unittest.TestCase):
     def test_format_overlay_line_can_show_language(self):
         self.assertEqual(format_overlay_line("hello", "en", True), "en: hello")
         self.assertEqual(format_overlay_line("hello", "en", False), "hello")
+
+    def test_overlay_opacity_value_is_bounded(self):
+        self.assertEqual(overlay_opacity_value("0.7"), 0.7)
+        self.assertEqual(overlay_opacity_value("bad"), 0.86)
+        self.assertEqual(overlay_opacity_value("0.1"), 0.2)
+        self.assertEqual(overlay_opacity_value("2"), 1.0)
 
     def test_swap_language_values(self):
         self.assertEqual(swap_language_values("zh", "en"), ("en", "zh"))
