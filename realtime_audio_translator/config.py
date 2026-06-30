@@ -19,6 +19,7 @@ DEFAULT_CONFIG = {
     "tts_output_device": "CABLE Input",
     "overlay_topmost": True,
     "overlay_opacity": 0.86,
+    "overlay_font_size": 18,
     "show_language_labels": True,
     "show_original_text": False,
     "record_logs": False,

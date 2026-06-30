@@ -33,6 +33,7 @@ Windows 即時雙向語音翻譯工具。它擷取目前喇叭與麥克風聲音
 Provider 選 `local` 時不呼叫雲端翻譯，字幕會保留原文，適合離線檢查 ASR 與字幕流程。
 勾選 `Show original` 可在字幕同時顯示原文與譯文。
 `Overlay opacity` 可設定字幕透明度，範圍 0.2 到 1.0。
+`Overlay font size` 可設定字幕字體大小，範圍 12 到 48。
 
 ## 使用
 

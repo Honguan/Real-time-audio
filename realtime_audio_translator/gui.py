@@ -32,6 +32,14 @@ def overlay_opacity_value(value) -> float:
     return min(1.0, max(0.2, opacity))
 
 
+def overlay_font_size_value(value) -> int:
+    try:
+        size = int(value)
+    except Exception:
+        return 18
+    return min(48, max(12, size))
+
+
 def swap_language_values(source_language: str, target_language: str) -> tuple[str, str]:
     return target_language, source_language
 
@@ -44,7 +52,7 @@ def mode_notice(provider: str, tts_provider: str) -> str:
 
 
 class Overlay(tk.Toplevel):
-    def __init__(self, master: tk.Tk, topmost: bool, opacity: float):
+    def __init__(self, master: tk.Tk, topmost: bool, opacity: float, font_size: int):
         super().__init__(master)
         self.overrideredirect(True)
         self.attributes("-topmost", topmost)
@@ -54,9 +62,11 @@ class Overlay(tk.Toplevel):
         self.speaker = tk.StringVar(value="")
         self.mine = tk.StringVar(value="")
         self._drag = (0, 0)
+        self.labels = []
         for row, variable in enumerate((self.speaker, self.mine)):
-            label = tk.Label(self, textvariable=variable, fg="#f5f5f5", bg="#111111", font=("Microsoft JhengHei UI", 18), anchor="w")
+            label = tk.Label(self, textvariable=variable, fg="#f5f5f5", bg="#111111", font=("Microsoft JhengHei UI", font_size), anchor="w")
             label.grid(row=row, column=0, sticky="ew", padx=18, pady=6)
+            self.labels.append(label)
         self.grid_columnconfigure(0, weight=1)
         self.bind("<ButtonPress-1>", self._start_drag)
         self.bind("<B1-Motion>", self._drag_to)
@@ -73,6 +83,10 @@ class Overlay(tk.Toplevel):
         if mine:
             self.mine.set(mine)
 
+    def set_font_size(self, font_size: int) -> None:
+        for label in self.labels:
+            label.configure(font=("Microsoft JhengHei UI", font_size))
+
 
 class TranslatorApp(tk.Tk):
     def __init__(self, repo_root: Path | None = None):
@@ -85,7 +99,12 @@ class TranslatorApp(tk.Tk):
         self.status = tk.StringVar(value="ready")
         self.runtime_text = tk.StringVar(value="")
         self.mode_text = tk.StringVar(value=mode_notice(self.config["provider"], self.config["tts_provider"]))
-        self.overlay = Overlay(self, self.config["overlay_topmost"], overlay_opacity_value(self.config.get("overlay_opacity", 0.86)))
+        self.overlay = Overlay(
+            self,
+            self.config["overlay_topmost"],
+            overlay_opacity_value(self.config.get("overlay_opacity", 0.86)),
+            overlay_font_size_value(self.config.get("overlay_font_size", 18)),
+        )
         self._build()
         self._refresh_lists()
 
@@ -114,6 +133,7 @@ class TranslatorApp(tk.Tk):
             ("Google JSON", "google_service_account_json"),
             ("Segment seconds", "segment_seconds"),
             ("Overlay opacity", "overlay_opacity"),
+            ("Overlay font size", "overlay_font_size"),
             ("Runtime dir", "runtime_dir"),
         ]
         for row, (label, key) in enumerate(rows):
@@ -130,7 +150,7 @@ class TranslatorApp(tk.Tk):
             widget.grid(row=row, column=1, sticky="ew", pady=4, padx=8)
             if key == "google_service_account_json":
                 ttk.Button(frame, text="Select", command=self._pick_google_json).grid(row=row, column=2, sticky="ew")
-            if key == "overlay_opacity":
+            if key in ("overlay_opacity", "overlay_font_size"):
                 ttk.Button(frame, text="Apply", command=self._apply_overlay).grid(row=row, column=2, sticky="ew")
             if key == "runtime_dir":
                 ttk.Button(frame, text="Select", command=self._pick_runtime_dir).grid(row=row, column=2, sticky="ew")
@@ -194,6 +214,7 @@ class TranslatorApp(tk.Tk):
         config["show_original_text"] = self.show_original_text.get()
         config["record_logs"] = self.record_logs.get()
         config["overlay_opacity"] = overlay_opacity_value(config["overlay_opacity"])
+        config["overlay_font_size"] = overlay_font_size_value(config["overlay_font_size"])
         try:
             config["segment_seconds"] = float(config["segment_seconds"])
         except Exception:
@@ -208,6 +229,7 @@ class TranslatorApp(tk.Tk):
     def _apply_overlay(self) -> None:
         self.overlay.attributes("-topmost", self.overlay_topmost.get())
         self.overlay.attributes("-alpha", overlay_opacity_value(self.vars["overlay_opacity"].get()))
+        self.overlay.set_font_size(overlay_font_size_value(self.vars["overlay_font_size"].get()))
         self._save()
 
     def _pick_google_json(self) -> None:
