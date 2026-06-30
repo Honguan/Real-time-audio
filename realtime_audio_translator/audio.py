@@ -1,3 +1,4 @@
+import audioop
 import queue
 import wave
 from pathlib import Path
@@ -32,6 +33,18 @@ def format_device_label(device: dict) -> str:
 
 def device_name_from_label(label: str) -> str:
     return label.rsplit(" [", 1)[0]
+
+
+def audio_segment_active(path: Path, threshold: float) -> bool:
+    threshold = min(1.0, max(0.0, float(threshold)))
+    if threshold == 0:
+        return True
+    with wave.open(str(path), "rb") as handle:
+        frames = handle.readframes(handle.getnframes())
+        if not frames:
+            return False
+        peak = float(2 ** (8 * handle.getsampwidth() - 1))
+        return audioop.rms(frames, handle.getsampwidth()) / peak >= threshold
 
 
 def find_device(name_part: str, want_output: bool) -> int | None:

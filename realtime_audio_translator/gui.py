@@ -159,6 +159,7 @@ class TranslatorApp(tk.Tk):
             ("Google project", "google_project_id"),
             ("Google JSON", "google_service_account_json"),
             ("Segment seconds", "segment_seconds"),
+            ("Speech threshold", "speech_threshold"),
             ("Overlay opacity", "overlay_opacity"),
             ("Overlay font size", "overlay_font_size"),
             ("Overlay hold seconds", "overlay_hold_seconds"),
@@ -260,6 +261,10 @@ class TranslatorApp(tk.Tk):
             config["segment_seconds"] = float(config["segment_seconds"])
         except Exception:
             config["segment_seconds"] = 2.0
+        try:
+            config["speech_threshold"] = min(1.0, max(0.0, float(config["speech_threshold"])))
+        except Exception:
+            config["speech_threshold"] = 0.01
         return config
 
     def _save(self) -> None:

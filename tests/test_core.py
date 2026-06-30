@@ -2,9 +2,10 @@ import json
 import queue
 import tempfile
 import unittest
+import wave
 from pathlib import Path
 
-from realtime_audio_translator.audio import device_name_from_label
+from realtime_audio_translator.audio import audio_segment_active, device_name_from_label
 from realtime_audio_translator.commands import parse_help_options
 from realtime_audio_translator.config import DEFAULT_CONFIG, clear_cache, clear_logs, ensure_app_dirs, load_config, save_config
 from realtime_audio_translator.engine import RealtimeEngine
@@ -179,6 +180,24 @@ class CoreTests(unittest.TestCase):
     def test_device_label_strips_hostapi_suffix(self):
         self.assertEqual(device_name_from_label("CABLE Input (VB-Audio Virtual Cable) [Windows WASAPI]"), "CABLE Input (VB-Audio Virtual Cable)")
 
+    def test_audio_segment_active_uses_rms_threshold(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            quiet = Path(tmp) / "quiet.wav"
+            loud = Path(tmp) / "loud.wav"
+            self._write_wav(quiet, 0)
+            self._write_wav(loud, 12000)
+
+            self.assertFalse(audio_segment_active(quiet, 0.01))
+            self.assertTrue(audio_segment_active(loud, 0.01))
+            self.assertTrue(audio_segment_active(quiet, 0))
+
+    def _write_wav(self, path: Path, sample: int) -> None:
+        with wave.open(str(path), "wb") as handle:
+            handle.setnchannels(1)
+            handle.setsampwidth(2)
+            handle.setframerate(16000)
+            handle.writeframes(sample.to_bytes(2, "little", signed=True) * 1600)
+
     def test_format_overlay_line_can_show_language(self):
         self.assertEqual(format_overlay_line("hello", "en", True), "en: hello")
         self.assertEqual(format_overlay_line("hello", "en", False), "hello")
@@ -242,14 +261,17 @@ class CoreTests(unittest.TestCase):
                 return "你好"
 
         class Worker:
-            def __init__(self):
+            def __init__(self, wav):
                 self.queue = queue.Queue()
-                self.queue.put(Path("clip.wav"))
+                self.queue.put(wav)
 
-        engine.running = True
-        engine.transcriber = Transcriber()
-        engine.translator = Translator()
-        engine._process_segments("speaker", Worker())
+        with tempfile.TemporaryDirectory() as tmp:
+            wav = Path(tmp) / "clip.wav"
+            self._write_wav(wav, 12000)
+            engine.running = True
+            engine.transcriber = Transcriber()
+            engine.translator = Translator()
+            engine._process_segments("speaker", Worker(wav))
 
         self.assertTrue(any(status.startswith("speaker latency ") for status in statuses))
 
@@ -270,14 +292,17 @@ class CoreTests(unittest.TestCase):
                 return "你好"
 
         class Worker:
-            def __init__(self):
+            def __init__(self, wav):
                 self.queue = queue.Queue()
-                self.queue.put(Path("clip.wav"))
+                self.queue.put(wav)
 
-        engine.running = True
-        engine.transcriber = Transcriber()
-        engine.translator = Translator()
-        engine._process_segments("speaker", Worker())
+        with tempfile.TemporaryDirectory() as tmp:
+            wav = Path(tmp) / "clip.wav"
+            self._write_wav(wav, 12000)
+            engine.running = True
+            engine.transcriber = Transcriber()
+            engine.translator = Translator()
+            engine._process_segments("speaker", Worker(wav))
 
         self.assertEqual(overlays[0][0], "hello\n你好")
 
@@ -307,18 +332,21 @@ class CoreTests(unittest.TestCase):
                 return b"\0\0"
 
         class Worker:
-            def __init__(self):
+            def __init__(self, wav):
                 self.queue = queue.Queue()
-                self.queue.put(Path("clip.wav"))
+                self.queue.put(wav)
 
         original_play = engine_module.play_linear16
         engine_module.play_linear16 = lambda audio, device: played.append((audio, device))
         try:
-            engine.running = True
-            engine.transcriber = Transcriber()
-            engine.translator = Translator()
-            engine.tts = TTS()
-            engine._process_segments("me", Worker())
+            with tempfile.TemporaryDirectory() as tmp:
+                wav = Path(tmp) / "clip.wav"
+                self._write_wav(wav, 12000)
+                engine.running = True
+                engine.transcriber = Transcriber()
+                engine.translator = Translator()
+                engine.tts = TTS()
+                engine._process_segments("me", Worker(wav))
         finally:
             engine_module.play_linear16 = original_play
 

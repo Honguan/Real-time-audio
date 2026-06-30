@@ -31,6 +31,7 @@ DEFAULT_CONFIG = {
     "openai_tts_model": "gpt-4o-mini-tts",
     "openai_tts_voice": "alloy",
     "segment_seconds": 2.0,
+    "speech_threshold": 0.01,
     "runtime_dir": str(APP_DIR / "runtime"),
 }
 

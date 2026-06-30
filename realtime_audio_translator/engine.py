@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Callable
 
 from .asr import AudioTranscriber
-from .audio import SegmentWorker, find_device
+from .audio import SegmentWorker, audio_segment_active, find_device
 from .config import APP_DIR
 from .logbook import ConversationLog
 from .providers import TextToSpeech, Translator
@@ -99,6 +99,8 @@ class RealtimeEngine:
                 continue
             try:
                 started = time.perf_counter()
+                if not audio_segment_active(wav, self.config.get("speech_threshold", 0.01)):
+                    continue
                 text = self.transcriber.transcribe(wav, source)
                 if not text:
                     continue
