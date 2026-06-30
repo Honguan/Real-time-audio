@@ -18,7 +18,7 @@ DEFAULT_CONFIG = {
     "tts_output_device": "CABLE Input",
     "overlay_topmost": True,
     "show_language_labels": True,
-    "record_logs": True,
+    "record_logs": False,
     "google_project_id": "",
     "google_service_account_json": "",
     "openai_model": "gpt-4.1-mini",

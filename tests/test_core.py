@@ -28,6 +28,9 @@ class CoreTests(unittest.TestCase):
             self.assertTrue((root / "logs").is_dir())
             self.assertTrue((root / "cache" / "audio").is_dir())
 
+    def test_conversation_logs_are_off_by_default(self):
+        self.assertFalse(DEFAULT_CONFIG["record_logs"])
+
     def test_parse_help_options_extracts_choices_and_flags(self):
         help_text = """
         --model MODEL, -m MODEL
