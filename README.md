@@ -81,5 +81,6 @@ py -3.10 -m realtime_audio_translator
 - 接近即時代表約 1.5 到 3 秒延遲，取決於模型、GPU、API 與網路。
 - 對話紀錄預設關閉；需要保存 Markdown/JSONL 紀錄時，請手動勾選 `Record logs`。
 - 可在主視窗按 `Clear cache` 或 `Clear logs` 清除暫存音訊與對話紀錄。
+- 主視窗會顯示目前是本機 ASR 或雲端 API，以及 API 使用是否可能產生費用。
 - Google TTS、Google 翻譯、OpenAI 翻譯與 OpenAI TTS 都需要網路與有效憑證。
 - 開發模式會優先載入本資料夾 `_xxl_data`；發布版使用 `%USERPROFILE%\.realtime-audio\runtime\faster-whisper-xxl.exe` 備援辨識。

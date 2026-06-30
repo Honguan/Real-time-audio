@@ -8,7 +8,7 @@ from realtime_audio_translator.audio import device_name_from_label
 from realtime_audio_translator.commands import parse_help_options
 from realtime_audio_translator.config import DEFAULT_CONFIG, clear_cache, clear_logs, ensure_app_dirs, load_config, save_config
 from realtime_audio_translator.engine import RealtimeEngine
-from realtime_audio_translator.gui import PROVIDER_CHOICES, format_overlay_line, swap_language_values
+from realtime_audio_translator.gui import PROVIDER_CHOICES, format_overlay_line, mode_notice, swap_language_values
 from realtime_audio_translator.logbook import ConversationLog
 from realtime_audio_translator.models import list_models, model_download_command, recommend_model
 from realtime_audio_translator.providers import TextToSpeech, build_google_translate_request, build_openai_translation_request
@@ -149,6 +149,11 @@ class CoreTests(unittest.TestCase):
 
     def test_provider_choices_are_fixed(self):
         self.assertEqual(PROVIDER_CHOICES, ("google", "openai"))
+
+    def test_mode_notice_discloses_cloud_api_cost_risk(self):
+        self.assertIn("cloud API", mode_notice("google", "openai"))
+        self.assertIn("may incur costs", mode_notice("google", "openai"))
+        self.assertIn("local/offline", mode_notice("local", "local"))
 
     def test_engine_reports_segment_latency(self):
         statuses = []

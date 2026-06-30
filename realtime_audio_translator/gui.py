@@ -16,6 +16,7 @@ from .runtime import DEFAULT_RUNTIME_DIR, RUNTIME_RELEASE_URL, install_runtime_f
 
 
 PROVIDER_CHOICES = ("google", "openai")
+CLOUD_PROVIDERS = ("google", "openai")
 
 
 def format_overlay_line(text: str, language: str, show_language: bool) -> str:
@@ -24,6 +25,13 @@ def format_overlay_line(text: str, language: str, show_language: bool) -> str:
 
 def swap_language_values(source_language: str, target_language: str) -> tuple[str, str]:
     return target_language, source_language
+
+
+def mode_notice(provider: str, tts_provider: str) -> str:
+    cloud = [name for name in dict.fromkeys((provider, tts_provider)) if name in CLOUD_PROVIDERS]
+    if cloud:
+        return f"Mode: local ASR + cloud API ({', '.join(cloud)}); API use may incur costs"
+    return "Mode: local/offline; no cloud API selected"
 
 
 class Overlay(tk.Toplevel):
@@ -67,6 +75,7 @@ class TranslatorApp(tk.Tk):
         self.geometry("900x680")
         self.status = tk.StringVar(value="ready")
         self.runtime_text = tk.StringVar(value="")
+        self.mode_text = tk.StringVar(value=mode_notice(self.config["provider"], self.config["tts_provider"]))
         self.overlay = Overlay(self, self.config["overlay_topmost"])
         self._build()
         self._refresh_lists()
@@ -100,6 +109,7 @@ class TranslatorApp(tk.Tk):
             ttk.Label(frame, text=label).grid(row=row, column=0, sticky="w", pady=4)
             if key in ("provider", "tts_provider"):
                 widget = ttk.Combobox(frame, textvariable=self.vars[key], values=PROVIDER_CHOICES, state="readonly")
+                widget.bind("<<ComboboxSelected>>", lambda _event: self._save())
             elif key.endswith("device") or key == "model":
                 widget = ttk.Combobox(frame, textvariable=self.vars[key], values=[])
                 self.comboboxes[key] = widget
@@ -113,19 +123,20 @@ class TranslatorApp(tk.Tk):
 
         next_row = len(rows)
         ttk.Label(frame, textvariable=self.runtime_text, foreground="#a94442").grid(row=next_row, column=0, columnspan=3, sticky="ew", pady=4)
+        ttk.Label(frame, textvariable=self.mode_text, foreground="#7a4b00").grid(row=next_row + 1, column=0, columnspan=3, sticky="ew", pady=4)
 
         runtime_buttons = ttk.Frame(frame)
-        runtime_buttons.grid(row=next_row + 1, column=0, columnspan=3, sticky="ew", pady=4)
+        runtime_buttons.grid(row=next_row + 2, column=0, columnspan=3, sticky="ew", pady=4)
         ttk.Button(runtime_buttons, text="Open runtime folder", command=self._open_runtime_dir).pack(side="left", padx=3)
         ttk.Button(runtime_buttons, text="Import extracted runtime", command=self._import_runtime).pack(side="left", padx=3)
         ttk.Button(runtime_buttons, text="Download Faster-Whisper-XXL", command=lambda: webbrowser.open(RUNTIME_RELEASE_URL)).pack(side="left", padx=3)
 
-        ttk.Checkbutton(frame, text="Overlay topmost", variable=self.overlay_topmost, command=self._apply_overlay).grid(row=next_row + 2, column=0, sticky="w")
-        ttk.Checkbutton(frame, text="Show language", variable=self.show_language_labels, command=self._save).grid(row=next_row + 2, column=1, sticky="w")
-        ttk.Checkbutton(frame, text="Record logs", variable=self.record_logs).grid(row=next_row + 2, column=2, sticky="w")
+        ttk.Checkbutton(frame, text="Overlay topmost", variable=self.overlay_topmost, command=self._apply_overlay).grid(row=next_row + 3, column=0, sticky="w")
+        ttk.Checkbutton(frame, text="Show language", variable=self.show_language_labels, command=self._save).grid(row=next_row + 3, column=1, sticky="w")
+        ttk.Checkbutton(frame, text="Record logs", variable=self.record_logs).grid(row=next_row + 3, column=2, sticky="w")
 
         buttons = ttk.Frame(frame)
-        buttons.grid(row=next_row + 3, column=0, columnspan=3, sticky="ew", pady=12)
+        buttons.grid(row=next_row + 4, column=0, columnspan=3, sticky="ew", pady=12)
         for text, command in (
             ("Refresh", self._refresh_lists),
             ("Swap languages", self._swap_languages),
@@ -143,7 +154,7 @@ class TranslatorApp(tk.Tk):
         ):
             ttk.Button(buttons, text=text, command=command).pack(side="left", padx=3)
 
-        ttk.Label(frame, textvariable=self.status).grid(row=next_row + 4, column=0, columnspan=3, sticky="ew")
+        ttk.Label(frame, textvariable=self.status).grid(row=next_row + 5, column=0, columnspan=3, sticky="ew")
         frame.grid_columnconfigure(1, weight=1)
 
     def _refresh_lists(self) -> None:
@@ -174,6 +185,7 @@ class TranslatorApp(tk.Tk):
 
     def _save(self) -> None:
         self.config = self._config_from_vars()
+        self.mode_text.set(mode_notice(self.config["provider"], self.config["tts_provider"]))
         save_config(APP_DIR, self.config)
 
     def _apply_overlay(self) -> None:
