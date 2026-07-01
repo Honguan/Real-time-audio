@@ -187,6 +187,7 @@ class TranslatorApp(tk.Tk):
         self.runtime_text = tk.StringVar(value="")
         self.mode_text = tk.StringVar(value=mode_notice(self.config["provider"], self.config["tts_provider"], bool(self.config["record_logs"]), self.config.get("local_translate_url", "")))
         self.overlay_generation = 0
+        self._push_to_talk_previous_muted = None
         self.overlay = Overlay(
             self,
             self.config["overlay_topmost"],
@@ -557,7 +558,12 @@ class TranslatorApp(tk.Tk):
 
     def _push_to_talk(self, active: bool) -> None:
         if self.engine:
-            self.engine.set_muted(not active)
+            if active:
+                self._push_to_talk_previous_muted = self.engine.muted
+                self.engine.set_muted(False)
+            else:
+                self.engine.set_muted(bool(getattr(self, "_push_to_talk_previous_muted", True)))
+                self._push_to_talk_previous_muted = None
 
     def _clear_cache(self) -> None:
         clear_cache(APP_DIR)
