@@ -33,6 +33,8 @@ SETTING_ROWS = (
     ("Speaker device", "speaker_device"),
     ("Microphone device", "microphone_device"),
     ("TTS output", "tts_output_device"),
+    ("TTS rate", "tts_rate"),
+    ("TTS volume", "tts_volume"),
     ("Google project", "google_project_id"),
     ("Google JSON", "google_service_account_json"),
     ("Segment seconds", "segment_seconds"),
@@ -331,6 +333,14 @@ class TranslatorApp(tk.Tk):
             config["speech_threshold"] = min(1.0, max(0.0, float(config["speech_threshold"])))
         except Exception:
             config["speech_threshold"] = 0.01
+        try:
+            config["tts_rate"] = max(-10, min(10, int(config["tts_rate"])))
+        except Exception:
+            config["tts_rate"] = 0
+        try:
+            config["tts_volume"] = max(0, min(100, int(config["tts_volume"])))
+        except Exception:
+            config["tts_volume"] = 100
         return config
 
     def _save(self) -> None:

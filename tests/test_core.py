@@ -33,6 +33,8 @@ class CoreTests(unittest.TestCase):
     def test_conversation_logs_are_off_by_default(self):
         self.assertFalse(DEFAULT_CONFIG["record_logs"])
         self.assertEqual(DEFAULT_CONFIG["log_dir"], str(Path.home() / ".realtime-audio" / "logs"))
+        self.assertEqual(DEFAULT_CONFIG["tts_rate"], 0)
+        self.assertEqual(DEFAULT_CONFIG["tts_volume"], 100)
 
     def test_engine_uses_configured_log_dir(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -200,13 +202,16 @@ class CoreTests(unittest.TestCase):
 
         calls = []
         original_speak = providers_module.speak_windows_sapi
-        providers_module.speak_windows_sapi = lambda text, device: calls.append((text, device))
+        providers_module.speak_windows_sapi = lambda text, device, rate=0, volume=100: calls.append((text, device, rate, volume))
         try:
-            TextToSpeech(DEFAULT_CONFIG.copy()).speak_local("hello", "CABLE Input")
+            config = DEFAULT_CONFIG.copy()
+            config["tts_rate"] = -2
+            config["tts_volume"] = 80
+            TextToSpeech(config).speak_local("hello", "CABLE Input")
         finally:
             providers_module.speak_windows_sapi = original_speak
 
-        self.assertEqual(calls, [("hello", "CABLE Input")])
+        self.assertEqual(calls, [("hello", "CABLE Input", -2, 80)])
 
     def test_conversation_log_writes_markdown_and_jsonl(self):
         with tempfile.TemporaryDirectory() as tmp:

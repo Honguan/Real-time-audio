@@ -25,9 +25,11 @@ def play_linear16(audio: bytes, device_name: str = "CABLE Input", samplerate: in
     sd.play(data, samplerate=samplerate, device=device, blocking=True)
 
 
-def speak_windows_sapi(text: str, device_name: str = "CABLE Input") -> None:
+def speak_windows_sapi(text: str, device_name: str = "CABLE Input", rate: int = 0, volume: int = 100) -> None:
     script = r"""
 $voice = New-Object -ComObject SAPI.SpVoice
+$voice.Rate = [int]$env:RAT_TTS_RATE
+$voice.Volume = [int]$env:RAT_TTS_VOLUME
 $device = $env:RAT_TTS_DEVICE
 if ($device) {
     foreach ($output in $voice.GetAudioOutputs()) {
@@ -42,6 +44,8 @@ if ($device) {
     env = os.environ.copy()
     env["RAT_TTS_TEXT"] = text
     env["RAT_TTS_DEVICE"] = device_name
+    env["RAT_TTS_RATE"] = str(max(-10, min(10, int(rate))))
+    env["RAT_TTS_VOLUME"] = str(max(0, min(100, int(volume))))
     creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
     subprocess.run(
         ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script],
