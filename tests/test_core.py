@@ -101,6 +101,17 @@ class CoreTests(unittest.TestCase):
         self.assertIn('("Toggle subtitles", self._toggle_subtitles)', gui_source)
         self.assertIn("self.overlay_visible.set(toggle_overlay_visibility(self.overlay_visible.get()))", gui_source)
 
+    def test_speech_quick_toggle_switches_tts_output(self):
+        import realtime_audio_translator.gui as gui_module
+
+        self.assertTrue(hasattr(gui_module, "toggle_speech_enabled"))
+        self.assertFalse(gui_module.toggle_speech_enabled(True))
+        self.assertTrue(gui_module.toggle_speech_enabled(False))
+
+        gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
+        self.assertIn('("Toggle speech", self._toggle_speech)', gui_source)
+        self.assertIn("self.tts_enabled.set(toggle_speech_enabled(self.tts_enabled.get()))", gui_source)
+
     def test_mic_test_button_reports_input_level(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
 
