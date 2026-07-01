@@ -332,6 +332,7 @@ class TranslatorApp(tk.Tk):
             ("Fix subtitles", lambda: self._troubleshoot("subtitles")),
             ("Fix local translation", lambda: self._troubleshoot("local_translation")),
             ("Clear cache", self._clear_cache),
+            ("Open logs", self._open_logs),
             ("Clear logs", self._clear_logs),
         ):
             ttk.Button(buttons, text=text, command=command).pack(side="left", padx=3)
@@ -654,6 +655,12 @@ class TranslatorApp(tk.Tk):
     def _clear_cache(self) -> None:
         clear_cache(APP_DIR)
         self.status.set("cache cleared")
+
+    def _open_logs(self) -> None:
+        self._save()
+        path = Path(self.config.get("log_dir") or APP_DIR / "logs")
+        path.mkdir(parents=True, exist_ok=True)
+        subprocess.Popen(["explorer", str(path)])
 
     def _clear_logs(self) -> None:
         self._save()

@@ -65,6 +65,13 @@ class CoreTests(unittest.TestCase):
 
         self.assertIn('ttk.Checkbutton(frame, text="Record logs", variable=self.record_logs, command=self._save)', gui_source)
 
+    def test_open_logs_button_opens_configured_log_dir(self):
+        gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
+
+        self.assertIn('("Open logs", self._open_logs)', gui_source)
+        self.assertIn('def _open_logs(self) -> None:', gui_source)
+        self.assertIn('subprocess.Popen(["explorer", str(path)])', gui_source)
+
     def test_google_json_picker_saves_immediately(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
 
