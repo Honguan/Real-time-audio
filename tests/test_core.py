@@ -559,6 +559,12 @@ class CoreTests(unittest.TestCase):
         self.assertIn("Open app folder", readme)
         self.assertIn("%USERPROFILE%\\.realtime-audio", readme)
 
+    def test_readme_mentions_tts_test_provider(self):
+        readme = Path("README.md").read_text(encoding="utf-8")
+
+        self.assertIn("TTS test", readme)
+        self.assertIn("TTS provider", readme)
+
     def test_device_label_strips_hostapi_suffix(self):
         self.assertEqual(device_name_from_label("CABLE Input (VB-Audio Virtual Cable) [Windows WASAPI]"), "CABLE Input (VB-Audio Virtual Cable)")
 

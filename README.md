@@ -43,6 +43,7 @@ Provider 預設為 `local`，不呼叫雲端翻譯，字幕會保留原文，適
 先按 `Mute/unmute` 靜音；按住 `Push to talk` (hold it to unmute TTS output) 時才把我方翻譯語音送出，放開後恢復靜音。
 `TTS rate` 與 `TTS volume` 可調整本機 Windows TTS 語速與音量。
 `TTS voice` 可填 Windows 語音名稱的一部分，例如 `Microsoft Jenny`；按 `List` 可列出已安裝 Windows 語音，留空使用系統預設聲音。
+`TTS test` 會使用目前選定的 `TTS provider`，並播放到 `TTS output`。
 開啟 `Record logs` 時，`Log dir` 可選擇對話紀錄保存資料夾。
 `Overlay opacity` 可設定字幕透明度，範圍 0.2 到 1.0。
 `Overlay font size` 可設定字幕字體大小，範圍 12 到 48。
