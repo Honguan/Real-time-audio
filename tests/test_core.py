@@ -3,7 +3,9 @@ import queue
 import tempfile
 import unittest
 import wave
+from datetime import datetime
 from pathlib import Path
+from unittest.mock import patch
 
 from realtime_audio_translator.audio import audio_segment_active, device_name_from_label
 from realtime_audio_translator.asr import AudioTranscriber
@@ -375,6 +377,23 @@ class CoreTests(unittest.TestCase):
             md = (Path(tmp) / "session.md").read_text(encoding="utf-8")
             self.assertIn("speaker", md)
             self.assertIn("你好", md)
+
+    def test_conversation_log_auto_session_ids_do_not_collide_within_same_second(self):
+        class Clock:
+            calls = 0
+
+            @classmethod
+            def now(cls):
+                cls.calls += 1
+                return datetime(2026, 7, 1, 12, 0, 0, cls.calls)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch("realtime_audio_translator.logbook.datetime", Clock):
+                first = ConversationLog(Path(tmp))
+                second = ConversationLog(Path(tmp))
+
+            self.assertNotEqual(first.session_id, second.session_id)
+            self.assertNotEqual(first.jsonl_path, second.jsonl_path)
 
     def test_conversation_log_can_write_latency(self):
         with tempfile.TemporaryDirectory() as tmp:

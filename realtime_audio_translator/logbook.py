@@ -6,7 +6,7 @@ from pathlib import Path
 class ConversationLog:
     def __init__(self, log_dir: Path, session_id: str | None = None):
         log_dir.mkdir(parents=True, exist_ok=True)
-        self.session_id = session_id or datetime.now().strftime("%Y%m%d-%H%M%S")
+        self.session_id = session_id or datetime.now().strftime("%Y%m%d-%H%M%S-%f")
         self.jsonl_path = log_dir / f"{self.session_id}.jsonl"
         self.md_path = log_dir / f"{self.session_id}.md"
         if not self.md_path.exists():
