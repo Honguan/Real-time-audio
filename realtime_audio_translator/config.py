@@ -49,6 +49,9 @@ def ensure_app_dirs(root: Path = APP_DIR) -> None:
     root.mkdir(parents=True, exist_ok=True)
     for relative in ("models", "logs", "cache/audio"):
         (root / relative).mkdir(parents=True, exist_ok=True)
+    glossary = root / "glossary.json"
+    if not glossary.exists():
+        glossary.write_text("{}\n", encoding="utf-8")
 
 
 def load_config(root: Path = APP_DIR) -> dict:

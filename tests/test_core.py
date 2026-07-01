@@ -30,6 +30,17 @@ class CoreTests(unittest.TestCase):
             self.assertTrue((root / "logs").is_dir())
             self.assertTrue((root / "cache" / "audio").is_dir())
 
+    def test_app_dirs_create_empty_glossary_without_overwriting(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ensure_app_dirs(root)
+            glossary = root / "glossary.json"
+            self.assertEqual(json.loads(glossary.read_text(encoding="utf-8")), {})
+
+            glossary.write_text(json.dumps({"Dragon Pit": "龍坑"}), encoding="utf-8")
+            ensure_app_dirs(root)
+            self.assertEqual(json.loads(glossary.read_text(encoding="utf-8")), {"Dragon Pit": "龍坑"})
+
     def test_conversation_logs_are_off_by_default(self):
         self.assertFalse(DEFAULT_CONFIG["record_logs"])
         self.assertEqual(DEFAULT_CONFIG["log_dir"], str(Path.home() / ".realtime-audio" / "logs"))
