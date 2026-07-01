@@ -112,6 +112,18 @@ class CoreTests(unittest.TestCase):
         self.assertIn('("Toggle speech", self._toggle_speech)', gui_source)
         self.assertIn("self.tts_enabled.set(toggle_speech_enabled(self.tts_enabled.get()))", gui_source)
 
+    def test_audio_source_quick_toggles_switch_capture_sources(self):
+        import realtime_audio_translator.gui as gui_module
+
+        self.assertTrue(DEFAULT_CONFIG["speaker_enabled"])
+        self.assertTrue(DEFAULT_CONFIG["microphone_enabled"])
+        self.assertFalse(gui_module.toggle_source_enabled(True))
+        self.assertTrue(gui_module.toggle_source_enabled(False))
+
+        gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
+        self.assertIn('("Toggle speaker", self._toggle_speaker)', gui_source)
+        self.assertIn('("Toggle mic", self._toggle_microphone)', gui_source)
+
     def test_mic_test_button_reports_input_level(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
 
@@ -660,8 +672,12 @@ class CoreTests(unittest.TestCase):
 
         class Worker:
             def __init__(self, wav):
-                self.queue = queue.Queue()
-                self.queue.put(wav)
+                self.queue = self
+                self.wav = wav
+
+            def get(self, timeout):
+                engine.running = False
+                return self.wav
 
         with tempfile.TemporaryDirectory() as tmp:
             wav = Path(tmp) / "clip.wav"
@@ -843,6 +859,37 @@ class CoreTests(unittest.TestCase):
             engine_module.play_linear16 = original_play
 
         self.assertEqual(played, [])
+
+    def test_engine_skips_disabled_audio_source(self):
+        config = DEFAULT_CONFIG.copy()
+        config["record_logs"] = False
+        config["speaker_enabled"] = False
+        transcribed = []
+        engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, lambda status: None)
+
+        class Transcriber:
+            def transcribe(self, wav, source_language):
+                transcribed.append(wav)
+                engine.running = False
+                return "hello"
+
+        class Worker:
+            def __init__(self, wav):
+                self.queue = self
+                self.wav = wav
+
+            def get(self, timeout):
+                engine.running = False
+                return self.wav
+
+        with tempfile.TemporaryDirectory() as tmp:
+            wav = Path(tmp) / "clip.wav"
+            self._write_wav(wav, 12000)
+            engine.running = True
+            engine.transcriber = Transcriber()
+            engine._process_segments("speaker", Worker(wav))
+
+        self.assertEqual(transcribed, [])
 
     def test_engine_start_stops_when_no_audio_devices_start(self):
         import realtime_audio_translator.engine as engine_module

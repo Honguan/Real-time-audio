@@ -17,6 +17,8 @@ DEFAULT_CONFIG = {
     "device": "cuda",
     "speaker_device": "",
     "microphone_device": "",
+    "speaker_enabled": True,
+    "microphone_enabled": True,
     "tts_output_device": "CABLE Input",
     "tts_rate": 0,
     "tts_volume": 100,

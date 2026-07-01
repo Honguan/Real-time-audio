@@ -97,6 +97,8 @@ class RealtimeEngine:
                 wav = worker.queue.get(timeout=0.5)
             except Exception:
                 continue
+            if not self.config.get("speaker_enabled" if direction == "speaker" else "microphone_enabled", True):
+                continue
             try:
                 started = time.perf_counter()
                 if not audio_segment_active(wav, self.config.get("speech_threshold", 0.01)):

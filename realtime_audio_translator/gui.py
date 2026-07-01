@@ -115,6 +115,10 @@ def toggle_speech_enabled(enabled: bool) -> bool:
     return not enabled
 
 
+def toggle_source_enabled(enabled: bool) -> bool:
+    return not enabled
+
+
 def subtitle_updates_allowed(paused: bool) -> bool:
     return not paused
 
@@ -216,6 +220,8 @@ class TranslatorApp(tk.Tk):
         self.show_language_labels = tk.BooleanVar(value=bool(self.config["show_language_labels"]))
         self.show_original_text = tk.BooleanVar(value=bool(self.config["show_original_text"]))
         self.tts_enabled = tk.BooleanVar(value=bool(self.config.get("tts_enabled", True)))
+        self.speaker_enabled = tk.BooleanVar(value=bool(self.config.get("speaker_enabled", True)))
+        self.microphone_enabled = tk.BooleanVar(value=bool(self.config.get("microphone_enabled", True)))
         self.record_logs = tk.BooleanVar(value=bool(self.config["record_logs"]))
         self.advanced_mode = tk.BooleanVar(value=bool(self.config.get("advanced_mode", False)))
         self.comboboxes: dict[str, ttk.Combobox] = {}
@@ -283,7 +289,9 @@ class TranslatorApp(tk.Tk):
         ttk.Checkbutton(frame, text="Show original", variable=self.show_original_text, command=self._save).grid(row=next_row + 4, column=0, sticky="w")
         ttk.Checkbutton(frame, text="Speak translations", variable=self.tts_enabled, command=self._save).grid(row=next_row + 4, column=1, sticky="w")
         ttk.Checkbutton(frame, text="Record logs", variable=self.record_logs, command=self._save).grid(row=next_row + 4, column=2, sticky="w")
-        ttk.Checkbutton(frame, text="Advanced settings", variable=self.advanced_mode, command=self._apply_mode).grid(row=next_row + 5, column=0, sticky="w")
+        ttk.Checkbutton(frame, text="Speaker capture", variable=self.speaker_enabled, command=self._save).grid(row=next_row + 5, column=0, sticky="w")
+        ttk.Checkbutton(frame, text="Mic capture", variable=self.microphone_enabled, command=self._save).grid(row=next_row + 5, column=1, sticky="w")
+        ttk.Checkbutton(frame, text="Advanced settings", variable=self.advanced_mode, command=self._apply_mode).grid(row=next_row + 5, column=2, sticky="w")
 
         buttons = ttk.Frame(frame)
         buttons.grid(row=next_row + 6, column=0, columnspan=3, sticky="ew", pady=12)
@@ -316,6 +324,8 @@ class TranslatorApp(tk.Tk):
             ("Mute/unmute", self._toggle_mute),
             ("Toggle subtitles", self._toggle_subtitles),
             ("Toggle speech", self._toggle_speech),
+            ("Toggle speaker", self._toggle_speaker),
+            ("Toggle mic", self._toggle_microphone),
             ("Copy subtitles", copy_overlay),
             ("Fix speaker audio", lambda: self._troubleshoot("speaker_audio")),
             ("Fix mic output", lambda: self._troubleshoot("mic_output")),
@@ -368,6 +378,8 @@ class TranslatorApp(tk.Tk):
         config["show_language_labels"] = self.show_language_labels.get()
         config["show_original_text"] = self.show_original_text.get()
         config["tts_enabled"] = self.tts_enabled.get()
+        config["speaker_enabled"] = self.speaker_enabled.get()
+        config["microphone_enabled"] = self.microphone_enabled.get()
         config["record_logs"] = self.record_logs.get()
         config["advanced_mode"] = self.advanced_mode.get()
         if config.get("performance_mode") not in PERFORMANCE_CHOICES:
@@ -397,6 +409,8 @@ class TranslatorApp(tk.Tk):
         self.config = self._config_from_vars()
         self.mode_text.set(mode_notice(self.config["provider"], self.config["tts_provider"], bool(self.config["record_logs"]), self.config.get("local_translate_url", "")))
         save_config(APP_DIR, self.config)
+        if self.engine:
+            self.engine.config = self.config
 
     def _apply_mode(self, save: bool = True) -> None:
         for key in ADVANCED_SETTING_KEYS:
@@ -618,6 +632,14 @@ class TranslatorApp(tk.Tk):
 
     def _toggle_speech(self) -> None:
         self.tts_enabled.set(toggle_speech_enabled(self.tts_enabled.get()))
+        self._save()
+
+    def _toggle_speaker(self) -> None:
+        self.speaker_enabled.set(toggle_source_enabled(self.speaker_enabled.get()))
+        self._save()
+
+    def _toggle_microphone(self) -> None:
+        self.microphone_enabled.set(toggle_source_enabled(self.microphone_enabled.get()))
         self._save()
 
     def _push_to_talk(self, active: bool) -> None:
