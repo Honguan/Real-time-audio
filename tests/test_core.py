@@ -467,6 +467,8 @@ class CoreTests(unittest.TestCase):
         self.assertIn("cloud API", mode_notice("google", "openai"))
         self.assertIn("may incur costs", mode_notice("google", "openai"))
         self.assertIn("local/offline", mode_notice("local", "local"))
+        self.assertIn("logs off", mode_notice("local", "local", False))
+        self.assertIn("logs on", mode_notice("local", "local", True))
 
     def test_engine_reports_segment_latency(self):
         statuses = []

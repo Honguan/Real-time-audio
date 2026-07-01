@@ -124,11 +124,12 @@ def troubleshooting_action(issue: str) -> tuple[str, str]:
     return actions[issue]
 
 
-def mode_notice(provider: str, tts_provider: str) -> str:
+def mode_notice(provider: str, tts_provider: str, record_logs: bool = False) -> str:
     cloud = [name for name in dict.fromkeys((provider, tts_provider)) if name in CLOUD_PROVIDERS]
+    logs = "logs on" if record_logs else "logs off"
     if cloud:
-        return f"Mode: local ASR + cloud API ({', '.join(cloud)}); API use may incur costs"
-    return "Mode: local/offline; no cloud API selected"
+        return f"Mode: local ASR + cloud API ({', '.join(cloud)}); API use may incur costs; {logs}"
+    return f"Mode: local/offline; no cloud API selected; {logs}"
 
 
 class Overlay(tk.Toplevel):
@@ -182,7 +183,7 @@ class TranslatorApp(tk.Tk):
         self.geometry("900x680")
         self.status = tk.StringVar(value="ready")
         self.runtime_text = tk.StringVar(value="")
-        self.mode_text = tk.StringVar(value=mode_notice(self.config["provider"], self.config["tts_provider"]))
+        self.mode_text = tk.StringVar(value=mode_notice(self.config["provider"], self.config["tts_provider"], bool(self.config["record_logs"])))
         self.overlay_generation = 0
         self.overlay = Overlay(
             self,
@@ -369,7 +370,7 @@ class TranslatorApp(tk.Tk):
 
     def _save(self) -> None:
         self.config = self._config_from_vars()
-        self.mode_text.set(mode_notice(self.config["provider"], self.config["tts_provider"]))
+        self.mode_text.set(mode_notice(self.config["provider"], self.config["tts_provider"], bool(self.config["record_logs"])))
         save_config(APP_DIR, self.config)
 
     def _apply_mode(self, save: bool = True) -> None:
