@@ -13,7 +13,7 @@ from .models import download_model, list_models, recommend_model
 from .paths import resource_root
 from .providers import TextToSpeech, Translator, google_access_token
 from .runtime import DEFAULT_RUNTIME_DIR, RUNTIME_RELEASE_URL, install_runtime_from, runtime_dir, runtime_status, whisper_exe
-from .tts import list_windows_sapi_voices
+from .tts import list_windows_sapi_voices, play_linear16
 
 
 LANGUAGE_CHOICES = ("auto", "zh", "en", "ja", "ko")
@@ -565,7 +565,18 @@ class TranslatorApp(tk.Tk):
 
     def _test_tts(self) -> None:
         try:
-            TextToSpeech(self._config_from_vars()).speak_local("Translation output test", self.vars["tts_output_device"].get())
+            config = self._config_from_vars()
+            provider = config.get("tts_provider", "local")
+            device = self.vars["tts_output_device"].get()
+            tts = TextToSpeech(config)
+            if provider == "local":
+                tts.speak_local("Translation output test", device)
+            elif provider == "openai":
+                audio = tts.synthesize_openai_linear16("Translation output test")
+                play_linear16(audio, device)
+            else:
+                audio = tts.synthesize_google_linear16("Translation output test", config["target_language"])
+                play_linear16(audio, device)
             self.status.set("tts output tested")
         except Exception as exc:
             messagebox.showerror("TTS test failed", str(exc))

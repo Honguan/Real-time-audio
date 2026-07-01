@@ -169,7 +169,10 @@ class CoreTests(unittest.TestCase):
 
         self.assertIn('("TTS test", self._test_tts)', gui_source)
         self.assertIn('def _test_tts(self) -> None:', gui_source)
-        self.assertIn('TextToSpeech(self._config_from_vars()).speak_local("Translation output test", self.vars["tts_output_device"].get())', gui_source)
+        self.assertIn('provider = config.get("tts_provider", "local")', gui_source)
+        self.assertIn('tts.speak_local("Translation output test", device)', gui_source)
+        self.assertIn('audio = tts.synthesize_openai_linear16("Translation output test")', gui_source)
+        self.assertIn('audio = tts.synthesize_google_linear16("Translation output test", config["target_language"])', gui_source)
 
     def test_push_to_talk_restores_previous_mute_state(self):
         app = TranslatorApp.__new__(TranslatorApp)
