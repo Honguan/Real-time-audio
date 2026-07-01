@@ -68,6 +68,11 @@ class CoreTests(unittest.TestCase):
 
         self.assertIn('self.vars["google_service_account_json"].set(path)\n            self._save()', gui_source)
 
+    def test_device_model_voice_choices_save_immediately(self):
+        gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
+
+        self.assertIn('elif key.endswith("device") or key in ("model", "tts_voice_name"):\n                widget = ttk.Combobox(frame, textvariable=self.vars[key], values=[])\n                widget.bind("<<ComboboxSelected>>", lambda _event: self._save())', gui_source)
+
     def test_engine_uses_configured_log_dir(self):
         with tempfile.TemporaryDirectory() as tmp:
             log_dir = Path(tmp) / "custom-logs"

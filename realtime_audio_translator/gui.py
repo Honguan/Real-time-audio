@@ -225,6 +225,7 @@ class TranslatorApp(tk.Tk):
                 widget.bind("<<ComboboxSelected>>", lambda _event, name=key: self._apply_performance_mode() if name == "performance_mode" else self._save())
             elif key.endswith("device") or key in ("model", "tts_voice_name"):
                 widget = ttk.Combobox(frame, textvariable=self.vars[key], values=[])
+                widget.bind("<<ComboboxSelected>>", lambda _event: self._save())
                 self.comboboxes[key] = widget
             else:
                 widget = ttk.Entry(frame, textvariable=self.vars[key])
