@@ -891,6 +891,26 @@ class CoreTests(unittest.TestCase):
 
         self.assertEqual(transcribed, [])
 
+    def test_engine_start_ignores_disabled_capture_sources(self):
+        import realtime_audio_translator.engine as engine_module
+
+        statuses = []
+        config = DEFAULT_CONFIG.copy()
+        config["record_logs"] = False
+        config["speaker_enabled"] = False
+        engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, statuses.append)
+        started = []
+
+        original_transcriber = engine_module.AudioTranscriber
+        engine_module.AudioTranscriber = lambda *args, **kwargs: object()
+        engine._start_direction = lambda direction, device_hint, loopback: started.append(direction) or True
+        try:
+            engine.start()
+        finally:
+            engine_module.AudioTranscriber = original_transcriber
+
+        self.assertEqual(started, ["me"])
+
     def test_engine_start_stops_when_no_audio_devices_start(self):
         import realtime_audio_translator.engine as engine_module
 

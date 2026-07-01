@@ -43,10 +43,11 @@ class RealtimeEngine:
             self.config["compute_type"],
             self.config,
         )
-        started = [
-            self._start_direction("speaker", self.config.get("speaker_device", ""), True),
-            self._start_direction("me", self.config.get("microphone_device", ""), False),
-        ]
+        started = []
+        if self.config.get("speaker_enabled", True):
+            started.append(self._start_direction("speaker", self.config.get("speaker_device", ""), True))
+        if self.config.get("microphone_enabled", True):
+            started.append(self._start_direction("me", self.config.get("microphone_device", ""), False))
         if any(started):
             self.status("running")
         else:
