@@ -541,6 +541,12 @@ class CoreTests(unittest.TestCase):
         self.assertIn("README.md", script)
         self.assertIn("RUNTIME_DOWNLOADS.txt", script)
 
+    def test_package_script_writes_sha256sums(self):
+        script = Path("scripts/package.ps1").read_text(encoding="utf-8")
+
+        self.assertIn("SHA256SUMS.txt", script)
+        self.assertIn("Get-FileHash", script)
+
     def test_readme_mentions_push_to_talk(self):
         readme = Path("README.md").read_text(encoding="utf-8")
 

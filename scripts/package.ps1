@@ -13,6 +13,7 @@ if (-not $Iscc) {
 $Out = Join-Path $Root "installer-output"
 $RuntimeDownloads = Join-Path $Out "RUNTIME_DOWNLOADS.txt"
 $ReleaseZip = Join-Path $Out "RealtimeAudioTranslator-0.1.0-win-x64.zip"
+$Checksums = Join-Path $Out "SHA256SUMS.txt"
 
 @(
   "Realtime Audio Translator runtime downloads",
@@ -42,3 +43,10 @@ Compress-Archive `
   -LiteralPath (Join-Path $Out "RealtimeAudioTranslatorSetup.exe"), (Join-Path $Root "README.md"), $RuntimeDownloads `
   -DestinationPath $ReleaseZip `
   -CompressionLevel Optimal
+
+@((Join-Path $Out "RealtimeAudioTranslatorSetup.exe"), $ReleaseZip, $RuntimeDownloads) |
+  ForEach-Object {
+    $Hash = Get-FileHash -LiteralPath $_ -Algorithm SHA256
+    "$($Hash.Hash)  $(Split-Path -Leaf $Hash.Path)"
+  } |
+  Set-Content -LiteralPath $Checksums -Encoding UTF8
