@@ -494,7 +494,12 @@ class TranslatorApp(tk.Tk):
         self.vars["runtime_dir"].set(str(target))
         self._save()
         self._refresh_runtime_status()
-        self.status.set("runtime imported")
+        try:
+            refresh_commands(whisper_exe(target), APP_DIR / "commands.json")
+        except Exception as exc:
+            self.status.set(f"runtime imported; commands update failed: {exc}")
+            return
+        self.status.set("runtime imported; commands.json updated")
 
     def _refresh_runtime_status(self) -> None:
         status = runtime_status(runtime_dir(self._config_from_vars()))

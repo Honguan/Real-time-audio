@@ -675,6 +675,11 @@ class CoreTests(unittest.TestCase):
         self.assertIn('text="Download CUDA12 dependency"', gui_source)
         self.assertIn("RUNTIME_RELEASE_URL", gui_source)
 
+    def test_import_runtime_refreshes_commands_json(self):
+        gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
+
+        self.assertIn('refresh_commands(whisper_exe(target), APP_DIR / "commands.json")', gui_source)
+
     def test_provider_choices_are_fixed(self):
         self.assertEqual(PROVIDER_CHOICES, ("local", "google", "openai"))
         self.assertEqual(TTS_PROVIDER_CHOICES, ("local", "google", "openai"))
