@@ -63,6 +63,11 @@ class CoreTests(unittest.TestCase):
 
         self.assertIn('ttk.Checkbutton(frame, text="Record logs", variable=self.record_logs, command=self._save)', gui_source)
 
+    def test_google_json_picker_saves_immediately(self):
+        gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
+
+        self.assertIn('self.vars["google_service_account_json"].set(path)\n            self._save()', gui_source)
+
     def test_engine_uses_configured_log_dir(self):
         with tempfile.TemporaryDirectory() as tmp:
             log_dir = Path(tmp) / "custom-logs"

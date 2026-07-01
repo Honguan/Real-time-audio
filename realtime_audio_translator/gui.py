@@ -407,6 +407,7 @@ class TranslatorApp(tk.Tk):
         path = filedialog.askopenfilename(filetypes=[("JSON", "*.json"), ("All files", "*.*")])
         if path:
             self.vars["google_service_account_json"].set(path)
+            self._save()
 
     def _pick_glossary_json(self) -> None:
         path = filedialog.askopenfilename(filetypes=[("JSON", "*.json"), ("All files", "*.*")])
