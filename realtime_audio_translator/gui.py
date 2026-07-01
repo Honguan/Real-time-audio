@@ -187,6 +187,7 @@ class TranslatorApp(tk.Tk):
         self.engine: RealtimeEngine | None = None
         self.title("Realtime Audio Translator")
         self.geometry("900x680")
+        self.protocol("WM_DELETE_WINDOW", self._quit)
         self.status = tk.StringVar(value="ready")
         self.runtime_text = tk.StringVar(value="")
         self.mode_text = tk.StringVar(value=mode_notice(self.config["provider"], self.config["tts_provider"], bool(self.config["record_logs"]), self.config.get("local_translate_url", "")))

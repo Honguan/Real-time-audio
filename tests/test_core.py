@@ -145,6 +145,7 @@ class CoreTests(unittest.TestCase):
     def test_quit_button_stops_engine_and_closes_window(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
         self.assertIn('("Quit", self._quit)', gui_source)
+        self.assertIn('self.protocol("WM_DELETE_WINDOW", self._quit)', gui_source)
 
         app = TranslatorApp.__new__(TranslatorApp)
         calls = []
