@@ -186,6 +186,18 @@ class CoreTests(unittest.TestCase):
 
         self.assertEqual(translated, "龍坑")
 
+    def test_translator_ignores_empty_glossary_terms(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            glossary = Path(tmp) / "glossary.json"
+            glossary.write_text(json.dumps({"": "BAD", "Dragon Pit": "龍坑"}), encoding="utf-8")
+            config = DEFAULT_CONFIG.copy()
+            config["provider"] = "local"
+            config["glossary_path"] = str(glossary)
+
+            translated = Translator(config).translate("Dragon Pit", "en", "zh-TW")
+
+        self.assertEqual(translated, "龍坑")
+
     def test_translator_applies_glossary_to_cached_result(self):
         with tempfile.TemporaryDirectory() as tmp:
             glossary = Path(tmp) / "glossary.json"

@@ -82,7 +82,10 @@ class Translator:
         if not isinstance(glossary, dict):
             return text
         for source, target in sorted(glossary.items(), key=lambda item: len(str(item[0])), reverse=True):
-            text = text.replace(str(source), str(target))
+            source = str(source)
+            if not source:
+                continue
+            text = text.replace(source, str(target))
         return text
 
     def _local_translate(self, text: str, source_language: str, target_language: str) -> str:
