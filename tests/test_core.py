@@ -90,6 +90,13 @@ class CoreTests(unittest.TestCase):
         self.assertIn('def _test_subtitles(self) -> None:', gui_source)
         self.assertIn('self.overlay.update_lines("Subtitle test", "字幕測試")', gui_source)
 
+    def test_mic_test_button_reports_input_level(self):
+        gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
+
+        self.assertIn('("Mic test", self._test_mic)', gui_source)
+        self.assertIn('def _test_mic(self) -> None:', gui_source)
+        self.assertIn('self.status.set(f"mic level {level:.4f}")', gui_source)
+
     def test_push_to_talk_restores_previous_mute_state(self):
         app = TranslatorApp.__new__(TranslatorApp)
 

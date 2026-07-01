@@ -296,6 +296,7 @@ class TranslatorApp(tk.Tk):
             ("Open glossary", self._open_glossary),
             ("API test", self._test_api),
             ("Device tone", self._test_tone),
+            ("Mic test", self._test_mic),
             ("Subtitle test", self._test_subtitles),
             ("Start", self._start),
             ("Stop", self._stop),
@@ -526,6 +527,19 @@ class TranslatorApp(tk.Tk):
         samplerate = 24000
         data = np.array([math.sin(2 * math.pi * 440 * i / samplerate) * 0.2 for i in range(samplerate // 4)], dtype="float32")
         sd.play(data, samplerate=samplerate, device=device, blocking=True)
+
+    def _test_mic(self) -> None:
+        import numpy as np
+        import sounddevice as sd
+
+        try:
+            device = find_device(self.vars["microphone_device"].get(), want_output=False)
+            data = sd.rec(int(0.5 * 16000), samplerate=16000, channels=1, dtype="float32", device=device)
+            sd.wait()
+            level = float(np.sqrt(np.mean(np.square(data))))
+            self.status.set(f"mic level {level:.4f}")
+        except Exception as exc:
+            messagebox.showerror("Mic test failed", str(exc))
 
     def _test_subtitles(self) -> None:
         self.overlay_visible.set(True)
