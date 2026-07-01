@@ -141,6 +141,42 @@ class CoreTests(unittest.TestCase):
 
         self.assertEqual(translator.translate("hello", "en", "zh-TW"), "hello")
 
+    def test_translator_applies_glossary_json(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            glossary = Path(tmp) / "glossary.json"
+            glossary.write_text(json.dumps({"Dragon Pit": "龍坑", "mid lane": "中路"}), encoding="utf-8")
+            config = DEFAULT_CONFIG.copy()
+            config["provider"] = "local"
+            config["glossary_path"] = str(glossary)
+
+            translated = Translator(config).translate("Push mid lane near Dragon Pit", "en", "zh-TW")
+
+        self.assertEqual(translated, "Push 中路 near 龍坑")
+
+    def test_translator_applies_glossary_to_cached_result(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            glossary = Path(tmp) / "glossary.json"
+            glossary.write_text(json.dumps({"Dragon Pit": "龍坑"}), encoding="utf-8")
+            config = DEFAULT_CONFIG.copy()
+            config["provider"] = "local"
+            config["glossary_path"] = str(glossary)
+            translator = Translator(config)
+
+            self.assertEqual(translator.translate("Dragon Pit", "en", "zh-TW"), "龍坑")
+            self.assertEqual(translator.translate("Dragon Pit", "en", "zh-TW"), "龍坑")
+
+    def test_translator_ignores_invalid_glossary_json(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            glossary = Path(tmp) / "glossary.json"
+            glossary.write_text("{bad", encoding="utf-8")
+            config = DEFAULT_CONFIG.copy()
+            config["provider"] = "local"
+            config["glossary_path"] = str(glossary)
+
+            translated = Translator(config).translate("Dragon Pit", "en", "zh-TW")
+
+        self.assertEqual(translated, "Dragon Pit")
+
     def test_local_provider_can_call_libretranslate_endpoint(self):
         import realtime_audio_translator.providers as providers_module
 

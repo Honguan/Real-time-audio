@@ -39,6 +39,7 @@ SETTING_ROWS = (
     ("TTS voice", "tts_voice_name"),
     ("Google project", "google_project_id"),
     ("Google JSON", "google_service_account_json"),
+    ("Glossary JSON", "glossary_path"),
     ("Segment seconds", "segment_seconds"),
     ("Speech threshold", "speech_threshold"),
     ("Overlay opacity", "overlay_opacity"),
@@ -230,6 +231,10 @@ class TranslatorApp(tk.Tk):
                 button = ttk.Button(frame, text="Select", command=self._pick_google_json)
                 button.grid(row=row, column=2, sticky="ew")
                 row_widgets.append(button)
+            if key == "glossary_path":
+                button = ttk.Button(frame, text="Select", command=self._pick_glossary_json)
+                button.grid(row=row, column=2, sticky="ew")
+                row_widgets.append(button)
             if key in ("overlay_opacity", "overlay_font_size", "overlay_hold_seconds"):
                 button = ttk.Button(frame, text="Apply", command=self._apply_overlay)
                 button.grid(row=row, column=2, sticky="ew")
@@ -397,6 +402,12 @@ class TranslatorApp(tk.Tk):
         path = filedialog.askopenfilename(filetypes=[("JSON", "*.json"), ("All files", "*.*")])
         if path:
             self.vars["google_service_account_json"].set(path)
+
+    def _pick_glossary_json(self) -> None:
+        path = filedialog.askopenfilename(filetypes=[("JSON", "*.json"), ("All files", "*.*")])
+        if path:
+            self.vars["glossary_path"].set(path)
+            self._save()
 
     def _pick_runtime_dir(self) -> None:
         path = filedialog.askdirectory(initialdir=str(runtime_dir(self._config_from_vars())))

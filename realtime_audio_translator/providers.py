@@ -1,7 +1,9 @@
 import base64
 import html
+import json
 import os
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import requests
 
@@ -58,7 +60,7 @@ class Translator:
         provider = self.config.get("provider", "google")
         cache_key = (provider, source_language, target_language, text.strip())
         if cache_key in self.cache:
-            return self.cache[cache_key]
+            return self._apply_glossary(self.cache[cache_key])
         if provider == "local":
             translated = self._local_translate(text, source_language, target_language)
         elif provider == "openai":
@@ -66,7 +68,22 @@ class Translator:
         else:
             translated = self._google_translate(text, source_language, target_language)
         self.cache[cache_key] = translated
-        return translated
+        return self._apply_glossary(translated)
+
+    def _apply_glossary(self, text: str) -> str:
+        path = self.config.get("glossary_path", "").strip()
+        if not path or not Path(path).exists():
+            return text
+        try:
+            with Path(path).open("r", encoding="utf-8") as handle:
+                glossary = json.load(handle)
+        except Exception:
+            return text
+        if not isinstance(glossary, dict):
+            return text
+        for source, target in glossary.items():
+            text = text.replace(str(source), str(target))
+        return text
 
     def _local_translate(self, text: str, source_language: str, target_language: str) -> str:
         url = self.config.get("local_translate_url", "").strip()

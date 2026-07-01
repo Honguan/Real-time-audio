@@ -35,6 +35,7 @@ Provider 預設為 `local`，不呼叫雲端翻譯，字幕會保留原文，適
 預設只顯示常用設定；勾選 `Advanced settings` 可展開雲端憑證、靈敏度與字幕調校欄位。
 `Performance mode` 可在 `low_latency`、`balanced`、`quality` 間切換，會調整語音分段長度；低延遲更快，高準確會等較長片段。
 若要使用本機 LibreTranslate，請把 `Local translate URL` 設為例如 `http://127.0.0.1:5000/translate`。
+`Glossary JSON` 可指定遊戲術語表，例如 `{"Dragon Pit":"龍坑","mid lane":"中路"}`，翻譯後會套用固定替換。
 翻譯失敗時字幕會保留原文，避免單次 API 或本機翻譯服務錯誤讓字幕消失。
 `Speech threshold` 可設定語音靈敏度，較高會忽略更多背景聲。
 勾選 `Show original` 可在字幕同時顯示原文與譯文。
