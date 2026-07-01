@@ -377,6 +377,7 @@ class CoreTests(unittest.TestCase):
             self.assertEqual(row["translated_text"], "你好")
             md = (Path(tmp) / "session.md").read_text(encoding="utf-8")
             self.assertIn("speaker", md)
+            self.assertIn("provider: google", md)
             self.assertIn("你好", md)
 
     def test_conversation_log_auto_session_ids_do_not_collide_within_same_second(self):

@@ -38,6 +38,7 @@ class ConversationLog:
             handle.write(json.dumps(row, ensure_ascii=False) + "\n")
         with self.md_path.open("a", encoding="utf-8", newline="\n") as handle:
             handle.write(f"## {row['timestamp']} {direction}\n\n")
+            handle.write(f"- provider: {provider}\n")
             handle.write(f"- {source_language}: {text}\n")
             handle.write(f"- {target_language}: {translated_text}\n\n")
             if latency_seconds is not None:
