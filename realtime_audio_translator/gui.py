@@ -296,6 +296,7 @@ class TranslatorApp(tk.Tk):
             ("Open glossary", self._open_glossary),
             ("API test", self._test_api),
             ("Device tone", self._test_tone),
+            ("Subtitle test", self._test_subtitles),
             ("Start", self._start),
             ("Stop", self._stop),
             ("Pause/resume", self._toggle_pause),
@@ -525,6 +526,12 @@ class TranslatorApp(tk.Tk):
         samplerate = 24000
         data = np.array([math.sin(2 * math.pi * 440 * i / samplerate) * 0.2 for i in range(samplerate // 4)], dtype="float32")
         sd.play(data, samplerate=samplerate, device=device, blocking=True)
+
+    def _test_subtitles(self) -> None:
+        self.overlay_visible.set(True)
+        self._apply_overlay()
+        self.overlay.update_lines("Subtitle test", "字幕測試")
+        self.status.set("subtitle overlay tested")
 
     def _troubleshoot(self, issue: str) -> None:
         action, target = troubleshooting_action(issue)

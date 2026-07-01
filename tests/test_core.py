@@ -83,6 +83,13 @@ class CoreTests(unittest.TestCase):
         self.assertIn('ptt_button.bind("<ButtonRelease-1>", lambda _event: self._push_to_talk(False))', gui_source)
         self.assertIn('self.engine.set_muted(False)', gui_source)
 
+    def test_subtitle_test_button_updates_overlay(self):
+        gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
+
+        self.assertIn('("Subtitle test", self._test_subtitles)', gui_source)
+        self.assertIn('def _test_subtitles(self) -> None:', gui_source)
+        self.assertIn('self.overlay.update_lines("Subtitle test", "字幕測試")', gui_source)
+
     def test_push_to_talk_restores_previous_mute_state(self):
         app = TranslatorApp.__new__(TranslatorApp)
 
