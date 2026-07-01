@@ -526,6 +526,12 @@ class CoreTests(unittest.TestCase):
         self.assertIn("Push to talk", readme)
         self.assertIn("hold it to unmute TTS output", readme)
 
+    def test_readme_mentions_open_logs(self):
+        readme = Path("README.md").read_text(encoding="utf-8")
+
+        self.assertIn("Open logs", readme)
+        self.assertIn("開啟目前紀錄資料夾", readme)
+
     def test_device_label_strips_hostapi_suffix(self):
         self.assertEqual(device_name_from_label("CABLE Input (VB-Audio Virtual Cable) [Windows WASAPI]"), "CABLE Input (VB-Audio Virtual Cable)")
 
