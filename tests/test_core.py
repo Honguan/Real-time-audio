@@ -35,6 +35,7 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(DEFAULT_CONFIG["log_dir"], str(Path.home() / ".realtime-audio" / "logs"))
         self.assertEqual(DEFAULT_CONFIG["tts_rate"], 0)
         self.assertEqual(DEFAULT_CONFIG["tts_volume"], 100)
+        self.assertEqual(DEFAULT_CONFIG["tts_voice_name"], "")
 
     def test_engine_uses_configured_log_dir(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -202,16 +203,30 @@ class CoreTests(unittest.TestCase):
 
         calls = []
         original_speak = providers_module.speak_windows_sapi
-        providers_module.speak_windows_sapi = lambda text, device, rate=0, volume=100: calls.append((text, device, rate, volume))
+        providers_module.speak_windows_sapi = lambda text, device, rate=0, volume=100, voice_name="": calls.append((text, device, rate, volume, voice_name))
         try:
             config = DEFAULT_CONFIG.copy()
             config["tts_rate"] = -2
             config["tts_volume"] = 80
+            config["tts_voice_name"] = "Microsoft Jenny"
             TextToSpeech(config).speak_local("hello", "CABLE Input")
         finally:
             providers_module.speak_windows_sapi = original_speak
 
-        self.assertEqual(calls, [("hello", "CABLE Input", -2, 80)])
+        self.assertEqual(calls, [("hello", "CABLE Input", -2, 80, "Microsoft Jenny")])
+
+    def test_windows_sapi_receives_voice_name(self):
+        import realtime_audio_translator.tts as tts_module
+
+        calls = []
+        original_run = tts_module.subprocess.run
+        tts_module.subprocess.run = lambda *args, **kwargs: calls.append((args, kwargs))
+        try:
+            tts_module.speak_windows_sapi("hello", "CABLE Input", voice_name="Microsoft Jenny")
+        finally:
+            tts_module.subprocess.run = original_run
+
+        self.assertEqual(calls[0][1]["env"]["RAT_TTS_VOICE"], "Microsoft Jenny")
 
     def test_conversation_log_writes_markdown_and_jsonl(self):
         with tempfile.TemporaryDirectory() as tmp:

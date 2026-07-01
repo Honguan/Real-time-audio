@@ -40,6 +40,7 @@ Provider 預設為 `local`，不呼叫雲端翻譯，字幕會保留原文，適
 勾選 `Show original` 可在字幕同時顯示原文與譯文。
 取消勾選 `Speak translations` 可只顯示字幕、不播放翻譯語音。
 `TTS rate` 與 `TTS volume` 可調整本機 Windows TTS 語速與音量。
+`TTS voice` 可填 Windows 語音名稱的一部分，例如 `Microsoft Jenny`；留空使用系統預設聲音。
 開啟 `Record logs` 時，`Log dir` 可選擇對話紀錄保存資料夾。
 `Overlay opacity` 可設定字幕透明度，範圍 0.2 到 1.0。
 `Overlay font size` 可設定字幕字體大小，範圍 12 到 48。

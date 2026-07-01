@@ -20,6 +20,7 @@ DEFAULT_CONFIG = {
     "tts_output_device": "CABLE Input",
     "tts_rate": 0,
     "tts_volume": 100,
+    "tts_voice_name": "",
     "overlay_visible": True,
     "overlay_topmost": True,
     "overlay_opacity": 0.86,
