@@ -97,7 +97,7 @@ py -3.10 -m realtime_audio_translator
 .\scripts\package.ps1
 ```
 
-缺少 Inno Setup 時，腳本會提示安裝 `iscc.exe`，不會自動修改系統。精簡版只輸出單一 `RealtimeAudioTranslatorSetup.exe`。
+缺少 Inno Setup 時，腳本會提示安裝 `iscc.exe`，不會自動修改系統。精簡版只輸出單一 `RealtimeAudioTranslatorSetup.exe`，並在 `SHA256SUMS.txt` 寫入發布檔雜湊。
 
 ## 限制
 

@@ -571,6 +571,11 @@ class CoreTests(unittest.TestCase):
         self.assertIn("TTS test", readme)
         self.assertIn("TTS provider", readme)
 
+    def test_readme_mentions_release_checksums(self):
+        readme = Path("README.md").read_text(encoding="utf-8")
+
+        self.assertIn("SHA256SUMS.txt", readme)
+
     def test_device_label_strips_hostapi_suffix(self):
         self.assertEqual(device_name_from_label("CABLE Input (VB-Audio Virtual Cable) [Windows WASAPI]"), "CABLE Input (VB-Audio Virtual Cable)")
 
