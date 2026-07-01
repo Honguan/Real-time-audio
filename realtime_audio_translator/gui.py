@@ -306,6 +306,7 @@ class TranslatorApp(tk.Tk):
             ("Subtitle test", self._test_subtitles),
             ("Start", self._start),
             ("Stop", self._stop),
+            ("Quit", self._quit),
             ("Pause/resume", self._toggle_pause),
             ("Mute/unmute", self._toggle_mute),
             ("Toggle subtitles", self._toggle_subtitles),
@@ -592,6 +593,10 @@ class TranslatorApp(tk.Tk):
     def _stop(self) -> None:
         if self.engine:
             self.engine.stop()
+
+    def _quit(self) -> None:
+        self._stop()
+        self.destroy()
 
     def _toggle_pause(self) -> None:
         if self.engine:

@@ -142,6 +142,24 @@ class CoreTests(unittest.TestCase):
 
         self.assertEqual(app.engine.calls, [False, False])
 
+    def test_quit_button_stops_engine_and_closes_window(self):
+        gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
+        self.assertIn('("Quit", self._quit)', gui_source)
+
+        app = TranslatorApp.__new__(TranslatorApp)
+        calls = []
+
+        class Engine:
+            def stop(self):
+                calls.append("stop")
+
+        app.engine = Engine()
+        app.destroy = lambda: calls.append("destroy")
+
+        app._quit()
+
+        self.assertEqual(calls, ["stop", "destroy"])
+
     def test_engine_uses_configured_log_dir(self):
         with tempfile.TemporaryDirectory() as tmp:
             log_dir = Path(tmp) / "custom-logs"
