@@ -73,6 +73,14 @@ class CoreTests(unittest.TestCase):
 
         self.assertIn('elif key.endswith("device") or key in ("model", "tts_voice_name"):\n                widget = ttk.Combobox(frame, textvariable=self.vars[key], values=[])\n                widget.bind("<<ComboboxSelected>>", lambda _event: self._save())', gui_source)
 
+    def test_push_to_talk_button_holds_unmute(self):
+        gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
+
+        self.assertIn('ptt_button = ttk.Button(buttons, text="Push to talk")', gui_source)
+        self.assertIn('ptt_button.bind("<ButtonPress-1>", lambda _event: self._push_to_talk(True))', gui_source)
+        self.assertIn('ptt_button.bind("<ButtonRelease-1>", lambda _event: self._push_to_talk(False))', gui_source)
+        self.assertIn('self.engine.set_muted(not active)', gui_source)
+
     def test_engine_uses_configured_log_dir(self):
         with tempfile.TemporaryDirectory() as tmp:
             log_dir = Path(tmp) / "custom-logs"

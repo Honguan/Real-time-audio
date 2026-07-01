@@ -308,6 +308,10 @@ class TranslatorApp(tk.Tk):
             ("Clear logs", self._clear_logs),
         ):
             ttk.Button(buttons, text=text, command=command).pack(side="left", padx=3)
+        ptt_button = ttk.Button(buttons, text="Push to talk")
+        ptt_button.bind("<ButtonPress-1>", lambda _event: self._push_to_talk(True))
+        ptt_button.bind("<ButtonRelease-1>", lambda _event: self._push_to_talk(False))
+        ptt_button.pack(side="left", padx=3)
 
         ttk.Label(frame, textvariable=self.status).grid(row=next_row + 7, column=0, columnspan=3, sticky="ew")
         frame.grid_columnconfigure(1, weight=1)
@@ -550,6 +554,10 @@ class TranslatorApp(tk.Tk):
     def _toggle_mute(self) -> None:
         if self.engine:
             self.engine.set_muted(not self.engine.muted)
+
+    def _push_to_talk(self, active: bool) -> None:
+        if self.engine:
+            self.engine.set_muted(not active)
 
     def _clear_cache(self) -> None:
         clear_cache(APP_DIR)
