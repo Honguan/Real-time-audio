@@ -43,6 +43,17 @@ class CoreTests(unittest.TestCase):
             ensure_app_dirs(root)
             self.assertEqual(json.loads(glossary.read_text(encoding="utf-8")), {"Dragon Pit": "龍坑"})
 
+    def test_app_dirs_create_commands_json_without_overwriting(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ensure_app_dirs(root)
+            commands = root / "commands.json"
+            self.assertEqual(json.loads(commands.read_text(encoding="utf-8")), {})
+
+            commands.write_text(json.dumps({"model": {"choices": ["medium"]}}), encoding="utf-8")
+            ensure_app_dirs(root)
+            self.assertEqual(json.loads(commands.read_text(encoding="utf-8")), {"model": {"choices": ["medium"]}})
+
     def test_ensure_glossary_file_creates_parent_and_preserves_existing(self):
         with tempfile.TemporaryDirectory() as tmp:
             glossary = Path(tmp) / "nested" / "glossary.json"
