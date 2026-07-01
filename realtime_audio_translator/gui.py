@@ -282,6 +282,7 @@ class TranslatorApp(tk.Tk):
         ttk.Button(runtime_buttons, text="Open runtime folder", command=self._open_runtime_dir).pack(side="left", padx=3)
         ttk.Button(runtime_buttons, text="Import extracted runtime", command=self._import_runtime).pack(side="left", padx=3)
         ttk.Button(runtime_buttons, text="Download Faster-Whisper-XXL", command=lambda: webbrowser.open(RUNTIME_RELEASE_URL)).pack(side="left", padx=3)
+        ttk.Button(runtime_buttons, text="Download CUDA12 dependency", command=lambda: webbrowser.open(RUNTIME_RELEASE_URL)).pack(side="left", padx=3)
 
         ttk.Checkbutton(frame, text="Show overlay", variable=self.overlay_visible, command=self._apply_overlay).grid(row=next_row + 3, column=0, sticky="w")
         ttk.Checkbutton(frame, text="Overlay topmost", variable=self.overlay_topmost, command=self._apply_overlay).grid(row=next_row + 3, column=1, sticky="w")
