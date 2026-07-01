@@ -13,6 +13,7 @@ from .models import download_model, list_models, recommend_model
 from .paths import resource_root
 from .providers import Translator, google_access_token
 from .runtime import DEFAULT_RUNTIME_DIR, RUNTIME_RELEASE_URL, install_runtime_from, runtime_dir, runtime_status, whisper_exe
+from .tts import list_windows_sapi_voices
 
 
 LANGUAGE_CHOICES = ("auto", "zh", "en", "ja", "ko")
@@ -218,7 +219,7 @@ class TranslatorApp(tk.Tk):
                 values = PERFORMANCE_CHOICES if key == "performance_mode" else TTS_PROVIDER_CHOICES if key == "tts_provider" else PROVIDER_CHOICES
                 widget = ttk.Combobox(frame, textvariable=self.vars[key], values=values, state="readonly")
                 widget.bind("<<ComboboxSelected>>", lambda _event, name=key: self._apply_performance_mode() if name == "performance_mode" else self._save())
-            elif key.endswith("device") or key == "model":
+            elif key.endswith("device") or key in ("model", "tts_voice_name"):
                 widget = ttk.Combobox(frame, textvariable=self.vars[key], values=[])
                 self.comboboxes[key] = widget
             else:
@@ -239,6 +240,10 @@ class TranslatorApp(tk.Tk):
                 row_widgets.append(button)
             if key == "log_dir":
                 button = ttk.Button(frame, text="Select", command=self._pick_log_dir)
+                button.grid(row=row, column=2, sticky="ew")
+                row_widgets.append(button)
+            if key == "tts_voice_name":
+                button = ttk.Button(frame, text="List", command=self._list_tts_voices)
                 button.grid(row=row, column=2, sticky="ew")
                 row_widgets.append(button)
             self.setting_widgets[key] = row_widgets
@@ -301,8 +306,20 @@ class TranslatorApp(tk.Tk):
         devices = [format_device_label(d) for d in list_audio_devices()]
         models = list_models(self.repo_root / "_models", APP_DIR / "models")
         for key, widget in self.comboboxes.items():
-            widget.configure(values=models if key == "model" else devices)
+            if key == "model":
+                widget.configure(values=models)
+            elif key != "tts_voice_name":
+                widget.configure(values=devices)
         self._refresh_runtime_status()
+
+    def _list_tts_voices(self) -> None:
+        try:
+            voices = list_windows_sapi_voices()
+        except Exception as exc:
+            self.status.set(f"could not list TTS voices: {exc}")
+            return
+        self.comboboxes["tts_voice_name"].configure(values=voices)
+        self.status.set("; ".join(voices) if voices else "no Windows TTS voices found")
 
     def _swap_languages(self) -> None:
         source, target = swap_language_values(self.vars["source_language"].get(), self.vars["target_language"].get())

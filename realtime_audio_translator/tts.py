@@ -25,6 +25,24 @@ def play_linear16(audio: bytes, device_name: str = "CABLE Input", samplerate: in
     sd.play(data, samplerate=samplerate, device=device, blocking=True)
 
 
+def list_windows_sapi_voices() -> list[str]:
+    script = r"""
+$voice = New-Object -ComObject SAPI.SpVoice
+foreach ($candidate in $voice.GetVoices()) {
+    $candidate.GetDescription()
+}
+"""
+    creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    result = subprocess.run(
+        ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script],
+        check=True,
+        capture_output=True,
+        text=True,
+        creationflags=creationflags,
+    )
+    return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+
+
 def speak_windows_sapi(text: str, device_name: str = "CABLE Input", rate: int = 0, volume: int = 100, voice_name: str = "") -> None:
     script = r"""
 $voice = New-Object -ComObject SAPI.SpVoice

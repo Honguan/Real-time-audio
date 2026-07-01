@@ -228,6 +228,21 @@ class CoreTests(unittest.TestCase):
 
         self.assertEqual(calls[0][1]["env"]["RAT_TTS_VOICE"], "Microsoft Jenny")
 
+    def test_windows_sapi_lists_voice_names(self):
+        import realtime_audio_translator.tts as tts_module
+
+        class Result:
+            stdout = "Microsoft Jenny Desktop\r\n\r\nMicrosoft Haruka Desktop\r\n"
+
+        original_run = tts_module.subprocess.run
+        tts_module.subprocess.run = lambda *args, **kwargs: Result()
+        try:
+            voices = tts_module.list_windows_sapi_voices()
+        finally:
+            tts_module.subprocess.run = original_run
+
+        self.assertEqual(voices, ["Microsoft Jenny Desktop", "Microsoft Haruka Desktop"])
+
     def test_conversation_log_writes_markdown_and_jsonl(self):
         with tempfile.TemporaryDirectory() as tmp:
             log = ConversationLog(Path(tmp), "session")
