@@ -107,6 +107,10 @@ def overlay_visibility_action(visible: bool) -> str:
     return "show" if visible else "hide"
 
 
+def toggle_overlay_visibility(visible: bool) -> bool:
+    return not visible
+
+
 def subtitle_updates_allowed(paused: bool) -> bool:
     return not paused
 
@@ -303,6 +307,7 @@ class TranslatorApp(tk.Tk):
             ("Stop", self._stop),
             ("Pause/resume", self._toggle_pause),
             ("Mute/unmute", self._toggle_mute),
+            ("Toggle subtitles", self._toggle_subtitles),
             ("Copy subtitles", copy_overlay),
             ("Fix speaker audio", lambda: self._troubleshoot("speaker_audio")),
             ("Fix mic output", lambda: self._troubleshoot("mic_output")),
@@ -584,6 +589,10 @@ class TranslatorApp(tk.Tk):
     def _toggle_mute(self) -> None:
         if self.engine:
             self.engine.set_muted(not self.engine.muted)
+
+    def _toggle_subtitles(self) -> None:
+        self.overlay_visible.set(toggle_overlay_visibility(self.overlay_visible.get()))
+        self._apply_overlay()
 
     def _push_to_talk(self, active: bool) -> None:
         if self.engine:

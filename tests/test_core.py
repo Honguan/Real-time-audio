@@ -90,6 +90,17 @@ class CoreTests(unittest.TestCase):
         self.assertIn('def _test_subtitles(self) -> None:', gui_source)
         self.assertIn('self.overlay.update_lines("Subtitle test", "字幕測試")', gui_source)
 
+    def test_overlay_quick_toggle_switches_visibility(self):
+        import realtime_audio_translator.gui as gui_module
+
+        self.assertTrue(hasattr(gui_module, "toggle_overlay_visibility"))
+        self.assertFalse(gui_module.toggle_overlay_visibility(True))
+        self.assertTrue(gui_module.toggle_overlay_visibility(False))
+
+        gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
+        self.assertIn('("Toggle subtitles", self._toggle_subtitles)', gui_source)
+        self.assertIn("self.overlay_visible.set(toggle_overlay_visibility(self.overlay_visible.get()))", gui_source)
+
     def test_mic_test_button_reports_input_level(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
 
