@@ -376,6 +376,7 @@ class CoreTests(unittest.TestCase):
             self.assertEqual(row["session_id"], "session")
             self.assertEqual(row["translated_text"], "你好")
             md = (Path(tmp) / "session.md").read_text(encoding="utf-8")
+            self.assertIn("created:", md)
             self.assertIn("speaker", md)
             self.assertIn("provider: google", md)
             self.assertIn("你好", md)
@@ -385,7 +386,7 @@ class CoreTests(unittest.TestCase):
             calls = 0
 
             @classmethod
-            def now(cls):
+            def now(cls, _tz=None):
                 cls.calls += 1
                 return datetime(2026, 7, 1, 12, 0, 0, cls.calls)
 

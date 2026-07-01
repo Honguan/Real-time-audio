@@ -10,7 +10,8 @@ class ConversationLog:
         self.jsonl_path = log_dir / f"{self.session_id}.jsonl"
         self.md_path = log_dir / f"{self.session_id}.md"
         if not self.md_path.exists():
-            self.md_path.write_text(f"# Conversation {self.session_id}\n\n", encoding="utf-8", newline="\n")
+            created = datetime.now(timezone.utc).isoformat()
+            self.md_path.write_text(f"# Conversation {self.session_id}\n\ncreated: {created}\n\n", encoding="utf-8", newline="\n")
 
     def append(
         self,
