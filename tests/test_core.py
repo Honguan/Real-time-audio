@@ -58,6 +58,11 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(DEFAULT_CONFIG["tts_volume"], 100)
         self.assertEqual(DEFAULT_CONFIG["tts_voice_name"], "")
 
+    def test_record_logs_toggle_saves_immediately(self):
+        gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
+
+        self.assertIn('ttk.Checkbutton(frame, text="Record logs", variable=self.record_logs, command=self._save)', gui_source)
+
     def test_engine_uses_configured_log_dir(self):
         with tempfile.TemporaryDirectory() as tmp:
             log_dir = Path(tmp) / "custom-logs"
