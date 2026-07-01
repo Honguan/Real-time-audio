@@ -120,6 +120,7 @@ def troubleshooting_action(issue: str) -> tuple[str, str]:
         "speaker_audio": ("open", "ms-settings:sound"),
         "mic_output": ("open", "https://vb-audio.com/Cable/"),
         "subtitles": ("overlay", "show"),
+        "local_translation": ("open", "https://github.com/LibreTranslate/LibreTranslate"),
     }
     return actions[issue]
 
@@ -301,6 +302,7 @@ class TranslatorApp(tk.Tk):
             ("Fix speaker audio", lambda: self._troubleshoot("speaker_audio")),
             ("Fix mic output", lambda: self._troubleshoot("mic_output")),
             ("Fix subtitles", lambda: self._troubleshoot("subtitles")),
+            ("Fix local translation", lambda: self._troubleshoot("local_translation")),
             ("Clear cache", self._clear_cache),
             ("Clear logs", self._clear_logs),
         ):

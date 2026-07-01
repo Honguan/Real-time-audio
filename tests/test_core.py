@@ -458,6 +458,7 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(troubleshooting_action("speaker_audio"), ("open", "ms-settings:sound"))
         self.assertEqual(troubleshooting_action("mic_output"), ("open", "https://vb-audio.com/Cable/"))
         self.assertEqual(troubleshooting_action("subtitles"), ("overlay", "show"))
+        self.assertEqual(troubleshooting_action("local_translation"), ("open", "https://github.com/LibreTranslate/LibreTranslate"))
 
     def test_provider_choices_are_fixed(self):
         self.assertEqual(PROVIDER_CHOICES, ("local", "google", "openai"))
