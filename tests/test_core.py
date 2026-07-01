@@ -469,6 +469,7 @@ class CoreTests(unittest.TestCase):
         self.assertIn("local/offline", mode_notice("local", "local"))
         self.assertIn("logs off", mode_notice("local", "local", False))
         self.assertIn("logs on", mode_notice("local", "local", True))
+        self.assertIn("local translation URL missing", mode_notice("local", "local", False, ""))
 
     def test_engine_reports_segment_latency(self):
         statuses = []
