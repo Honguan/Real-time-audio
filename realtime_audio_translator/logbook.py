@@ -23,6 +23,7 @@ class ConversationLog:
         latency_seconds: float | None = None,
     ) -> None:
         row = {
+            "session_id": self.session_id,
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "direction": direction,
             "source_language": source_language,

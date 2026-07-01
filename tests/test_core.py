@@ -373,6 +373,7 @@ class CoreTests(unittest.TestCase):
             log = ConversationLog(Path(tmp), "session")
             log.append("speaker", "en", "zh-TW", "hello", "你好", "google")
             row = json.loads((Path(tmp) / "session.jsonl").read_text(encoding="utf-8").splitlines()[0])
+            self.assertEqual(row["session_id"], "session")
             self.assertEqual(row["translated_text"], "你好")
             md = (Path(tmp) / "session.md").read_text(encoding="utf-8")
             self.assertIn("speaker", md)
