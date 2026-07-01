@@ -97,6 +97,13 @@ class CoreTests(unittest.TestCase):
         self.assertIn('def _test_mic(self) -> None:', gui_source)
         self.assertIn('self.status.set(f"mic level {level:.4f}")', gui_source)
 
+    def test_tts_test_button_uses_configured_output(self):
+        gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
+
+        self.assertIn('("TTS test", self._test_tts)', gui_source)
+        self.assertIn('def _test_tts(self) -> None:', gui_source)
+        self.assertIn('TextToSpeech(self._config_from_vars()).speak_local("Translation output test", self.vars["tts_output_device"].get())', gui_source)
+
     def test_push_to_talk_restores_previous_mute_state(self):
         app = TranslatorApp.__new__(TranslatorApp)
 

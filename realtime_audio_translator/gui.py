@@ -11,7 +11,7 @@ from .config import APP_DIR, clear_cache, clear_logs, ensure_glossary_file, load
 from .engine import RealtimeEngine
 from .models import download_model, list_models, recommend_model
 from .paths import resource_root
-from .providers import Translator, google_access_token
+from .providers import TextToSpeech, Translator, google_access_token
 from .runtime import DEFAULT_RUNTIME_DIR, RUNTIME_RELEASE_URL, install_runtime_from, runtime_dir, runtime_status, whisper_exe
 from .tts import list_windows_sapi_voices
 
@@ -296,6 +296,7 @@ class TranslatorApp(tk.Tk):
             ("Open glossary", self._open_glossary),
             ("API test", self._test_api),
             ("Device tone", self._test_tone),
+            ("TTS test", self._test_tts),
             ("Mic test", self._test_mic),
             ("Subtitle test", self._test_subtitles),
             ("Start", self._start),
@@ -527,6 +528,13 @@ class TranslatorApp(tk.Tk):
         samplerate = 24000
         data = np.array([math.sin(2 * math.pi * 440 * i / samplerate) * 0.2 for i in range(samplerate // 4)], dtype="float32")
         sd.play(data, samplerate=samplerate, device=device, blocking=True)
+
+    def _test_tts(self) -> None:
+        try:
+            TextToSpeech(self._config_from_vars()).speak_local("Translation output test", self.vars["tts_output_device"].get())
+            self.status.set("tts output tested")
+        except Exception as exc:
+            messagebox.showerror("TTS test failed", str(exc))
 
     def _test_mic(self) -> None:
         import numpy as np
