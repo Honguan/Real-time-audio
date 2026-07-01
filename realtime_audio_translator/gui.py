@@ -5,7 +5,7 @@ import webbrowser
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
-from .audio import find_device, format_device_label, list_audio_devices
+from .audio import audio_segment_active, capture_wav, find_device, format_device_label, list_audio_devices
 from .commands import refresh_commands
 from .config import APP_DIR, clear_cache, clear_logs, ensure_glossary_file, load_config, save_config
 from .engine import RealtimeEngine
@@ -301,6 +301,7 @@ class TranslatorApp(tk.Tk):
             ("API test", self._test_api),
             ("Device tone", self._test_tone),
             ("TTS test", self._test_tts),
+            ("Speaker test", self._test_speaker),
             ("Mic test", self._test_mic),
             ("Subtitle test", self._test_subtitles),
             ("Start", self._start),
@@ -540,6 +541,16 @@ class TranslatorApp(tk.Tk):
             self.status.set("tts output tested")
         except Exception as exc:
             messagebox.showerror("TTS test failed", str(exc))
+
+    def _test_speaker(self) -> None:
+        try:
+            device = find_device(self.vars["speaker_device"].get(), want_output=True)
+            path = APP_DIR / "cache" / "audio" / "speaker-test.wav"
+            capture_wav(path, device, 0.5, loopback=True)
+            active = audio_segment_active(path, float(self.vars["speech_threshold"].get()))
+            self.status.set("speaker audio detected" if active else "speaker audio quiet")
+        except Exception as exc:
+            messagebox.showerror("Speaker test failed", str(exc))
 
     def _test_mic(self) -> None:
         import numpy as np

@@ -108,6 +108,14 @@ class CoreTests(unittest.TestCase):
         self.assertIn('def _test_mic(self) -> None:', gui_source)
         self.assertIn('self.status.set(f"mic level {level:.4f}")', gui_source)
 
+    def test_speaker_test_button_uses_loopback_capture(self):
+        gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
+
+        self.assertIn('("Speaker test", self._test_speaker)', gui_source)
+        self.assertIn('def _test_speaker(self) -> None:', gui_source)
+        self.assertIn('capture_wav(path, device, 0.5, loopback=True)', gui_source)
+        self.assertIn('self.status.set("speaker audio detected" if active else "speaker audio quiet")', gui_source)
+
     def test_tts_test_button_uses_configured_output(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
 
