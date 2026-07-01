@@ -72,6 +72,13 @@ class CoreTests(unittest.TestCase):
         self.assertIn('def _open_logs(self) -> None:', gui_source)
         self.assertIn('subprocess.Popen(["explorer", str(path)])', gui_source)
 
+    def test_open_app_folder_button_opens_app_dir(self):
+        gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
+
+        self.assertIn('("Open app folder", self._open_app_dir)', gui_source)
+        self.assertIn('def _open_app_dir(self) -> None:', gui_source)
+        self.assertIn('path = APP_DIR', gui_source)
+
     def test_google_json_picker_saves_immediately(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
 
@@ -531,6 +538,12 @@ class CoreTests(unittest.TestCase):
 
         self.assertIn("Open logs", readme)
         self.assertIn("開啟目前紀錄資料夾", readme)
+
+    def test_readme_mentions_open_app_folder(self):
+        readme = Path("README.md").read_text(encoding="utf-8")
+
+        self.assertIn("Open app folder", readme)
+        self.assertIn("%USERPROFILE%\\.realtime-audio", readme)
 
     def test_device_label_strips_hostapi_suffix(self):
         self.assertEqual(device_name_from_label("CABLE Input (VB-Audio Virtual Cable) [Windows WASAPI]"), "CABLE Input (VB-Audio Virtual Cable)")

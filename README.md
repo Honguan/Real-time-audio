@@ -69,6 +69,7 @@ py -3.10 -m realtime_audio_translator
 ```
 
 其中包含 `config.json`、`commands.json`、`models`、`logs`、`cache/audio`。
+可在主視窗按 `Open app folder` 開啟 `%USERPROFILE%\.realtime-audio`。
 
 ## 音訊路由
 

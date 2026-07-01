@@ -310,6 +310,7 @@ class TranslatorApp(tk.Tk):
             ("Recommend model", self._recommend),
             ("Download model", self._download_model),
             ("Update command config", self._refresh_commands),
+            ("Open app folder", self._open_app_dir),
             ("Open glossary", self._open_glossary),
             ("API test", self._test_api),
             ("Device tone", self._test_tone),
@@ -467,6 +468,11 @@ class TranslatorApp(tk.Tk):
 
     def _open_runtime_dir(self) -> None:
         path = runtime_dir(self._config_from_vars())
+        path.mkdir(parents=True, exist_ok=True)
+        subprocess.Popen(["explorer", str(path)])
+
+    def _open_app_dir(self) -> None:
+        path = APP_DIR
         path.mkdir(parents=True, exist_ok=True)
         subprocess.Popen(["explorer", str(path)])
 
