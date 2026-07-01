@@ -7,7 +7,7 @@ from tkinter import filedialog, messagebox, ttk
 
 from .audio import find_device, format_device_label, list_audio_devices
 from .commands import refresh_commands
-from .config import APP_DIR, clear_cache, clear_logs, load_config, save_config
+from .config import APP_DIR, clear_cache, clear_logs, ensure_glossary_file, load_config, save_config
 from .engine import RealtimeEngine
 from .models import download_model, list_models, recommend_model
 from .paths import resource_root
@@ -288,6 +288,7 @@ class TranslatorApp(tk.Tk):
             ("Recommend model", self._recommend),
             ("Download model", self._download_model),
             ("Update command config", self._refresh_commands),
+            ("Open glossary", self._open_glossary),
             ("API test", self._test_api),
             ("Device tone", self._test_tone),
             ("Start", self._start),
@@ -426,6 +427,11 @@ class TranslatorApp(tk.Tk):
         path = runtime_dir(self._config_from_vars())
         path.mkdir(parents=True, exist_ok=True)
         subprocess.Popen(["explorer", str(path)])
+
+    def _open_glossary(self) -> None:
+        self._save()
+        path = ensure_glossary_file(Path(self.config.get("glossary_path") or APP_DIR / "glossary.json"))
+        subprocess.Popen(["notepad", str(path)])
 
     def _import_runtime(self) -> None:
         source = filedialog.askdirectory(title="Select extracted Faster-Whisper-XXL folder")

@@ -8,7 +8,7 @@ from pathlib import Path
 from realtime_audio_translator.audio import audio_segment_active, device_name_from_label
 from realtime_audio_translator.asr import AudioTranscriber
 from realtime_audio_translator.commands import parse_help_options
-from realtime_audio_translator.config import DEFAULT_CONFIG, clear_cache, clear_logs, ensure_app_dirs, load_config, save_config
+from realtime_audio_translator.config import DEFAULT_CONFIG, clear_cache, clear_logs, ensure_app_dirs, ensure_glossary_file, load_config, save_config
 from realtime_audio_translator.engine import RealtimeEngine
 from realtime_audio_translator.gui import LANGUAGE_CHOICES, PERFORMANCE_CHOICES, PROVIDER_CHOICES, TTS_PROVIDER_CHOICES, format_overlay_line, mode_notice, overlay_clipboard_text, overlay_font_size_value, overlay_hold_seconds_value, overlay_opacity_value, overlay_visibility_action, performance_segment_seconds, subtitle_updates_allowed, swap_language_values, troubleshooting_action, visible_setting_keys
 from realtime_audio_translator.logbook import ConversationLog
@@ -40,6 +40,16 @@ class CoreTests(unittest.TestCase):
             glossary.write_text(json.dumps({"Dragon Pit": "龍坑"}), encoding="utf-8")
             ensure_app_dirs(root)
             self.assertEqual(json.loads(glossary.read_text(encoding="utf-8")), {"Dragon Pit": "龍坑"})
+
+    def test_ensure_glossary_file_creates_parent_and_preserves_existing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            glossary = Path(tmp) / "nested" / "glossary.json"
+            self.assertEqual(ensure_glossary_file(glossary), glossary)
+            self.assertEqual(json.loads(glossary.read_text(encoding="utf-8")), {})
+
+            glossary.write_text(json.dumps({"mid lane": "中路"}), encoding="utf-8")
+            ensure_glossary_file(glossary)
+            self.assertEqual(json.loads(glossary.read_text(encoding="utf-8")), {"mid lane": "中路"})
 
     def test_conversation_logs_are_off_by_default(self):
         self.assertFalse(DEFAULT_CONFIG["record_logs"])
