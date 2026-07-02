@@ -251,6 +251,7 @@ class CoreTests(unittest.TestCase):
         simple = visible_setting_keys(False)
         advanced = visible_setting_keys(True)
         self.assertIn("source_language", simple)
+        self.assertIn("local_translate_url", simple)
         self.assertNotIn("google_service_account_json", simple)
         self.assertIn("google_service_account_json", advanced)
 

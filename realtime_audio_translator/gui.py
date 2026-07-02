@@ -58,6 +58,7 @@ BASIC_SETTING_KEYS = {
     "provider",
     "tts_provider",
     "performance_mode",
+    "local_translate_url",
     "model",
     "speaker_device",
     "microphone_device",
