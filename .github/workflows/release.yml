@@ -91,7 +91,13 @@ jobs:
             throw "Downloaded runtime does not contain faster-whisper-xxl.exe."
           }
           Copy-Item -Path (Join-Path $fw.Directory.FullName "*") -Destination downloaded-runtime -Recurse -Force
-          Get-ChildItem cuda-download\extracted -Recurse -Filter *.dll | Copy-Item -Destination downloaded-runtime -Force
+          foreach ($dllName in "cublas64_12.dll", "cublasLt64_12.dll", "cudnn64_9.dll") {
+            $dll = Get-ChildItem cuda-download\extracted -Recurse -Filter $dllName | Select-Object -First 1
+            if (-not $dll) {
+              throw "Cannot find required CUDA DLL: $dllName"
+            }
+            Copy-Item -LiteralPath $dll.FullName -Destination downloaded-runtime -Force
+          }
 
       - name: Build release zips
         shell: pwsh
