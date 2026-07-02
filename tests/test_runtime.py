@@ -19,6 +19,11 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("https://github.com/Purfview/whisper-standalone-win/releases", message)
         self.assertIn("cuBLAS.and.cuDNN_CUDA12_win_v3.7z", message)
 
+    def test_gui_runtime_missing_prompts_use_runtime_install_message(self):
+        gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
+
+        self.assertNotIn('f"Put faster-whisper-xxl.exe in {exe.parent}"', gui_source)
+
     def test_whisper_exe_uses_runtime_dir(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

@@ -546,7 +546,7 @@ class TranslatorApp(tk.Tk):
     def _refresh_commands(self) -> None:
         exe = whisper_exe(runtime_dir(self._config_from_vars()))
         if not exe.exists():
-            messagebox.showerror("Runtime missing", f"Put faster-whisper-xxl.exe in {exe.parent}")
+            messagebox.showerror("Runtime missing", runtime_install_message(exe.parent))
             return
         refresh_commands(exe, APP_DIR / "commands.json")
         self.status.set("commands.json updated")
