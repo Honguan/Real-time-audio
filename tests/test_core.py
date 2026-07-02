@@ -586,15 +586,37 @@ class CoreTests(unittest.TestCase):
 
     def test_package_script_builds_release_zip_with_readme(self):
         script = Path("scripts/package.ps1").read_text(encoding="utf-8")
-        self.assertIn("RealtimeAudioTranslator-0.1.0-win-x64.zip", script)
+        self.assertIn("RealtimeAudioTranslator-$Version-win-x64.zip", script)
+        self.assertIn("RealtimeAudioTranslator-runtime-cuda12-$Version.zip", script)
         self.assertIn("README.md", script)
-        self.assertIn("RUNTIME_DOWNLOADS.txt", script)
+        self.assertIn("RELEASE_NOTES.md", script)
 
     def test_package_script_writes_sha256sums(self):
         script = Path("scripts/package.ps1").read_text(encoding="utf-8")
 
         self.assertIn("SHA256SUMS.txt", script)
         self.assertIn("Get-FileHash", script)
+
+    def test_github_release_workflow_uploads_zip_assets(self):
+        workflow = Path(".github/workflows/release.yml").read_text(encoding="utf-8")
+
+        self.assertIn("tags:", workflow)
+        self.assertIn("v*", workflow)
+        self.assertIn("workflow_dispatch", workflow)
+        self.assertIn("scripts/package.ps1", workflow)
+        self.assertIn("softprops/action-gh-release", workflow)
+        self.assertIn("release-output/*.zip", workflow)
+        self.assertIn("release-output/SHA256SUMS.txt", workflow)
+
+    def test_release_notes_include_public_download_instructions(self):
+        notes = Path("docs/RELEASE_NOTES.md").read_text(encoding="utf-8")
+
+        self.assertIn("最快使用", notes)
+        self.assertIn("RealtimeAudioTranslator.exe", notes)
+        self.assertIn("%USERPROFILE%\\.realtime-audio\\runtime", notes)
+        self.assertIn("%USERPROFILE%\\.realtime-audio\\models", notes)
+        self.assertIn("VB-CABLE", notes)
+        self.assertIn("GitHub Releases", notes)
 
     def test_readme_mentions_push_to_talk(self):
         readme = Path("README.md").read_text(encoding="utf-8")
@@ -606,7 +628,7 @@ class CoreTests(unittest.TestCase):
         readme = Path("README.md").read_text(encoding="utf-8")
 
         self.assertIn("Open logs", readme)
-        self.assertIn("開啟目前紀錄資料夾", readme)
+        self.assertIn("開啟紀錄資料夾", readme)
 
     def test_readme_mentions_open_app_folder(self):
         readme = Path("README.md").read_text(encoding="utf-8")
@@ -632,6 +654,10 @@ class CoreTests(unittest.TestCase):
         readme = Path("README.md").read_text(encoding="utf-8")
 
         self.assertIn("SHA256SUMS.txt", readme)
+        self.assertIn("GitHub Releases", readme)
+        self.assertIn("RealtimeAudioTranslator.exe", readme)
+        self.assertIn("%USERPROFILE%\\.realtime-audio\\runtime", readme)
+        self.assertIn("%USERPROFILE%\\.realtime-audio\\models", readme)
 
     def test_device_label_strips_hostapi_suffix(self):
         self.assertEqual(device_name_from_label("CABLE Input (VB-Audio Virtual Cable) [Windows WASAPI]"), "CABLE Input (VB-Audio Virtual Cable)")

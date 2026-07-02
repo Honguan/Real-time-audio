@@ -1,0 +1,82 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release tag, for example v0.1.1"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Download Faster-Whisper-XXL runtime
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $release = Invoke-RestMethod "https://api.github.com/repos/Purfview/whisper-standalone-win/releases/latest"
+          $runtimeAsset = $release.assets |
+            Where-Object { $_.name -match "Faster-Whisper-XXL.*win.*\.(7z|zip)$" -or $_.name -match "faster-whisper-xxl.*win.*\.(7z|zip)$" } |
+            Select-Object -First 1
+          $cudaAsset = $release.assets |
+            Where-Object { $_.name -eq "cuBLAS.and.cuDNN_CUDA12_win_v3.7z" } |
+            Select-Object -First 1
+          if (-not $runtimeAsset) {
+            throw "Cannot find Faster-Whisper-XXL Windows asset. Upload runtime zip manually or update release workflow matcher."
+          }
+          if (-not $cudaAsset) {
+            throw "Cannot find cuBLAS.and.cuDNN_CUDA12_win_v3.7z. Upload runtime zip manually or update release workflow matcher."
+          }
+
+          New-Item -ItemType Directory -Path runtime-download, cuda-download, downloaded-runtime | Out-Null
+          Invoke-WebRequest $runtimeAsset.browser_download_url -OutFile runtime-download\runtime.pkg
+          Invoke-WebRequest $cudaAsset.browser_download_url -OutFile cuda-download\cuda.7z
+
+          $sevenZip = "${env:ProgramFiles}\7-Zip\7z.exe"
+          if (-not (Test-Path $sevenZip)) {
+            throw "7-Zip not found on runner."
+          }
+          & $sevenZip x runtime-download\runtime.pkg "-oruntime-download\extracted" -y
+          & $sevenZip x cuda-download\cuda.7z "-ocuda-download\extracted" -y
+
+          $fw = Get-ChildItem runtime-download\extracted -Recurse -Filter faster-whisper-xxl.exe | Select-Object -First 1
+          if (-not $fw) {
+            throw "Downloaded runtime does not contain faster-whisper-xxl.exe."
+          }
+          Copy-Item -LiteralPath (Join-Path $fw.Directory.FullName "*") -Destination downloaded-runtime -Recurse -Force
+          Get-ChildItem cuda-download\extracted -Recurse -Filter *.dll | Copy-Item -Destination downloaded-runtime -Force
+
+      - name: Build release zips
+        shell: pwsh
+        run: |
+          $version = "${{ github.event.inputs.version }}"
+          if ([string]::IsNullOrWhiteSpace($version)) {
+            $version = "${{ github.ref_name }}"
+          }
+          if ($version -notlike "v*") {
+            throw "Release version must start with v, for example v0.1.1."
+          }
+          ./scripts/package.ps1 -Version $version -RuntimeSource downloaded-runtime
+
+      - name: Upload GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: docs/RELEASE_NOTES.md
+          files: |
+            release-output/*.zip
+            release-output/SHA256SUMS.txt

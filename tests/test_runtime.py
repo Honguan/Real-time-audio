@@ -1,5 +1,7 @@
 import tempfile
 import unittest
+import subprocess
+import zipfile
 from pathlib import Path
 
 from realtime_audio_translator.runtime import install_runtime_from, runtime_install_message, runtime_status, whisper_exe
@@ -67,22 +69,66 @@ class RuntimeTests(unittest.TestCase):
 
             self.assertEqual(install_runtime_from(runtime, runtime), runtime)
 
-    def test_package_script_removes_stale_split_installer_files(self):
+    def test_package_script_is_zip_only(self):
         script = (Path(__file__).parents[1] / "scripts" / "package.ps1").read_text(encoding="utf-8")
 
-        self.assertIn("*.bin", script)
-        self.assertIn("Remove-Item", script)
+        self.assertNotIn("iscc", script.lower())
+        self.assertNotIn("Inno Setup", script)
+        self.assertNotIn("RealtimeAudioTranslatorSetup", script)
+        self.assertNotIn(".iss", script)
 
-    def test_package_script_fails_if_split_installer_files_remain(self):
-        script = (Path(__file__).parents[1] / "scripts" / "package.ps1").read_text(encoding="utf-8")
+    def test_package_script_creates_app_runtime_zips_and_checksums(self):
+        root = Path(__file__).parents[1]
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp)
+            dist = work / "RealtimeAudioTranslator"
+            runtime = work / "runtime"
+            out = work / "release"
+            (dist / "_internal").mkdir(parents=True)
+            (dist / "RealtimeAudioTranslator.exe").write_text("app", encoding="utf-8")
+            (dist / "_internal" / "lib.txt").write_text("lib", encoding="utf-8")
+            (runtime / "_xxl_data").mkdir(parents=True)
+            (runtime / "faster-whisper-xxl.exe").write_text("fw", encoding="utf-8")
+            (runtime / "ffmpeg.exe").write_text("ff", encoding="utf-8")
+            (runtime / "_xxl_data" / "data.txt").write_text("data", encoding="utf-8")
+            (runtime / "cublas64_12.dll").write_text("cuda", encoding="utf-8")
 
-        self.assertIn("installer split files were generated", script)
+            subprocess.run(
+                [
+                    "powershell",
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(root / "scripts" / "package.ps1"),
+                    "-SkipBuild",
+                    "-Version",
+                    "v0.0.0-test",
+                    "-OutputDir",
+                    str(out),
+                    "-DistDir",
+                    str(dist),
+                    "-RuntimeSource",
+                    str(runtime),
+                ],
+                cwd=root,
+                check=True,
+            )
 
-    def test_package_script_detects_default_inno_setup_paths(self):
-        script = (Path(__file__).parents[1] / "scripts" / "package.ps1").read_text(encoding="utf-8")
+            app_zip = out / "RealtimeAudioTranslator-v0.0.0-test-win-x64.zip"
+            runtime_zip = out / "RealtimeAudioTranslator-runtime-cuda12-v0.0.0-test.zip"
+            self.assertTrue(app_zip.exists())
+            self.assertTrue(runtime_zip.exists())
+            self.assertTrue((out / "SHA256SUMS.txt").exists())
+            self.assertFalse(list(out.glob("*.bin")))
+            self.assertFalse((out / "RealtimeAudioTranslatorSetup.exe").exists())
 
-        self.assertIn("ProgramFiles(x86)", script)
-        self.assertIn("Inno Setup 6", script)
+            with zipfile.ZipFile(app_zip) as archive:
+                self.assertIn("RealtimeAudioTranslator.exe", archive.namelist())
+                self.assertIn("_internal/lib.txt", archive.namelist())
+            with zipfile.ZipFile(runtime_zip) as archive:
+                self.assertIn("faster-whisper-xxl.exe", archive.namelist())
+                self.assertIn("_xxl_data/data.txt", archive.namelist())
 
 
 if __name__ == "__main__":
