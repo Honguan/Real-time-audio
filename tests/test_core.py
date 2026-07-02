@@ -594,7 +594,8 @@ class CoreTests(unittest.TestCase):
     def test_package_script_builds_release_zip_with_readme(self):
         script = Path("scripts/package.ps1").read_text(encoding="utf-8")
         self.assertIn("RealtimeAudioTranslator-$Version-win-x64.zip", script)
-        self.assertIn("RealtimeAudioTranslator-runtime-cuda12-$Version.zip", script)
+        self.assertIn("RealtimeAudioTranslator-runtime-cuda12-core-$Version.zip", script)
+        self.assertIn("RealtimeAudioTranslator-runtime-cuda12-dlls-$Version.zip", script)
         self.assertIn("README.md", script)
         self.assertIn("RELEASE_NOTES.md", script)
 

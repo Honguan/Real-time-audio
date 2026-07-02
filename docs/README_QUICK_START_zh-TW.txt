@@ -2,7 +2,7 @@
 
 1. 解壓 RealtimeAudioTranslator-<tag>-win-x64.zip。
 2. 執行 RealtimeAudioTranslator.exe。
-3. 如果提示缺 runtime，下載 RealtimeAudioTranslator-runtime-cuda12-<tag>.zip，解壓到：
+3. 如果提示缺 runtime，下載 RealtimeAudioTranslator-runtime-cuda12-core-<tag>.zip 和 RealtimeAudioTranslator-runtime-cuda12-dlls-<tag>.zip，兩個都解壓到：
    %USERPROFILE%\.realtime-audio\runtime\cuda12
 4. 如果提示缺模型，可在 App 內下載模型，或把模型 zip 解壓到：
    %USERPROFILE%\.realtime-audio\models
