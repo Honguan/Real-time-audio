@@ -1,6 +1,11 @@
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
 Set-Location $Root
+$Out = Join-Path $Root "installer-output"
+
+if (Test-Path $Out) {
+  Get-ChildItem -LiteralPath $Out -Filter "*.bin" -File -ErrorAction SilentlyContinue | Remove-Item -Force
+}
 
 $Iscc = Get-Command iscc.exe -ErrorAction SilentlyContinue
 if (-not $Iscc) {
@@ -10,7 +15,6 @@ if (-not $Iscc) {
 .\scripts\build.ps1
 & $Iscc.Source installer\RealtimeAudioTranslator.iss
 
-$Out = Join-Path $Root "installer-output"
 $RuntimeDownloads = Join-Path $Out "RUNTIME_DOWNLOADS.txt"
 $ReleaseZip = Join-Path $Out "RealtimeAudioTranslator-0.1.0-win-x64.zip"
 $Checksums = Join-Path $Out "SHA256SUMS.txt"

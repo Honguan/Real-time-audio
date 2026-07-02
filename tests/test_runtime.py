@@ -67,6 +67,12 @@ class RuntimeTests(unittest.TestCase):
 
             self.assertEqual(install_runtime_from(runtime, runtime), runtime)
 
+    def test_package_script_removes_stale_split_installer_files(self):
+        script = (Path(__file__).parents[1] / "scripts" / "package.ps1").read_text(encoding="utf-8")
+
+        self.assertIn("*.bin", script)
+        self.assertIn("Remove-Item", script)
+
 
 if __name__ == "__main__":
     unittest.main()
