@@ -7,7 +7,7 @@
 3. 第一次啟動若提示缺 runtime，下載 `RealtimeAudioTranslator-runtime-cuda12-<tag>.zip`，解壓到：
 
 ```text
-%USERPROFILE%\.realtime-audio\runtime
+%USERPROFILE%\.realtime-audio\runtime\cuda12
 ```
 
 解壓後該資料夾內應直接看到 `faster-whisper-xxl.exe`。
@@ -36,7 +36,7 @@
 
 ## 常見問題
 
-- 缺 runtime：下載 runtime zip，解壓到 `%USERPROFILE%\.realtime-audio\runtime`。
+- 缺 runtime：下載 runtime zip，解壓到 `%USERPROFILE%\.realtime-audio\runtime\cuda12`。
 - 缺模型：在工具內下載模型，或解壓模型 zip 到 `%USERPROFILE%\.realtime-audio\models`。
 - 沒有字幕：確認 `Show overlay` 已開啟，並按 `Subtitle test`。
 - 沒有聲音：確認 Windows 裝置、會議軟體麥克風、`TTS output` 都選對。

@@ -44,13 +44,13 @@ DEFAULT_CONFIG = {
     "openai_tts_voice": "alloy",
     "segment_seconds": 2.0,
     "speech_threshold": 0.01,
-    "runtime_dir": str(APP_DIR / "runtime"),
+    "runtime_dir": str(APP_DIR / "runtime" / "cuda12"),
 }
 
 
 def ensure_app_dirs(root: Path = APP_DIR) -> None:
     root.mkdir(parents=True, exist_ok=True)
-    for relative in ("models", "logs", "cache/audio"):
+    for relative in ("models", "logs", "cache/audio", "runtime/cuda12"):
         (root / relative).mkdir(parents=True, exist_ok=True)
     ensure_glossary_file(root / "glossary.json")
     commands = root / "commands.json"

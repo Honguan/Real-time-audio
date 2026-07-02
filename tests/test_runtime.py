@@ -4,7 +4,7 @@ import subprocess
 import zipfile
 from pathlib import Path
 
-from realtime_audio_translator.runtime import install_runtime_from, runtime_install_message, runtime_status, whisper_exe
+from realtime_audio_translator.runtime import DEFAULT_RUNTIME_DIR, install_runtime_from, runtime_install_message, runtime_status, whisper_exe
 
 
 class RuntimeTests(unittest.TestCase):
@@ -13,6 +13,10 @@ class RuntimeTests(unittest.TestCase):
             status = runtime_status(Path(tmp))
             self.assertFalse(status["ready"])
             self.assertIn("faster-whisper-xxl.exe", status["missing"])
+
+    def test_default_runtime_dir_uses_cuda12_folder(self):
+        self.assertEqual(DEFAULT_RUNTIME_DIR.name, "cuda12")
+        self.assertEqual(DEFAULT_RUNTIME_DIR.parent.name, "runtime")
 
     def test_runtime_install_message_includes_release_and_cuda12_package(self):
         message = runtime_install_message(Path("runtime"))
@@ -126,9 +130,13 @@ class RuntimeTests(unittest.TestCase):
             with zipfile.ZipFile(app_zip) as archive:
                 self.assertIn("RealtimeAudioTranslator.exe", archive.namelist())
                 self.assertIn("_internal/lib.txt", archive.namelist())
+                self.assertIn("assets/icon.png", archive.namelist())
+                self.assertIn("README_QUICK_START_zh-TW.txt", archive.namelist())
+                self.assertIn("release_version.txt", archive.namelist())
             with zipfile.ZipFile(runtime_zip) as archive:
                 self.assertIn("faster-whisper-xxl.exe", archive.namelist())
                 self.assertIn("_xxl_data/data.txt", archive.namelist())
+                self.assertIn("runtime_manifest.json", archive.namelist())
 
 
 if __name__ == "__main__":

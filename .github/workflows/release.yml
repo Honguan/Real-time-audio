@@ -10,6 +10,22 @@ on:
         description: "Release tag, for example v0.1.1"
         required: true
         type: string
+      build_runtime:
+        description: "Build runtime zip"
+        required: false
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
+      require_runtime_asset:
+        description: "Fail release if runtime zip cannot be built"
+        required: false
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
 
 permissions:
   contents: write
@@ -25,7 +41,15 @@ jobs:
         with:
           python-version: "3.10"
 
+      - name: Run tests
+        shell: pwsh
+        run: |
+          python -m unittest discover -s tests -v
+          python -m compileall realtime_audio_translator tests
+
       - name: Download Faster-Whisper-XXL runtime
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_runtime == 'true' }}
+        continue-on-error: ${{ github.event_name == 'workflow_dispatch' && inputs.require_runtime_asset == 'false' }}
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
@@ -58,7 +82,7 @@ jobs:
           if (-not $fw) {
             throw "Downloaded runtime does not contain faster-whisper-xxl.exe."
           }
-          Copy-Item -LiteralPath (Join-Path $fw.Directory.FullName "*") -Destination downloaded-runtime -Recurse -Force
+          Copy-Item -Path (Join-Path $fw.Directory.FullName "*") -Destination downloaded-runtime -Recurse -Force
           Get-ChildItem cuda-download\extracted -Recurse -Filter *.dll | Copy-Item -Destination downloaded-runtime -Force
 
       - name: Build release zips
@@ -71,7 +95,11 @@ jobs:
           if ($version -notlike "v*") {
             throw "Release version must start with v, for example v0.1.1."
           }
-          ./scripts/package.ps1 -Version $version -RuntimeSource downloaded-runtime
+          $args = @("-Version", $version)
+          if (Test-Path "downloaded-runtime\faster-whisper-xxl.exe") {
+            $args += @("-RuntimeSource", "downloaded-runtime")
+          }
+          ./scripts/package.ps1 @args
 
       - name: Upload GitHub Release
         uses: softprops/action-gh-release@v2

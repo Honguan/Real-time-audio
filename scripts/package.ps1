@@ -54,14 +54,13 @@ function Compress-FolderContents($SourceDir, $DestinationZip) {
 $AppStage = Join-Path $Out "_stage_app"
 New-Item -ItemType Directory -Path $AppStage | Out-Null
 Copy-Item -Path (Join-Path $DistDir "*") -Destination $AppStage -Recurse -Force
+if (Test-Path -LiteralPath (Join-Path $Root "assets")) {
+  Copy-Item -LiteralPath (Join-Path $Root "assets") -Destination (Join-Path $AppStage "assets") -Recurse -Force
+}
 Copy-Item -LiteralPath (Join-Path $Root "README.md") -Destination (Join-Path $AppStage "README.md") -Force
 Copy-Item -LiteralPath (Join-Path $Root "docs\RELEASE_NOTES.md") -Destination (Join-Path $AppStage "RELEASE_NOTES.md") -Force
-@(
-  "Quick start:",
-  "1. Run RealtimeAudioTranslator.exe.",
-  "2. If runtime is missing, extract the runtime zip to %USERPROFILE%\.realtime-audio\runtime.",
-  "3. If models are missing, download them in the app or extract a model zip to %USERPROFILE%\.realtime-audio\models."
-) | Set-Content -LiteralPath (Join-Path $AppStage "START_HERE.txt") -Encoding UTF8
+Copy-Item -LiteralPath (Join-Path $Root "docs\README_QUICK_START_zh-TW.txt") -Destination (Join-Path $AppStage "README_QUICK_START_zh-TW.txt") -Force
+Set-Content -LiteralPath (Join-Path $AppStage "release_version.txt") -Value "$Version" -Encoding UTF8
 
 $AppZip = Join-Path $Out "RealtimeAudioTranslator-$Version-win-x64.zip"
 Compress-FolderContents $AppStage $AppZip
@@ -76,10 +75,18 @@ if (-not [string]::IsNullOrWhiteSpace($RuntimeSource)) {
   Copy-Item -Path (Join-Path $RuntimeSource "*") -Destination $RuntimeStage -Recurse -Force
   @(
     "Extract to:",
-    "%USERPROFILE%\.realtime-audio\runtime",
+    "%USERPROFILE%\.realtime-audio\runtime\cuda12",
     "",
     "The folder should directly contain faster-whisper-xxl.exe."
   ) | Set-Content -LiteralPath (Join-Path $RuntimeStage "RUNTIME_README.txt") -Encoding UTF8
+  @(
+    "{",
+    "  ""runtime"": ""faster-whisper-xxl"",",
+    "  ""platform"": ""windows-x64"",",
+    "  ""cuda"": ""12"",",
+    "  ""version"": ""$Version""",
+    "}"
+  ) | Set-Content -LiteralPath (Join-Path $RuntimeStage "runtime_manifest.json") -Encoding UTF8
   $RuntimeZip = Join-Path $Out "RealtimeAudioTranslator-runtime-cuda12-$Version.zip"
   Compress-FolderContents $RuntimeStage $RuntimeZip
   $Created += $RuntimeZip

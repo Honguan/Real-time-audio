@@ -603,6 +603,10 @@ class CoreTests(unittest.TestCase):
         self.assertIn("tags:", workflow)
         self.assertIn("v*", workflow)
         self.assertIn("workflow_dispatch", workflow)
+        self.assertIn("build_runtime", workflow)
+        self.assertIn("require_runtime_asset", workflow)
+        self.assertIn("unittest discover -s tests -v", workflow)
+        self.assertIn("compileall realtime_audio_translator tests", workflow)
         self.assertIn("scripts/package.ps1", workflow)
         self.assertIn("softprops/action-gh-release", workflow)
         self.assertIn("release-output/*.zip", workflow)
@@ -613,10 +617,17 @@ class CoreTests(unittest.TestCase):
 
         self.assertIn("最快使用", notes)
         self.assertIn("RealtimeAudioTranslator.exe", notes)
-        self.assertIn("%USERPROFILE%\\.realtime-audio\\runtime", notes)
+        self.assertIn("%USERPROFILE%\\.realtime-audio\\runtime\\cuda12", notes)
         self.assertIn("%USERPROFILE%\\.realtime-audio\\models", notes)
         self.assertIn("VB-CABLE", notes)
         self.assertIn("GitHub Releases", notes)
+
+    def test_quick_start_doc_exists_for_app_zip(self):
+        quick_start = Path("docs/README_QUICK_START_zh-TW.txt").read_text(encoding="utf-8")
+
+        self.assertIn("RealtimeAudioTranslator.exe", quick_start)
+        self.assertIn("%USERPROFILE%\\.realtime-audio\\runtime\\cuda12", quick_start)
+        self.assertIn("%USERPROFILE%\\.realtime-audio\\models", quick_start)
 
     def test_readme_mentions_push_to_talk(self):
         readme = Path("README.md").read_text(encoding="utf-8")
@@ -656,7 +667,7 @@ class CoreTests(unittest.TestCase):
         self.assertIn("SHA256SUMS.txt", readme)
         self.assertIn("GitHub Releases", readme)
         self.assertIn("RealtimeAudioTranslator.exe", readme)
-        self.assertIn("%USERPROFILE%\\.realtime-audio\\runtime", readme)
+        self.assertIn("%USERPROFILE%\\.realtime-audio\\runtime\\cuda12", readme)
         self.assertIn("%USERPROFILE%\\.realtime-audio\\models", readme)
 
     def test_device_label_strips_hostapi_suffix(self):
