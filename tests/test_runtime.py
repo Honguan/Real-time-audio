@@ -135,8 +135,48 @@ class RuntimeTests(unittest.TestCase):
                 self.assertIn("release_version.txt", archive.namelist())
             with zipfile.ZipFile(runtime_zip) as archive:
                 self.assertIn("faster-whisper-xxl.exe", archive.namelist())
+                self.assertIn("ffmpeg.exe", archive.namelist())
+                self.assertIn("cublas64_12.dll", archive.namelist())
                 self.assertIn("_xxl_data/data.txt", archive.namelist())
                 self.assertIn("runtime_manifest.json", archive.namelist())
+
+    def test_package_script_rejects_incomplete_runtime_source(self):
+        root = Path(__file__).parents[1]
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp)
+            dist = work / "RealtimeAudioTranslator"
+            runtime = work / "runtime"
+            out = work / "release"
+            (dist / "_internal").mkdir(parents=True)
+            (dist / "RealtimeAudioTranslator.exe").write_text("app", encoding="utf-8")
+            runtime.mkdir()
+            (runtime / "faster-whisper-xxl.exe").write_text("fw", encoding="utf-8")
+
+            result = subprocess.run(
+                [
+                    "powershell",
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(root / "scripts" / "package.ps1"),
+                    "-SkipBuild",
+                    "-Version",
+                    "v0.0.0-test",
+                    "-OutputDir",
+                    str(out),
+                    "-DistDir",
+                    str(dist),
+                    "-RuntimeSource",
+                    str(runtime),
+                ],
+                cwd=root,
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("ffmpeg.exe", result.stderr + result.stdout)
 
 
 if __name__ == "__main__":

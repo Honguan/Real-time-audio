@@ -70,6 +70,12 @@ if (-not [string]::IsNullOrWhiteSpace($RuntimeSource)) {
   if (-not (Test-Path -LiteralPath (Join-Path $RuntimeSource "faster-whisper-xxl.exe"))) {
     throw "RuntimeSource must contain faster-whisper-xxl.exe: $RuntimeSource"
   }
+  if (-not (Test-Path -LiteralPath (Join-Path $RuntimeSource "ffmpeg.exe"))) {
+    throw "RuntimeSource must contain ffmpeg.exe: $RuntimeSource"
+  }
+  if (-not (Get-ChildItem -LiteralPath $RuntimeSource -Filter "*.dll" -File -ErrorAction SilentlyContinue)) {
+    throw "RuntimeSource must contain CUDA12 DLL files: $RuntimeSource"
+  }
   $RuntimeStage = Join-Path $Out "_stage_runtime"
   New-Item -ItemType Directory -Path $RuntimeStage | Out-Null
   Copy-Item -Path (Join-Path $RuntimeSource "*") -Destination $RuntimeStage -Recurse -Force
