@@ -89,7 +89,7 @@ class RealtimeEngine:
     def _start_direction(self, direction: str, device_hint: str, loopback: bool) -> bool:
         device = find_device(device_hint, want_output=loopback) if device_hint else None
         if device is None:
-            device = find_device("CABLE Output" if not loopback else "Speakers", want_output=loopback)
+            device = find_device("Microphone" if not loopback else "Speakers", want_output=loopback)
         if device is None:
             self.status(f"{direction}: no device")
             return False

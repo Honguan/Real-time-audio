@@ -1061,6 +1061,24 @@ class CoreTests(unittest.TestCase):
         self.assertFalse(engine.running)
         self.assertEqual(statuses[-1], "no audio devices")
 
+    def test_engine_default_microphone_capture_uses_microphone_not_cable_output(self):
+        import realtime_audio_translator.engine as engine_module
+
+        calls = []
+        config = DEFAULT_CONFIG.copy()
+        config["record_logs"] = False
+        engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, lambda status: None)
+
+        original_find_device = engine_module.find_device
+        engine_module.find_device = lambda name, want_output: calls.append((name, want_output)) or None
+        try:
+            engine._start_direction("me", "", False)
+        finally:
+            engine_module.find_device = original_find_device
+
+        self.assertIn(("Microphone", False), calls)
+        self.assertNotIn(("CABLE Output", False), calls)
+
     def test_engine_start_reports_transcriber_failure(self):
         import realtime_audio_translator.engine as engine_module
 
