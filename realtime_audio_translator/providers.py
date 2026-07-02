@@ -153,6 +153,8 @@ class TextToSpeech:
             "voice": {"languageCode": language_code},
             "audioConfig": {"audioEncoding": "LINEAR16", "sampleRateHertz": 24000},
         }
+        if self.config.get("google_tts_voice", "").strip():
+            payload["voice"]["name"] = self.config["google_tts_voice"].strip()
         response = requests.post(
             GOOGLE_TTS_URL,
             headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},

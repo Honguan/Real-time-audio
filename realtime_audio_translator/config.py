@@ -23,6 +23,7 @@ DEFAULT_CONFIG = {
     "tts_rate": 0,
     "tts_volume": 100,
     "tts_voice_name": "",
+    "google_tts_voice": "",
     "overlay_visible": True,
     "overlay_topmost": True,
     "overlay_opacity": 0.86,

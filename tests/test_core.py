@@ -433,6 +433,34 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(audio, b"pcm")
         self.assertEqual(calls[0][1]["json"]["response_format"], "pcm")
 
+    def test_google_tts_can_request_configured_voice(self):
+        import realtime_audio_translator.providers as providers_module
+
+        calls = []
+
+        class Response:
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return {"audioContent": "cGNt"}
+
+        original_post = providers_module.requests.post
+        original_token = providers_module.google_access_token
+        providers_module.google_access_token = lambda path: "test-token"
+        providers_module.requests.post = lambda *args, **kwargs: calls.append((args, kwargs)) or Response()
+        try:
+            config = DEFAULT_CONFIG.copy()
+            config["google_tts_voice"] = "en-US-Neural2-A"
+            audio = TextToSpeech(config).synthesize_google_linear16("hello", "en-US")
+        finally:
+            providers_module.requests.post = original_post
+            providers_module.google_access_token = original_token
+
+        self.assertEqual(audio, b"pcm")
+        self.assertEqual(calls[0][1]["headers"]["Authorization"], "Bearer test-token")
+        self.assertEqual(calls[0][1]["json"]["voice"]["name"], "en-US-Neural2-A")
+
     def test_local_tts_uses_windows_sapi(self):
         import realtime_audio_translator.providers as providers_module
 

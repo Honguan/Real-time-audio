@@ -37,6 +37,7 @@ SETTING_ROWS = (
     ("TTS rate", "tts_rate"),
     ("TTS volume", "tts_volume"),
     ("TTS voice", "tts_voice_name"),
+    ("Google TTS voice", "google_tts_voice"),
     ("Google project", "google_project_id"),
     ("Google JSON", "google_service_account_json"),
     ("Glossary JSON", "glossary_path"),
