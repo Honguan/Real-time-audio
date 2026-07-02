@@ -28,6 +28,7 @@ SETTING_ROWS = (
     ("TTS provider", "tts_provider"),
     ("Performance mode", "performance_mode"),
     ("Local translate URL", "local_translate_url"),
+    ("OpenAI model", "openai_model"),
     ("Model", "model"),
     ("ASR device", "device"),
     ("Compute type", "compute_type"),

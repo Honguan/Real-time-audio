@@ -74,6 +74,7 @@ class CoreTests(unittest.TestCase):
     def test_advanced_settings_expose_openai_tts_options(self):
         settings = visible_setting_keys(True)
 
+        self.assertIn("openai_model", settings)
         self.assertIn("openai_tts_model", settings)
         self.assertIn("openai_tts_voice", settings)
 
@@ -604,6 +605,7 @@ class CoreTests(unittest.TestCase):
 
         self.assertIn("TTS test", readme)
         self.assertIn("TTS provider", readme)
+        self.assertIn("OpenAI model", readme)
         self.assertIn("OpenAI TTS voice", readme)
 
     def test_readme_mentions_release_checksums(self):
