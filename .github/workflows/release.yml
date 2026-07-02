@@ -49,7 +49,9 @@ jobs:
         shell: pwsh
         run: |
           python -m unittest discover -s tests -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python -m compileall realtime_audio_translator tests
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Download Faster-Whisper-XXL runtime
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_runtime == 'true' }}
@@ -101,11 +103,11 @@ jobs:
           if ($version -notlike "v*") {
             throw "Release version must start with v, for example v0.1.1."
           }
-          $args = @("-Version", $version)
+          $packageArgs = @("-Version", $version)
           if (Test-Path "downloaded-runtime\faster-whisper-xxl.exe") {
-            $args += @("-RuntimeSource", "downloaded-runtime")
+            $packageArgs += @("-RuntimeSource", "downloaded-runtime")
           }
-          & ./scripts/package.ps1 @args
+          & ./scripts/package.ps1 @packageArgs
 
       - name: Upload GitHub Release
         uses: softprops/action-gh-release@v2

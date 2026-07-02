@@ -602,7 +602,8 @@ class CoreTests(unittest.TestCase):
         script = Path("scripts/package.ps1").read_text(encoding="utf-8")
 
         self.assertIn("SHA256SUMS.txt", script)
-        self.assertIn("Get-FileHash", script)
+        self.assertIn("System.Security.Cryptography.SHA256", script)
+        self.assertNotIn("Get-FileHash", script)
 
     def test_github_release_workflow_uploads_zip_assets(self):
         workflow = Path(".github/workflows/release.yml").read_text(encoding="utf-8")
@@ -614,13 +615,16 @@ class CoreTests(unittest.TestCase):
         self.assertIn("require_runtime_asset", workflow)
         self.assertIn("python -m pip install -r requirements.txt", workflow)
         self.assertIn("unittest discover -s tests -v", workflow)
+        self.assertIn("if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }", workflow)
         self.assertIn("compileall realtime_audio_translator tests", workflow)
         self.assertIn("releases?per_page=20", workflow)
         self.assertNotIn("/releases/latest", workflow)
         self.assertIn("Sort-Object updated_at -Descending", workflow)
         self.assertIn("Faster-Whisper-XXL_.*_windows", workflow)
         self.assertIn("cuBLAS.and.cuDNN_CUDA12_win_v3.7z", workflow)
-        self.assertIn("& ./scripts/package.ps1 @args", workflow)
+        self.assertIn("$packageArgs", workflow)
+        self.assertIn("& ./scripts/package.ps1 @packageArgs", workflow)
+        self.assertNotIn("& ./scripts/package.ps1 @args", workflow)
         self.assertIn("softprops/action-gh-release", workflow)
         self.assertIn("tag_name:", workflow)
         self.assertIn("inputs.version || github.ref_name", workflow)

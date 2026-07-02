@@ -119,12 +119,24 @@ if (-not [string]::IsNullOrWhiteSpace($ModelsSource)) {
 }
 
 $Checksums = Join-Path $Out "SHA256SUMS.txt"
-$Created |
-  ForEach-Object {
-    $Hash = Get-FileHash -LiteralPath $_ -Algorithm SHA256
-    "$($Hash.Hash)  $(Split-Path -Leaf $Hash.Path)"
-  } |
-  Set-Content -LiteralPath $Checksums -Encoding UTF8
+$Sha256 = [System.Security.Cryptography.SHA256]::Create()
+try {
+  $Created |
+    ForEach-Object {
+      $Path = $_
+      $Stream = [System.IO.File]::OpenRead((Resolve-Path -LiteralPath $Path))
+      try {
+        $HashBytes = $Sha256.ComputeHash($Stream)
+      } finally {
+        $Stream.Dispose()
+      }
+      $Hash = ([BitConverter]::ToString($HashBytes)).Replace("-", "").ToUpperInvariant()
+      "$Hash  $(Split-Path -Leaf $Path)"
+    } |
+    Set-Content -LiteralPath $Checksums -Encoding UTF8
+} finally {
+  $Sha256.Dispose()
+}
 
 Remove-Item -LiteralPath $AppStage -Recurse -Force
 if (Test-Path -LiteralPath (Join-Path $Out "_stage_runtime")) {
