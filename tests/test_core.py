@@ -620,7 +620,7 @@ class CoreTests(unittest.TestCase):
         self.assertIn("Sort-Object updated_at -Descending", workflow)
         self.assertIn("Faster-Whisper-XXL_.*_windows", workflow)
         self.assertIn("cuBLAS.and.cuDNN_CUDA12_win_v3.7z", workflow)
-        self.assertIn("scripts/package.ps1", workflow)
+        self.assertIn("& ./scripts/package.ps1 @args", workflow)
         self.assertIn("softprops/action-gh-release", workflow)
         self.assertIn("tag_name:", workflow)
         self.assertIn("inputs.version || github.ref_name", workflow)
