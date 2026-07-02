@@ -28,6 +28,7 @@ class RuntimeTests(unittest.TestCase):
             (root / "ffmpeg.exe").write_text("ff", encoding="utf-8")
             (root / "_xxl_data").mkdir()
             self.assertTrue(runtime_status(root)["ready"])
+            self.assertIn("cublasLt64_12.dll", runtime_status(root)["warnings"])
 
     def test_default_runtime_dir_uses_cuda12_folder(self):
         self.assertEqual(DEFAULT_RUNTIME_DIR.name, "cuda12")
@@ -37,8 +38,12 @@ class RuntimeTests(unittest.TestCase):
         message = runtime_install_message(Path("runtime"))
 
         self.assertIn("runtime", message)
+        self.assertIn("Faster-Whisper-XXL Windows runtime", message)
+        self.assertNotIn("runtime zip", message)
         self.assertIn("https://github.com/Purfview/whisper-standalone-win/releases", message)
         self.assertIn("cuBLAS.and.cuDNN_CUDA12_win_v3.7z", message)
+        self.assertIn("faster-whisper-xxl.exe", message)
+        self.assertIn("ffmpeg.exe", message)
 
     def test_gui_runtime_missing_prompts_use_runtime_install_message(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
