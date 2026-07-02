@@ -608,6 +608,12 @@ class CoreTests(unittest.TestCase):
         self.assertIn("OpenAI model", readme)
         self.assertIn("OpenAI TTS voice", readme)
 
+    def test_readme_mentions_overlay_language_and_topmost(self):
+        readme = Path("README.md").read_text(encoding="utf-8")
+
+        self.assertIn("Show language", readme)
+        self.assertIn("Overlay topmost", readme)
+
     def test_readme_mentions_release_checksums(self):
         readme = Path("README.md").read_text(encoding="utf-8")
 

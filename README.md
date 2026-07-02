@@ -52,6 +52,8 @@ Provider 預設為 `local`，不呼叫雲端翻譯，字幕會保留原文，適
 `Overlay font size` 可設定字幕字體大小，範圍 12 到 48。
 `Overlay hold seconds` 可設定字幕停留秒數，範圍 1 到 60。
 取消勾選 `Show overlay` 可一鍵隱藏字幕窗。
+取消勾選 `Show language` 可隱藏字幕前方的語言標籤。
+取消勾選 `Overlay topmost` 可讓字幕窗不固定在最上層。
 按 `Copy subtitles` 可複製目前字幕內容。
 按 `Fix speaker audio`、`Fix mic output`、`Fix subtitles` 可快速開啟聲音設定、VB-CABLE 下載頁或重新顯示字幕窗。
 
