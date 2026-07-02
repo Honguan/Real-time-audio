@@ -612,6 +612,7 @@ class CoreTests(unittest.TestCase):
         self.assertIn("workflow_dispatch", workflow)
         self.assertIn("build_runtime", workflow)
         self.assertIn("require_runtime_asset", workflow)
+        self.assertIn("python -m pip install -r requirements.txt", workflow)
         self.assertIn("unittest discover -s tests -v", workflow)
         self.assertIn("compileall realtime_audio_translator tests", workflow)
         self.assertIn("releases?per_page=20", workflow)
