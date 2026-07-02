@@ -38,6 +38,14 @@ def runtime_status(root: Path = DEFAULT_RUNTIME_DIR) -> dict:
     }
 
 
+def runtime_install_message(root: Path = DEFAULT_RUNTIME_DIR) -> str:
+    return (
+        f"Put {WHISPER_EXE} in {root}.\n"
+        f"Runtime: {RUNTIME_RELEASE_URL}\n"
+        f"CUDA12: {CUDA_PACKAGE_NAME}"
+    )
+
+
 def install_runtime_from(source: Path, target: Path = DEFAULT_RUNTIME_DIR) -> Path:
     exe = whisper_exe(source)
     if not exe.exists():

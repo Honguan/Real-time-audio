@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from realtime_audio_translator.runtime import install_runtime_from, runtime_status, whisper_exe
+from realtime_audio_translator.runtime import install_runtime_from, runtime_install_message, runtime_status, whisper_exe
 
 
 class RuntimeTests(unittest.TestCase):
@@ -11,6 +11,13 @@ class RuntimeTests(unittest.TestCase):
             status = runtime_status(Path(tmp))
             self.assertFalse(status["ready"])
             self.assertIn("faster-whisper-xxl.exe", status["missing"])
+
+    def test_runtime_install_message_includes_release_and_cuda12_package(self):
+        message = runtime_install_message(Path("runtime"))
+
+        self.assertIn("runtime", message)
+        self.assertIn("https://github.com/Purfview/whisper-standalone-win/releases", message)
+        self.assertIn("cuBLAS.and.cuDNN_CUDA12_win_v3.7z", message)
 
     def test_whisper_exe_uses_runtime_dir(self):
         with tempfile.TemporaryDirectory() as tmp:

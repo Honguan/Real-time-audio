@@ -12,7 +12,7 @@ from .engine import RealtimeEngine
 from .models import download_model, list_models, recommend_model
 from .paths import resource_root
 from .providers import TextToSpeech, Translator, google_access_token
-from .runtime import DEFAULT_RUNTIME_DIR, RUNTIME_RELEASE_URL, install_runtime_from, runtime_dir, runtime_status, whisper_exe
+from .runtime import DEFAULT_RUNTIME_DIR, RUNTIME_RELEASE_URL, install_runtime_from, runtime_dir, runtime_install_message, runtime_status, whisper_exe
 from .tts import list_windows_sapi_voices, play_linear16
 
 
@@ -531,7 +531,7 @@ class TranslatorApp(tk.Tk):
         self._save()
         exe = whisper_exe(runtime_dir(self.config))
         if not exe.exists():
-            messagebox.showerror("Runtime missing", f"Put faster-whisper-xxl.exe in {exe.parent}")
+            messagebox.showerror("Runtime missing", runtime_install_message(exe.parent))
             return
         model = self.config["model"]
         self.status.set(f"downloading model {model}")
