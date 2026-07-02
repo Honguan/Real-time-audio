@@ -27,6 +27,8 @@
 
 主程式不需要安裝 Python；zip 內的 PyInstaller 版本已包含 Python runtime。
 
+預設本機翻譯不會上傳雲端。若要真的翻譯文字，請先啟動 LibreTranslate，並在 `Local translate URL` 填入例如 `http://127.0.0.1:5000/translate`；未填 URL 時只會套用 glossary 詞彙表並保留原文。
+
 ## VB-CABLE 設定
 
 1. 會議軟體的麥克風選 `CABLE Output (VB-Audio Virtual Cable)`。

@@ -671,6 +671,7 @@ class CoreTests(unittest.TestCase):
         self.assertIn("GitHub Releases", notes)
         self.assertIn("https://github.com/Purfview/whisper-standalone-win/releases", notes)
         self.assertIn("cuBLAS.and.cuDNN_CUDA12_win_v3.7z", notes)
+        self.assertIn("Local translate URL", notes)
 
     def test_quick_start_doc_exists_for_app_zip(self):
         quick_start = Path("docs/README_QUICK_START_zh-TW.txt").read_text(encoding="utf-8")
@@ -679,6 +680,7 @@ class CoreTests(unittest.TestCase):
         self.assertIn("%USERPROFILE%\\.realtime-audio\\runtime\\cuda12", quick_start)
         self.assertIn("%USERPROFILE%\\.realtime-audio\\models", quick_start)
         self.assertIn("https://github.com/Purfview/whisper-standalone-win/releases", quick_start)
+        self.assertIn("Local translate URL", quick_start)
 
     def test_readme_and_release_notes_cover_required_faq(self):
         required = (
