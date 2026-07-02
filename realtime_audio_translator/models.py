@@ -7,6 +7,30 @@ from pathlib import Path
 KNOWN_MODELS = ("medium", "large-v3-turbo", "large-v2")
 
 
+def model_path(model: str, local_models: Path, app_models: Path) -> Path | None:
+    candidate = Path(model).expanduser()
+    if candidate.exists():
+        return candidate
+    for root in (local_models, app_models):
+        for name in (model, f"faster-whisper-{model}"):
+            path = root / name
+            if path.exists():
+                return path
+    return None
+
+
+def model_available(model: str, local_models: Path, app_models: Path) -> bool:
+    return model_path(model, local_models, app_models) is not None
+
+
+def model_install_message(model: str, model_dir: Path) -> str:
+    return (
+        f"找不到模型：{model}\n"
+        "請點 Download model，或把模型 zip 解壓到：\n"
+        f"{model_dir}"
+    )
+
+
 def list_models(local_models: Path, app_models: Path) -> list[str]:
     found: set[str] = set(KNOWN_MODELS)
     for root in (local_models, app_models):

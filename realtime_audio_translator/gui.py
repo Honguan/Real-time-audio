@@ -9,7 +9,7 @@ from .audio import audio_segment_active, capture_wav, find_device, format_device
 from .commands import refresh_commands
 from .config import APP_DIR, clear_cache, clear_logs, ensure_glossary_file, load_config, save_config
 from .engine import RealtimeEngine
-from .models import cuda_hardware_from_check_output, download_model, list_models, recommend_model
+from .models import cuda_hardware_from_check_output, download_model, list_models, model_available, model_install_message, recommend_model
 from .paths import resource_root
 from .providers import TextToSpeech, Translator, google_access_token
 from .runtime import DEFAULT_RUNTIME_DIR, RUNTIME_RELEASE_URL, install_runtime_from, runtime_dir, runtime_install_message, runtime_status, whisper_exe
@@ -506,14 +506,17 @@ class TranslatorApp(tk.Tk):
         self.status.set("runtime imported; commands.json updated")
 
     def _refresh_runtime_status(self) -> None:
-        status = runtime_status(runtime_dir(self._config_from_vars()))
+        config = self._config_from_vars()
+        status = runtime_status(runtime_dir(config))
         if status["ready"]:
             note = "Runtime ready"
             if status["warnings"]:
                 note += f"; recommended CUDA package: {status['cuda_package']}"
+            if not model_available(config["model"], self.repo_root / "_models", APP_DIR / "models"):
+                note += f"; model missing: {config['model']}"
             self.runtime_text.set(note)
         else:
-            self.runtime_text.set(runtime_install_message(runtime_dir(self._config_from_vars())))
+            self.runtime_text.set(runtime_install_message(runtime_dir(config)))
 
     def _recommend(self) -> None:
         exe = whisper_exe(runtime_dir(self._config_from_vars()))
@@ -635,6 +638,10 @@ class TranslatorApp(tk.Tk):
 
     def _start(self) -> None:
         self._save()
+        if not model_available(self.config["model"], self.repo_root / "_models", APP_DIR / "models"):
+            messagebox.showerror("Model missing", model_install_message(self.config["model"], APP_DIR / "models"))
+            self.status.set(f"model missing: {self.config['model']}")
+            return
         self.engine = RealtimeEngine(self.repo_root, self.config, self._overlay_update, self.status.set)
         threading.Thread(target=self.engine.start, daemon=True).start()
 

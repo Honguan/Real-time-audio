@@ -14,7 +14,7 @@ from realtime_audio_translator.config import DEFAULT_CONFIG, clear_cache, clear_
 from realtime_audio_translator.engine import RealtimeEngine, drain_queue
 from realtime_audio_translator.gui import LANGUAGE_CHOICES, PERFORMANCE_CHOICES, PROVIDER_CHOICES, TTS_PROVIDER_CHOICES, TranslatorApp, format_overlay_line, mode_notice, overlay_clipboard_text, overlay_font_size_value, overlay_hold_seconds_value, overlay_opacity_value, overlay_visibility_action, performance_segment_seconds, subtitle_updates_allowed, swap_language_values, troubleshooting_action, visible_setting_keys
 from realtime_audio_translator.logbook import ConversationLog
-from realtime_audio_translator.models import cuda_hardware_from_check_output, list_models, model_download_command, recommend_model
+from realtime_audio_translator.models import cuda_hardware_from_check_output, list_models, model_available, model_download_command, model_install_message, recommend_model
 from realtime_audio_translator.providers import TextToSpeech, Translator, build_google_translate_request, build_openai_translation_request
 
 
@@ -590,6 +590,27 @@ class CoreTests(unittest.TestCase):
 
             self.assertIn("medium", models)
             self.assertIn("large-v3-turbo", models)
+
+    def test_model_available_accepts_downloaded_model_folder(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            app_models = Path(tmp) / "models"
+            (app_models / "faster-whisper-medium").mkdir(parents=True)
+
+            self.assertTrue(model_available("medium", Path(tmp) / "missing", app_models))
+            self.assertFalse(model_available("large-v3-turbo", Path(tmp) / "missing", app_models))
+
+    def test_model_install_message_shows_model_folder(self):
+        message = model_install_message("medium", Path(r"C:\Users\me\.realtime-audio\models"))
+
+        self.assertIn("medium", message)
+        self.assertIn(r"C:\Users\me\.realtime-audio\models", message)
+        self.assertIn("Download model", message)
+
+    def test_start_checks_model_before_engine(self):
+        gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
+
+        self.assertIn('if not model_available(self.config["model"], self.repo_root / "_models", APP_DIR / "models"):', gui_source)
+        self.assertIn('messagebox.showerror("Model missing", model_install_message(self.config["model"], APP_DIR / "models"))', gui_source)
 
     def test_package_script_builds_release_zip_with_readme(self):
         script = Path("scripts/package.ps1").read_text(encoding="utf-8")
