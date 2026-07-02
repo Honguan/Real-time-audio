@@ -614,6 +614,7 @@ class CoreTests(unittest.TestCase):
         self.assertIn("workflow_dispatch", workflow)
         self.assertIn("build_runtime", workflow)
         self.assertIn("require_runtime_asset", workflow)
+        self.assertIn("github.event_name == 'workflow_dispatch' && inputs.build_runtime == 'true'", workflow)
         self.assertIn("python -m pip install -r requirements.txt", workflow)
         self.assertIn("unittest discover -s tests -v", workflow)
         self.assertIn("if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }", workflow)
@@ -646,6 +647,8 @@ class CoreTests(unittest.TestCase):
         self.assertIn("%USERPROFILE%\\.realtime-audio\\models", notes)
         self.assertIn("VB-CABLE", notes)
         self.assertIn("GitHub Releases", notes)
+        self.assertIn("https://github.com/Purfview/whisper-standalone-win/releases", notes)
+        self.assertIn("cuBLAS.and.cuDNN_CUDA12_win_v3.7z", notes)
 
     def test_quick_start_doc_exists_for_app_zip(self):
         quick_start = Path("docs/README_QUICK_START_zh-TW.txt").read_text(encoding="utf-8")
@@ -653,6 +656,7 @@ class CoreTests(unittest.TestCase):
         self.assertIn("RealtimeAudioTranslator.exe", quick_start)
         self.assertIn("%USERPROFILE%\\.realtime-audio\\runtime\\cuda12", quick_start)
         self.assertIn("%USERPROFILE%\\.realtime-audio\\models", quick_start)
+        self.assertIn("https://github.com/Purfview/whisper-standalone-win/releases", quick_start)
 
     def test_readme_and_release_notes_cover_required_faq(self):
         required = (
