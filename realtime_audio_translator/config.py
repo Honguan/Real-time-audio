@@ -50,7 +50,7 @@ DEFAULT_CONFIG = {
 
 def ensure_app_dirs(root: Path = APP_DIR) -> None:
     root.mkdir(parents=True, exist_ok=True)
-    for relative in ("models", "logs", "cache/audio", "runtime/cuda12"):
+    for relative in ("models", "logs", "cache/audio", "cache/temp_audio", "runtime/cuda12", "exports/subtitles"):
         (root / relative).mkdir(parents=True, exist_ok=True)
     ensure_glossary_file(root / "glossary.json")
     commands = root / "commands.json"
@@ -91,4 +91,5 @@ def clear_logs(root: Path = APP_DIR, log_dir: Path | None = None) -> None:
 
 def clear_cache(root: Path = APP_DIR) -> None:
     shutil.rmtree(root / "cache" / "audio", ignore_errors=True)
+    shutil.rmtree(root / "cache" / "temp_audio", ignore_errors=True)
     ensure_app_dirs(root)

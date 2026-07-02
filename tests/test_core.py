@@ -31,6 +31,8 @@ class CoreTests(unittest.TestCase):
             self.assertTrue((root / "models").is_dir())
             self.assertTrue((root / "logs").is_dir())
             self.assertTrue((root / "cache" / "audio").is_dir())
+            self.assertTrue((root / "cache" / "temp_audio").is_dir())
+            self.assertTrue((root / "exports" / "subtitles").is_dir())
 
     def test_app_dirs_create_empty_glossary_without_overwriting(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -258,12 +260,14 @@ class CoreTests(unittest.TestCase):
             ensure_app_dirs(root)
             (root / "logs" / "session.jsonl").write_text("secret", encoding="utf-8")
             (root / "cache" / "audio" / "clip.wav").write_bytes(b"audio")
+            (root / "cache" / "temp_audio" / "clip.wav").write_bytes(b"audio")
 
             clear_logs(root)
             clear_cache(root)
 
             self.assertEqual(list((root / "logs").iterdir()), [])
             self.assertEqual(list((root / "cache" / "audio").iterdir()), [])
+            self.assertEqual(list((root / "cache" / "temp_audio").iterdir()), [])
 
     def test_parse_help_options_extracts_choices_and_flags(self):
         help_text = """
