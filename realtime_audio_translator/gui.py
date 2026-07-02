@@ -513,7 +513,7 @@ class TranslatorApp(tk.Tk):
                 note += f"; recommended CUDA package: {status['cuda_package']}"
             self.runtime_text.set(note)
         else:
-            self.runtime_text.set(f"Runtime missing: {', '.join(status['missing'])}. Download Faster-Whisper-XXL and cuBLAS.and.cuDNN_CUDA12_win_v3.7z.")
+            self.runtime_text.set(runtime_install_message(runtime_dir(self._config_from_vars())))
 
     def _recommend(self) -> None:
         exe = whisper_exe(runtime_dir(self._config_from_vars()))

@@ -23,6 +23,7 @@ class RuntimeTests(unittest.TestCase):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
 
         self.assertNotIn('f"Put faster-whisper-xxl.exe in {exe.parent}"', gui_source)
+        self.assertNotIn("Runtime missing: {', '.join(status['missing'])}", gui_source)
 
     def test_whisper_exe_uses_runtime_dir(self):
         with tempfile.TemporaryDirectory() as tmp:
