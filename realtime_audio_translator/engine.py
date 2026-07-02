@@ -1,3 +1,4 @@
+import queue
 import threading
 import time
 from pathlib import Path
@@ -13,6 +14,16 @@ from .tts import play_linear16
 
 OverlayCallback = Callable[[str, str], None]
 StatusCallback = Callable[[str], None]
+
+
+def drain_queue(items) -> int:
+    removed = 0
+    while True:
+        try:
+            items.get_nowait()
+            removed += 1
+        except queue.Empty:
+            return removed
 
 
 class RealtimeEngine:
@@ -92,6 +103,7 @@ class RealtimeEngine:
         target = self.config["source_language"] if direction == "speaker" else self.config["target_language"]
         while self.running:
             if self.paused:
+                drain_queue(worker.queue)
                 time.sleep(0.1)
                 continue
             try:
