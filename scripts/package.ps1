@@ -15,6 +15,11 @@ if (-not $Iscc) {
 .\scripts\build.ps1
 & $Iscc.Source installer\RealtimeAudioTranslator.iss
 
+$SplitFiles = Get-ChildItem -LiteralPath $Out -Filter "*.bin" -File -ErrorAction SilentlyContinue
+if ($SplitFiles) {
+  throw "installer split files were generated; disable disk spanning before publishing."
+}
+
 $RuntimeDownloads = Join-Path $Out "RUNTIME_DOWNLOADS.txt"
 $ReleaseZip = Join-Path $Out "RealtimeAudioTranslator-0.1.0-win-x64.zip"
 $Checksums = Join-Path $Out "SHA256SUMS.txt"

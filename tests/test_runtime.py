@@ -73,6 +73,11 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("*.bin", script)
         self.assertIn("Remove-Item", script)
 
+    def test_package_script_fails_if_split_installer_files_remain(self):
+        script = (Path(__file__).parents[1] / "scripts" / "package.ps1").read_text(encoding="utf-8")
+
+        self.assertIn("installer split files were generated", script)
+
 
 if __name__ == "__main__":
     unittest.main()
