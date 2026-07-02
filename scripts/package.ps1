@@ -7,13 +7,19 @@ if (Test-Path $Out) {
   Get-ChildItem -LiteralPath $Out -Filter "*.bin" -File -ErrorAction SilentlyContinue | Remove-Item -Force
 }
 
-$Iscc = Get-Command iscc.exe -ErrorAction SilentlyContinue
+$Iscc = (Get-Command iscc.exe -ErrorAction SilentlyContinue).Source
+if (-not $Iscc) {
+  $Iscc = @(
+    (Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"),
+    (Join-Path $env:ProgramFiles "Inno Setup 6\ISCC.exe")
+  ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1
+}
 if (-not $Iscc) {
   throw "iscc.exe not found. Install Inno Setup or add iscc.exe to PATH."
 }
 
 .\scripts\build.ps1
-& $Iscc.Source installer\RealtimeAudioTranslator.iss
+& $Iscc installer\RealtimeAudioTranslator.iss
 
 $SplitFiles = Get-ChildItem -LiteralPath $Out -Filter "*.bin" -File -ErrorAction SilentlyContinue
 if ($SplitFiles) {

@@ -78,6 +78,12 @@ class RuntimeTests(unittest.TestCase):
 
         self.assertIn("installer split files were generated", script)
 
+    def test_package_script_detects_default_inno_setup_paths(self):
+        script = (Path(__file__).parents[1] / "scripts" / "package.ps1").read_text(encoding="utf-8")
+
+        self.assertIn("ProgramFiles(x86)", script)
+        self.assertIn("Inno Setup 6", script)
+
 
 if __name__ == "__main__":
     unittest.main()
