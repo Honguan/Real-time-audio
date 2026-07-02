@@ -94,7 +94,7 @@ jobs:
       - name: Build release zips
         shell: pwsh
         run: |
-          $version = "${{ github.event.inputs.version }}"
+          $version = "${{ inputs.version }}"
           if ([string]::IsNullOrWhiteSpace($version)) {
             $version = "${{ github.ref_name }}"
           }
@@ -110,6 +110,7 @@ jobs:
       - name: Upload GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ inputs.version || github.ref_name }}
           body_path: docs/RELEASE_NOTES.md
           files: |
             release-output/*.zip
