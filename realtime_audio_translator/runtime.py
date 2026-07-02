@@ -6,6 +6,7 @@ from .config import APP_DIR
 
 DEFAULT_RUNTIME_DIR = APP_DIR / "runtime" / "cuda12"
 WHISPER_EXE = "faster-whisper-xxl.exe"
+REQUIRED_RUNTIME_ITEMS = (WHISPER_EXE, "ffmpeg.exe", "_xxl_data")
 CUDA_HINTS = ("cublas64_12.dll", "cudnn64_9.dll")
 RUNTIME_RELEASE_URL = "https://github.com/Purfview/whisper-standalone-win/releases"
 CUDA_PACKAGE_NAME = "cuBLAS.and.cuDNN_CUDA12_win_v3.7z"
@@ -23,8 +24,9 @@ def whisper_exe(root: Path = DEFAULT_RUNTIME_DIR) -> Path:
 def runtime_status(root: Path = DEFAULT_RUNTIME_DIR) -> dict:
     missing = []
     warnings = []
-    if not whisper_exe(root).exists():
-        missing.append(WHISPER_EXE)
+    for name in REQUIRED_RUNTIME_ITEMS:
+        if not (root / name).exists():
+            missing.append(name)
     for name in CUDA_HINTS:
         if not any(root.rglob(name)):
             warnings.append(name)
@@ -43,7 +45,7 @@ def runtime_install_message(root: Path = DEFAULT_RUNTIME_DIR) -> str:
         "尚未找到語音辨識 runtime。\n"
         f"請下載 runtime zip，解壓到：\n{root}\n"
         "或點選「選擇 runtime 資料夾」手動指定位置。\n"
-        f"需要包含 {WHISPER_EXE}。\n"
+        f"需要包含 {', '.join(REQUIRED_RUNTIME_ITEMS)}。\n"
         f"Runtime: {RUNTIME_RELEASE_URL}\n"
         f"CUDA12: {CUDA_PACKAGE_NAME}"
     )
