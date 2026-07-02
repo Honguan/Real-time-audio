@@ -3,7 +3,7 @@ import subprocess
 import wave
 from pathlib import Path
 
-from .audio import find_device
+from .audio import device_name_from_label, find_device
 
 
 def write_linear16_wav(path: Path, audio: bytes, samplerate: int = 24000) -> Path:
@@ -70,7 +70,7 @@ if ($device) {
 """
     env = os.environ.copy()
     env["RAT_TTS_TEXT"] = text
-    env["RAT_TTS_DEVICE"] = device_name
+    env["RAT_TTS_DEVICE"] = device_name_from_label(device_name)
     env["RAT_TTS_RATE"] = str(max(-10, min(10, int(rate))))
     env["RAT_TTS_VOLUME"] = str(max(0, min(100, int(volume))))
     env["RAT_TTS_VOICE"] = voice_name

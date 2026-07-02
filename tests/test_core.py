@@ -506,6 +506,19 @@ class CoreTests(unittest.TestCase):
 
         self.assertEqual(calls[0][1]["env"]["RAT_TTS_VOICE"], "Microsoft Jenny")
 
+    def test_windows_sapi_strips_hostapi_from_output_device(self):
+        import realtime_audio_translator.tts as tts_module
+
+        calls = []
+        original_run = tts_module.subprocess.run
+        tts_module.subprocess.run = lambda *args, **kwargs: calls.append((args, kwargs))
+        try:
+            tts_module.speak_windows_sapi("hello", "CABLE Input (VB-Audio Virtual Cable) [Windows WASAPI]")
+        finally:
+            tts_module.subprocess.run = original_run
+
+        self.assertEqual(calls[0][1]["env"]["RAT_TTS_DEVICE"], "CABLE Input (VB-Audio Virtual Cable)")
+
     def test_windows_sapi_lists_voice_names(self):
         import realtime_audio_translator.tts as tts_module
 
