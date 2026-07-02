@@ -9,7 +9,7 @@ from .audio import audio_segment_active, capture_wav, find_device, format_device
 from .commands import refresh_commands
 from .config import APP_DIR, clear_cache, clear_logs, ensure_glossary_file, load_config, save_config
 from .engine import RealtimeEngine
-from .models import download_model, list_models, recommend_model
+from .models import cuda_hardware_from_check_output, download_model, list_models, recommend_model
 from .paths import resource_root
 from .providers import TextToSpeech, Translator, google_access_token
 from .runtime import DEFAULT_RUNTIME_DIR, RUNTIME_RELEASE_URL, install_runtime_from, runtime_dir, runtime_install_message, runtime_status, whisper_exe
@@ -522,9 +522,9 @@ class TranslatorApp(tk.Tk):
             self.vars["model"].set("medium")
             return
         cuda = subprocess.run([str(exe), "--checkcuda"], capture_output=True, text=True, check=False)
-        devices = 1 if "CUDA device" in (cuda.stdout + cuda.stderr) else 0
+        devices, vram_gb = cuda_hardware_from_check_output(cuda.stdout + cuda.stderr)
         prefer_quality = self.vars["performance_mode"].get() == "quality"
-        self.vars["model"].set(recommend_model(devices, 4, prefer_quality))
+        self.vars["model"].set(recommend_model(devices, vram_gb, prefer_quality))
         self._apply_performance_mode()
 
     def _download_model(self) -> None:

@@ -1,3 +1,4 @@
+import re
 import subprocess
 import wave
 from pathlib import Path
@@ -23,6 +24,14 @@ def recommend_model(cuda_devices: int, vram_gb: int, prefer_quality: bool = Fals
     if prefer_quality and vram_gb >= 8:
         return "large-v2"
     return "large-v3-turbo" if vram_gb >= 4 else "medium"
+
+
+def cuda_hardware_from_check_output(text: str) -> tuple[int, int]:
+    devices = text.count("CUDA device")
+    memory_mb = [int(value) for value in re.findall(r"(\d+)\s*MB", text, flags=re.IGNORECASE)]
+    memory_gb = [int(value) for value in re.findall(r"(\d+)\s*GB", text, flags=re.IGNORECASE)]
+    vram_gb = max(memory_gb or [mb // 1024 for mb in memory_mb] or [4 if devices else 0])
+    return devices, vram_gb
 
 
 def model_download_command(exe_path: Path, probe: Path, model: str, model_dir: Path) -> list[str]:

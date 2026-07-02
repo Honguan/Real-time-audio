@@ -14,7 +14,7 @@ from realtime_audio_translator.config import DEFAULT_CONFIG, clear_cache, clear_
 from realtime_audio_translator.engine import RealtimeEngine
 from realtime_audio_translator.gui import LANGUAGE_CHOICES, PERFORMANCE_CHOICES, PROVIDER_CHOICES, TTS_PROVIDER_CHOICES, TranslatorApp, format_overlay_line, mode_notice, overlay_clipboard_text, overlay_font_size_value, overlay_hold_seconds_value, overlay_opacity_value, overlay_visibility_action, performance_segment_seconds, subtitle_updates_allowed, swap_language_values, troubleshooting_action, visible_setting_keys
 from realtime_audio_translator.logbook import ConversationLog
-from realtime_audio_translator.models import list_models, model_download_command, recommend_model
+from realtime_audio_translator.models import cuda_hardware_from_check_output, list_models, model_download_command, recommend_model
 from realtime_audio_translator.providers import TextToSpeech, Translator, build_google_translate_request, build_openai_translation_request
 
 
@@ -553,6 +553,12 @@ class CoreTests(unittest.TestCase):
     def test_model_recommendation_prefers_turbo_on_small_cuda_vram(self):
         self.assertEqual(recommend_model(cuda_devices=1, vram_gb=4, prefer_quality=False), "large-v3-turbo")
         self.assertEqual(recommend_model(cuda_devices=0, vram_gb=0, prefer_quality=False), "medium")
+
+    def test_cuda_check_output_reports_devices_and_vram(self):
+        devices, vram_gb = cuda_hardware_from_check_output("CUDA device 0: RTX 3060, total memory: 6144 MB")
+
+        self.assertEqual(devices, 1)
+        self.assertEqual(vram_gb, 6)
 
     def test_model_download_command_uses_app_model_dir(self):
         command = model_download_command(Path("fw.exe"), Path("probe.wav"), "medium", Path("models"))
