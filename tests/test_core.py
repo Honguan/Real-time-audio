@@ -629,6 +629,23 @@ class CoreTests(unittest.TestCase):
         self.assertIn("%USERPROFILE%\\.realtime-audio\\runtime\\cuda12", quick_start)
         self.assertIn("%USERPROFILE%\\.realtime-audio\\models", quick_start)
 
+    def test_readme_and_release_notes_cover_required_faq(self):
+        required = (
+            "沒有字幕",
+            "聽不到對方聲音",
+            "對方聽不到翻譯語音",
+            "找不到 runtime",
+            "找不到模型",
+            "Discord 沒有收到虛擬麥克風聲音",
+            "字幕延遲太高",
+            "GPU 無法使用",
+        )
+
+        for path in (Path("README.md"), Path("docs/RELEASE_NOTES.md")):
+            text = path.read_text(encoding="utf-8")
+            for item in required:
+                self.assertIn(item, text)
+
     def test_readme_mentions_push_to_talk(self):
         readme = Path("README.md").read_text(encoding="utf-8")
 

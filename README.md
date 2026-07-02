@@ -109,10 +109,14 @@ release-output
 
 ## 常見問題
 
-- 缺 runtime：下載 runtime zip，解壓到 `%USERPROFILE%\.realtime-audio\runtime\cuda12`。
-- 缺模型：在工具內下載模型，或解壓模型 zip 到 `%USERPROFILE%\.realtime-audio\models`。
 - 沒有字幕：確認 `Show overlay` 已開啟，按 `Subtitle test`。
-- 沒有聲音：檢查 Windows 聲音裝置、會議軟體麥克風與 `TTS output`。
+- 聽不到對方聲音：確認喇叭來源選的是正在播放 Discord 或遊戲語音的裝置，再按 `Speaker test`。
+- 對方聽不到翻譯語音：確認 `Speak translations` 已開啟，且 `TTS output` 選 `CABLE Input`。
+- 找不到 runtime：下載 runtime zip，解壓到 `%USERPROFILE%\.realtime-audio\runtime\cuda12`。
+- 找不到模型：在工具內下載模型，或解壓模型 zip 到 `%USERPROFILE%\.realtime-audio\models`。
+- Discord 沒有收到虛擬麥克風聲音：Discord 麥克風請選 `CABLE Output (VB-Audio Virtual Cable)`。
+- 字幕延遲太高：把 `Performance mode` 改成 `low_latency`，並先用較小模型測試。
+- GPU 無法使用：把 `Device` 改成 CPU 或確認 CUDA12 runtime zip 已正確解壓。
 - 想看紀錄：開啟 `Record logs`，再按 `Open logs`。
 
 ## 限制
