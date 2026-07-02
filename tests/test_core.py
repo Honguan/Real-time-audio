@@ -71,6 +71,12 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(DEFAULT_CONFIG["tts_volume"], 100)
         self.assertEqual(DEFAULT_CONFIG["tts_voice_name"], "")
 
+    def test_advanced_settings_expose_openai_tts_options(self):
+        settings = visible_setting_keys(True)
+
+        self.assertIn("openai_tts_model", settings)
+        self.assertIn("openai_tts_voice", settings)
+
     def test_record_logs_toggle_saves_immediately(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
 
@@ -598,6 +604,7 @@ class CoreTests(unittest.TestCase):
 
         self.assertIn("TTS test", readme)
         self.assertIn("TTS provider", readme)
+        self.assertIn("OpenAI TTS voice", readme)
 
     def test_readme_mentions_release_checksums(self):
         readme = Path("README.md").read_text(encoding="utf-8")

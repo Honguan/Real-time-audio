@@ -44,6 +44,7 @@ Provider 預設為 `local`，不呼叫雲端翻譯，字幕會保留原文，適
 `TTS rate` 與 `TTS volume` 可調整本機 Windows TTS 語速與音量。
 `TTS voice` 可填 Windows 語音名稱的一部分，例如 `Microsoft Jenny`；按 `List` 可列出已安裝 Windows 語音，留空使用系統預設聲音。
 `Google TTS voice` 可填 Google Cloud voice name，例如 `en-US-Neural2-A`；留空只用目標語言自動選聲音。
+`OpenAI TTS voice` 可填 OpenAI 語音名稱；`OpenAI TTS model` 可保留預設或改成可用的語音模型。
 `TTS test` 會使用目前選定的 `TTS provider`，並播放到 `TTS output`。
 開啟 `Record logs` 時，`Log dir` 可選擇對話紀錄保存資料夾。
 `Overlay opacity` 可設定字幕透明度，範圍 0.2 到 1.0。
