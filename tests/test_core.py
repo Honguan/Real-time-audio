@@ -1061,6 +1061,28 @@ class CoreTests(unittest.TestCase):
         self.assertFalse(engine.running)
         self.assertEqual(statuses[-1], "no audio devices")
 
+    def test_engine_start_reports_transcriber_failure(self):
+        import realtime_audio_translator.engine as engine_module
+
+        statuses = []
+        config = DEFAULT_CONFIG.copy()
+        config["record_logs"] = False
+        engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, statuses.append)
+
+        class BrokenTranscriber:
+            def __init__(self, *args, **kwargs):
+                raise RuntimeError("Runtime missing: faster-whisper-xxl.exe")
+
+        original_transcriber = engine_module.AudioTranscriber
+        engine_module.AudioTranscriber = BrokenTranscriber
+        try:
+            engine.start()
+        finally:
+            engine_module.AudioTranscriber = original_transcriber
+
+        self.assertFalse(engine.running)
+        self.assertEqual(statuses[-1], "Runtime missing: faster-whisper-xxl.exe")
+
     def test_engine_stop_stops_workers(self):
         config = DEFAULT_CONFIG.copy()
         config["record_logs"] = False

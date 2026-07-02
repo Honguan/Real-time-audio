@@ -46,14 +46,19 @@ class RealtimeEngine:
         if self.running:
             return
         self.running = True
-        self.transcriber = AudioTranscriber(
-            self.repo_root,
-            self.config["model"],
-            APP_DIR / "models",
-            self.config["device"],
-            self.config["compute_type"],
-            self.config,
-        )
+        try:
+            self.transcriber = AudioTranscriber(
+                self.repo_root,
+                self.config["model"],
+                APP_DIR / "models",
+                self.config["device"],
+                self.config["compute_type"],
+                self.config,
+            )
+        except Exception as exc:
+            self.running = False
+            self.status(str(exc))
+            return
         started = []
         if self.config.get("speaker_enabled", True):
             started.append(self._start_direction("speaker", self.config.get("speaker_device", ""), True))
