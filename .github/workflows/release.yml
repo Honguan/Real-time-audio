@@ -53,11 +53,13 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          $release = Invoke-RestMethod "https://api.github.com/repos/Purfview/whisper-standalone-win/releases/latest"
-          $runtimeAsset = $release.assets |
-            Where-Object { $_.name -match "Faster-Whisper-XXL.*win.*\.(7z|zip)$" -or $_.name -match "faster-whisper-xxl.*win.*\.(7z|zip)$" } |
+          $releases = Invoke-RestMethod "https://api.github.com/repos/Purfview/whisper-standalone-win/releases?per_page=20"
+          $assets = $releases | ForEach-Object { $_.assets }
+          $runtimeAsset = $assets |
+            Where-Object { $_.name -match "Faster-Whisper-XXL_.*_windows\.(7z|zip)$" } |
+            Sort-Object updated_at -Descending |
             Select-Object -First 1
-          $cudaAsset = $release.assets |
+          $cudaAsset = $assets |
             Where-Object { $_.name -eq "cuBLAS.and.cuDNN_CUDA12_win_v3.7z" } |
             Select-Object -First 1
           if (-not $runtimeAsset) {
