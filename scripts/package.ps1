@@ -73,8 +73,11 @@ if (-not [string]::IsNullOrWhiteSpace($RuntimeSource)) {
   if (-not (Test-Path -LiteralPath (Join-Path $RuntimeSource "ffmpeg.exe"))) {
     throw "RuntimeSource must contain ffmpeg.exe: $RuntimeSource"
   }
-  if (-not (Get-ChildItem -LiteralPath $RuntimeSource -Filter "*.dll" -File -ErrorAction SilentlyContinue)) {
-    throw "RuntimeSource must contain CUDA12 DLL files: $RuntimeSource"
+  if (-not (Test-Path -LiteralPath (Join-Path $RuntimeSource "_xxl_data"))) {
+    throw "RuntimeSource must contain _xxl_data: $RuntimeSource"
+  }
+  if (-not (Test-Path -LiteralPath (Join-Path $RuntimeSource "cublas64_12.dll"))) {
+    throw "RuntimeSource must contain cublas64_12.dll: $RuntimeSource"
   }
   $RuntimeStage = Join-Path $Out "_stage_runtime"
   New-Item -ItemType Directory -Path $RuntimeStage | Out-Null
