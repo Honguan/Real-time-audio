@@ -112,7 +112,7 @@ if (-not [string]::IsNullOrWhiteSpace($ModelsSource)) {
   }
   $ModelsStage = Join-Path $Out "_stage_models"
   New-Item -ItemType Directory -Path $ModelsStage | Out-Null
-  Copy-Item -Path (Join-Path $ModelsSource "*") -Destination $ModelsStage -Recurse -Force
+  Copy-Item -LiteralPath $ModelsSource -Destination (Join-Path $ModelsStage $ModelName) -Recurse -Force
   $ModelsZip = Join-Path $Out "RealtimeAudioTranslator-models-$ModelName-$Version.zip"
   Compress-FolderContents $ModelsStage $ModelsZip
   $Created += $ModelsZip

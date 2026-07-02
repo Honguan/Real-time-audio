@@ -245,6 +245,48 @@ class RuntimeTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("cublas64_12.dll", result.stderr + result.stdout)
 
+    def test_package_script_keeps_model_folder_in_model_zip(self):
+        root = Path(__file__).parents[1]
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp)
+            dist = work / "RealtimeAudioTranslator"
+            model = work / "whisper-small"
+            out = work / "release"
+            (dist / "_internal").mkdir(parents=True)
+            (dist / "RealtimeAudioTranslator.exe").write_text("app", encoding="utf-8")
+            model.mkdir()
+            (model / "model.bin").write_text("model", encoding="utf-8")
+
+            subprocess.run(
+                [
+                    "powershell",
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(root / "scripts" / "package.ps1"),
+                    "-SkipBuild",
+                    "-Version",
+                    "v0.0.0-test",
+                    "-OutputDir",
+                    str(out),
+                    "-DistDir",
+                    str(dist),
+                    "-ModelsSource",
+                    str(model),
+                    "-ModelName",
+                    "whisper-small",
+                ],
+                cwd=root,
+                check=True,
+            )
+
+            model_zip = out / "RealtimeAudioTranslator-models-whisper-small-v0.0.0-test.zip"
+            self.assertTrue(model_zip.exists())
+            self.assertIn("RealtimeAudioTranslator-models-whisper-small-v0.0.0-test.zip", (out / "SHA256SUMS.txt").read_text(encoding="utf-8"))
+            with zipfile.ZipFile(model_zip) as archive:
+                self.assertIn("whisper-small/model.bin", archive.namelist())
+
 
 if __name__ == "__main__":
     unittest.main()
