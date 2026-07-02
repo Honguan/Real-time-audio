@@ -183,6 +183,16 @@ class CoreTests(unittest.TestCase):
         self.assertIn('audio = tts.synthesize_openai_linear16("Translation output test")', gui_source)
         self.assertIn('audio = tts.synthesize_google_linear16("Translation output test", config["target_language"])', gui_source)
 
+    def test_setup_guide_button_shows_first_run_steps(self):
+        gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
+
+        self.assertIn('("Setup guide", self._show_setup_guide)', gui_source)
+        self.assertIn('def _show_setup_guide(self) -> None:', gui_source)
+        self.assertIn("Import runtime", gui_source)
+        self.assertIn("Download model", gui_source)
+        self.assertIn("CABLE Output", gui_source)
+        self.assertIn("Subtitle test", gui_source)
+
     def test_push_to_talk_restores_previous_mute_state(self):
         app = TranslatorApp.__new__(TranslatorApp)
 

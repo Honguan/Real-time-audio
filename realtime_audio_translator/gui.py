@@ -311,6 +311,7 @@ class TranslatorApp(tk.Tk):
             self.status.set("subtitles copied")
 
         for text, command in (
+            ("Setup guide", self._show_setup_guide),
             ("Refresh", self._refresh_lists),
             ("Swap languages", self._swap_languages),
             ("Recommend model", self._recommend),
@@ -518,6 +519,16 @@ class TranslatorApp(tk.Tk):
             self.runtime_text.set(note)
         else:
             self.runtime_text.set(runtime_install_message(runtime_dir(config)))
+
+    def _show_setup_guide(self) -> None:
+        messagebox.showinfo(
+            "Setup guide",
+            "1. Import runtime or open runtime folder.\n"
+            "2. Download model or put model zip under the models folder.\n"
+            "3. Select speaker, microphone, and TTS output.\n"
+            "4. For Discord, select CABLE Output as microphone and CABLE Input as TTS output.\n"
+            "5. Run Subtitle test, Speaker test, Mic test, and TTS test before Start.",
+        )
 
     def _recommend(self) -> None:
         exe = whisper_exe(runtime_dir(self._config_from_vars()))
