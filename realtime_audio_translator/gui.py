@@ -143,11 +143,11 @@ def troubleshooting_action(issue: str) -> tuple[str, str]:
 
 def mode_notice(provider: str, tts_provider: str, record_logs: bool = False, local_translate_url: str = "") -> str:
     cloud = [name for name in dict.fromkeys((provider, tts_provider)) if name in CLOUD_PROVIDERS]
-    logs = "logs on" if record_logs else "logs off"
-    setup = "; local translation URL missing" if provider == "local" and not local_translate_url.strip() else ""
+    logs = "對話紀錄：開啟" if record_logs else "對話紀錄：關閉"
+    setup = "；本機翻譯 URL 未設定" if provider == "local" and not local_translate_url.strip() else ""
     if cloud:
-        return f"Mode: local ASR + cloud API ({', '.join(cloud)}); API use may incur costs; {logs}{setup}"
-    return f"Mode: local/offline; no cloud API selected; {logs}{setup}"
+        return f"目前模式：雲端 API 模式（{', '.join(cloud)}）；語音或文字可能傳送到第三方服務；可能依 API 供應商產生費用；{logs}{setup}"
+    return f"目前模式：本機免費模式；語音是否上傳：否；是否可能產生 API 費用：否；{logs}{setup}"
 
 
 class Overlay(tk.Toplevel):

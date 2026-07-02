@@ -235,7 +235,10 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(DEFAULT_CONFIG["tts_provider"], "local")
         self.assertFalse(DEFAULT_CONFIG["advanced_mode"])
         self.assertEqual(DEFAULT_CONFIG["performance_mode"], "balanced")
-        self.assertIn("local/offline", mode_notice(DEFAULT_CONFIG["provider"], DEFAULT_CONFIG["tts_provider"]))
+        notice = mode_notice(DEFAULT_CONFIG["provider"], DEFAULT_CONFIG["tts_provider"])
+        self.assertIn("目前模式：本機免費模式", notice)
+        self.assertIn("語音是否上傳：否", notice)
+        self.assertIn("是否可能產生 API 費用：否", notice)
 
     def test_performance_mode_controls_segment_seconds(self):
         self.assertEqual(PERFORMANCE_CHOICES, ("low_latency", "balanced", "quality"))
@@ -796,12 +799,18 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(TTS_PROVIDER_CHOICES, ("local", "google", "openai"))
 
     def test_mode_notice_discloses_cloud_api_cost_risk(self):
-        self.assertIn("cloud API", mode_notice("google", "openai"))
-        self.assertIn("may incur costs", mode_notice("google", "openai"))
-        self.assertIn("local/offline", mode_notice("local", "local"))
-        self.assertIn("logs off", mode_notice("local", "local", False))
-        self.assertIn("logs on", mode_notice("local", "local", True))
-        self.assertIn("local translation URL missing", mode_notice("local", "local", False, ""))
+        cloud_notice = mode_notice("google", "openai")
+        self.assertIn("目前模式：雲端 API 模式", cloud_notice)
+        self.assertIn("可能傳送到第三方服務", cloud_notice)
+        self.assertIn("可能依 API 供應商產生費用", cloud_notice)
+
+        local_notice = mode_notice("local", "local", False, "")
+        self.assertIn("目前模式：本機免費模式", local_notice)
+        self.assertIn("語音是否上傳：否", local_notice)
+        self.assertIn("是否可能產生 API 費用：否", local_notice)
+        self.assertIn("對話紀錄：關閉", local_notice)
+        self.assertIn("本機翻譯 URL 未設定", local_notice)
+        self.assertIn("對話紀錄：開啟", mode_notice("local", "local", True))
 
     def test_engine_reports_segment_latency(self):
         statuses = []
