@@ -59,6 +59,14 @@ class RuntimeTests(unittest.TestCase):
 
             self.assertTrue((target / "faster-whisper-xxl.exe").exists())
 
+    def test_install_runtime_from_accepts_existing_runtime_folder(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            runtime = Path(tmp) / "runtime"
+            runtime.mkdir()
+            (runtime / "faster-whisper-xxl.exe").write_text("exe", encoding="utf-8")
+
+            self.assertEqual(install_runtime_from(runtime, runtime), runtime)
+
 
 if __name__ == "__main__":
     unittest.main()

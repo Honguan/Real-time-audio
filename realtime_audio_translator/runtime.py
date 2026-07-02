@@ -53,6 +53,8 @@ def install_runtime_from(source: Path, target: Path = DEFAULT_RUNTIME_DIR) -> Pa
         if not matches:
             raise FileNotFoundError(exe)
         source = matches[0].parent
+    if source.resolve() == target.resolve():
+        return target
     target.mkdir(parents=True, exist_ok=True)
     for child in source.iterdir():
         destination = target / child.name
