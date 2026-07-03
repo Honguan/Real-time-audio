@@ -1,5 +1,6 @@
 import json
 import queue
+import sys
 import tempfile
 import unittest
 import wave
@@ -8,7 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from realtime_audio_translator.audio import audio_segment_active, device_name_from_label
-from realtime_audio_translator.asr import AudioTranscriber
+from realtime_audio_translator.asr import AudioTranscriber, add_xxl_data
 from realtime_audio_translator.commands import parse_help_options
 from realtime_audio_translator.config import DEFAULT_CONFIG, clear_cache, clear_logs, ensure_app_dirs, ensure_glossary_file, load_config, save_config
 from realtime_audio_translator.engine import RealtimeEngine, drain_queue, overlay_text_from_config
@@ -851,6 +852,21 @@ class CoreTests(unittest.TestCase):
             asr_module.subprocess.run = original_run
 
         self.assertNotIn("--language", calls[0])
+
+    def test_add_xxl_data_prefers_runtime_folder(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            repo_data = root / "repo" / "_xxl_data"
+            runtime_data = root / "runtime" / "_xxl_data"
+            repo_data.mkdir(parents=True)
+            runtime_data.mkdir(parents=True)
+            original_path = sys.path[:]
+            try:
+                add_xxl_data(root / "repo", root / "runtime")
+                self.assertEqual(sys.path[0], str(root / "runtime" / "_xxl_data"))
+                self.assertIn(str(root / "repo" / "_xxl_data"), sys.path)
+            finally:
+                sys.path[:] = original_path
 
     def test_whisper_model_stores_detected_language(self):
         transcriber = AudioTranscriber.__new__(AudioTranscriber)

@@ -6,18 +6,19 @@ from pathlib import Path
 from .runtime import runtime_dir, whisper_exe
 
 
-def add_xxl_data(repo_root: Path) -> None:
-    data_path = repo_root / "_xxl_data"
-    if data_path.exists() and str(data_path) not in sys.path:
-        sys.path.insert(0, str(data_path))
+def add_xxl_data(repo_root: Path, runtime_root: Path | None = None) -> None:
+    for data_path in (repo_root / "_xxl_data", runtime_root / "_xxl_data" if runtime_root else None):
+        if data_path and data_path.exists() and str(data_path) not in sys.path:
+            sys.path.insert(0, str(data_path))
 
 
 class AudioTranscriber:
     def __init__(self, repo_root: Path, model_name: str, model_dir: Path, device: str = "cuda", compute_type: str = "auto", config: dict | None = None):
-        add_xxl_data(repo_root)
+        runtime_root = runtime_dir(config)
+        add_xxl_data(repo_root, runtime_root)
         self.model_name = model_name
         self.model_dir = model_dir
-        self.exe_path = whisper_exe(runtime_dir(config))
+        self.exe_path = whisper_exe(runtime_root)
         self.model = None
         self.last_language: str | None = None
         try:
