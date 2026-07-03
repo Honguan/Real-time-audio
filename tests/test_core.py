@@ -583,6 +583,8 @@ class CoreTests(unittest.TestCase):
         self.assertIn('("Run diagnostics", self._run_diagnostics)', gui_source)
         self.assertIn("def _show_first_run_wizard", gui_source)
         self.assertIn("collect_diagnostics", gui_source)
+        self.assertIn("進階日誌", gui_source)
+        self.assertIn("app.log", gui_source)
         self.assertIn("plan_session", gui_source)
         self.assertIn('("Check updates", self._check_updates)', gui_source)
         self.assertIn("latest_release_tag", gui_source)

@@ -554,12 +554,14 @@ class TranslatorApp(tk.Tk):
             self.runtime_text.set(runtime_install_message(runtime_dir(config)))
 
     def _diagnostic_message(self) -> str:
-        issues = collect_diagnostics(self._config_from_vars(), self.repo_root)
+        config = self._config_from_vars()
+        issues = collect_diagnostics(config, self.repo_root)
         if not issues:
             return "目前沒有發現需要處理的設定問題。"
+        log_path = Path(config.get("log_dir") or APP_DIR / "logs") / "app.log"
         lines = []
         for issue in issues:
-            lines.append(f"[{issue.severity}] {issue.title}\n{issue.detail}\n修復：{issue.fix}\n可用按鈕：{diagnostic_action_label(issue.action)}")
+            lines.append(f"[{issue.severity}] {issue.title}\n{issue.detail}\n修復：{issue.fix}\n可用按鈕：{diagnostic_action_label(issue.action)}\n進階日誌：{log_path}")
         return "\n\n".join(lines)
 
     def _show_first_run_wizard(self) -> None:
