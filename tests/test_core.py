@@ -40,6 +40,9 @@ class CoreTests(unittest.TestCase):
             save_config(root, config)
             self.assertEqual(load_config(root)["target_language"], "ja")
             self.assertTrue((root / "models").is_dir())
+            self.assertTrue((root / "models" / "whisper-small").is_dir())
+            self.assertTrue((root / "models" / "translation").is_dir())
+            self.assertTrue((root / "models" / "tts").is_dir())
             self.assertTrue((root / "config").is_dir())
             self.assertEqual(json.loads((root / "config" / "settings.json").read_text(encoding="utf-8"))["target_language"], "ja")
             self.assertEqual(json.loads((root / "config" / "audio_devices.json").read_text(encoding="utf-8")), [])
@@ -1152,6 +1155,9 @@ class CoreTests(unittest.TestCase):
         self.assertIn("settings.json", readme)
         self.assertIn("audio_devices.json", readme)
         self.assertIn("config\\glossary.json", readme)
+        self.assertIn("models\\whisper-small", readme)
+        self.assertIn("models\\translation", readme)
+        self.assertIn("models\\tts", readme)
 
     def test_readme_and_release_notes_mention_subtitle_export(self):
         readme = Path("README.md").read_text(encoding="utf-8")

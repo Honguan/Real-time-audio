@@ -34,6 +34,8 @@ RealtimeAudioTranslator-runtime-cuda12-dlls-<tag>.7z
 %USERPROFILE%\.realtime-audio\models
 ```
 
+Whisper 模型可放在 `models\whisper-small`；翻譯模型放在 `models\translation`；TTS 模型放在 `models\tts`。
+
 ## 第一次設定
 
 1. 安裝 VB-Audio Virtual Cable。

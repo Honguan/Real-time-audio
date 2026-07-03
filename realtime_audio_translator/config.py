@@ -58,7 +58,18 @@ DEFAULT_CONFIG = {
 
 def ensure_app_dirs(root: Path = APP_DIR) -> None:
     root.mkdir(parents=True, exist_ok=True)
-    for relative in ("config", "models", "logs", "cache/audio", "cache/temp_audio", "runtime/cuda12", "exports/subtitles"):
+    for relative in (
+        "config",
+        "models",
+        "models/whisper-small",
+        "models/translation",
+        "models/tts",
+        "logs",
+        "cache/audio",
+        "cache/temp_audio",
+        "runtime/cuda12",
+        "exports/subtitles",
+    ):
         (root / relative).mkdir(parents=True, exist_ok=True)
     legacy_glossary = root / "glossary.json"
     glossary = root / "config" / "glossary.json"
