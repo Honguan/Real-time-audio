@@ -41,7 +41,7 @@ DEFAULT_CONFIG = {
     "ai_self_diagnosis": True,
     "google_project_id": "",
     "google_service_account_json": "",
-    "glossary_path": str(APP_DIR / "glossary.json"),
+    "glossary_path": str(APP_DIR / "config" / "glossary.json"),
     "translation_cache_path": str(APP_DIR / "cache" / "translation_cache.db"),
     "translation_cache_enabled": True,
     "local_translate_url": "",
@@ -58,7 +58,11 @@ def ensure_app_dirs(root: Path = APP_DIR) -> None:
     root.mkdir(parents=True, exist_ok=True)
     for relative in ("config", "models", "logs", "cache/audio", "cache/temp_audio", "runtime/cuda12", "exports/subtitles"):
         (root / relative).mkdir(parents=True, exist_ok=True)
-    ensure_glossary_file(root / "glossary.json")
+    legacy_glossary = root / "glossary.json"
+    glossary = root / "config" / "glossary.json"
+    if legacy_glossary.exists() and not glossary.exists():
+        glossary.write_text(legacy_glossary.read_text(encoding="utf-8"), encoding="utf-8")
+    ensure_glossary_file(glossary)
     devices = root / "config" / "audio_devices.json"
     if not devices.exists():
         devices.write_text("[]\n", encoding="utf-8")

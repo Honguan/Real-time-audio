@@ -42,6 +42,7 @@ class CoreTests(unittest.TestCase):
             self.assertTrue((root / "config").is_dir())
             self.assertEqual(json.loads((root / "config" / "settings.json").read_text(encoding="utf-8"))["target_language"], "ja")
             self.assertEqual(json.loads((root / "config" / "audio_devices.json").read_text(encoding="utf-8")), [])
+            self.assertEqual(json.loads((root / "config" / "glossary.json").read_text(encoding="utf-8")), {})
             self.assertTrue((root / "logs").is_dir())
             self.assertTrue((root / "logs" / "app.log").is_file())
             self.assertTrue((root / "cache" / "audio").is_dir())
@@ -63,12 +64,15 @@ class CoreTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             ensure_app_dirs(root)
-            glossary = root / "glossary.json"
+            glossary = root / "config" / "glossary.json"
             self.assertEqual(json.loads(glossary.read_text(encoding="utf-8")), {})
 
             glossary.write_text(json.dumps({"Dragon Pit": "龍坑"}), encoding="utf-8")
             ensure_app_dirs(root)
             self.assertEqual(json.loads(glossary.read_text(encoding="utf-8")), {"Dragon Pit": "龍坑"})
+
+    def test_default_glossary_path_uses_config_folder(self):
+        self.assertTrue(DEFAULT_CONFIG["glossary_path"].endswith(".realtime-audio\\config\\glossary.json"))
 
     def test_app_dirs_create_commands_json_without_overwriting(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1140,6 +1144,7 @@ class CoreTests(unittest.TestCase):
         self.assertIn("%USERPROFILE%\\.realtime-audio", readme)
         self.assertIn("settings.json", readme)
         self.assertIn("audio_devices.json", readme)
+        self.assertIn("config\\glossary.json", readme)
 
     def test_readme_and_release_notes_mention_subtitle_export(self):
         readme = Path("README.md").read_text(encoding="utf-8")
