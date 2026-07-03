@@ -13,6 +13,7 @@ from realtime_audio_translator.asr import AudioTranscriber, add_runtime_dll_dire
 from realtime_audio_translator.commands import parse_help_options
 from realtime_audio_translator.config import DEFAULT_CONFIG, clear_cache, clear_logs, ensure_app_dirs, ensure_glossary_file, load_config, save_config
 from realtime_audio_translator.ai_auto_tuner import apply_tuning, recommend_tuning
+from realtime_audio_translator.ai_confidence import build_confidence_snapshot, format_confidence_status
 from realtime_audio_translator.ai_memory import add_glossary_term, cache_translation, cached_translation
 from realtime_audio_translator.diagnostics import collect_diagnostics
 from realtime_audio_translator.engine import RealtimeEngine, audio_devices_overlap, drain_queue, overlay_text_from_config
@@ -380,6 +381,43 @@ class CoreTests(unittest.TestCase):
 
         self.assertIn("low_vram_medium", [item.code for item in recommendations])
         self.assertEqual(tuned["model"], "medium")
+
+    def test_confidence_status_reports_local_mode_latency_and_provider(self):
+        config = DEFAULT_CONFIG.copy()
+        snapshot = build_confidence_snapshot(config, "en", "zh", asr_latency_seconds=0.82, translation_latency_seconds=0.11)
+        status = format_confidence_status(snapshot)
+
+        self.assertFalse(snapshot.cloud_enabled)
+        self.assertFalse(snapshot.cost_risk)
+        self.assertIn("本機免費模式", status)
+        self.assertIn("latency 0.93s", status)
+        self.assertIn("provider local", status)
+
+    def test_confidence_status_reports_cloud_cost_and_advanced_details(self):
+        config = DEFAULT_CONFIG.copy()
+        config["provider"] = "openai"
+        config["tts_provider"] = "google"
+        snapshot = build_confidence_snapshot(
+            config,
+            "en",
+            "zh",
+            asr_latency_seconds=0.82,
+            translation_latency_seconds=0.11,
+            tts_latency_seconds=0.24,
+            language_confidence=0.92,
+            asr_confidence=0.8,
+            translation_confidence=0.7,
+        )
+        status = format_confidence_status(snapshot, advanced=True)
+
+        self.assertTrue(snapshot.cloud_enabled)
+        self.assertTrue(snapshot.cost_risk)
+        self.assertIn("雲端 API 模式", status)
+        self.assertIn("費用 可能", status)
+        self.assertIn("偵測語言 en 92%", status)
+        self.assertIn("ASR 延遲 820ms", status)
+        self.assertIn("翻譯延遲 110ms", status)
+        self.assertIn("TTS 延遲 240ms", status)
 
     def test_gui_exposes_scenarios_and_diagnostics(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
@@ -933,6 +971,15 @@ class CoreTests(unittest.TestCase):
         self.assertIn("Push to talk", readme)
         self.assertIn("hold it to unmute TTS output", readme)
 
+    def test_readme_and_release_notes_mention_confidence_status(self):
+        readme = Path("README.md").read_text(encoding="utf-8")
+        notes = Path("docs/RELEASE_NOTES.md").read_text(encoding="utf-8")
+
+        for text in (readme, notes):
+            self.assertIn("信心", text)
+            self.assertIn("本機/雲端", text)
+            self.assertIn("費用", text)
+
     def test_readme_mentions_open_logs(self):
         readme = Path("README.md").read_text(encoding="utf-8")
 
@@ -1296,6 +1343,42 @@ class CoreTests(unittest.TestCase):
             engine._process_segments("speaker", Worker(wav))
 
         self.assertEqual(overlays[0][0], "en: hello")
+
+    def test_engine_reports_confidence_status_after_successful_segment(self):
+        statuses = []
+        config = DEFAULT_CONFIG.copy()
+        config["record_logs"] = False
+        engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, statuses.append)
+
+        class Transcriber:
+            last_language = "en"
+            last_language_probability = 0.92
+
+            def transcribe(self, wav, source_language):
+                return "hello"
+
+        class Translator:
+            def translate(self, text, source_language, target_language):
+                engine.running = False
+                return "你好"
+
+        class Worker:
+            def __init__(self, wav):
+                self.queue = queue.Queue()
+                self.queue.put(wav)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            wav = Path(tmp) / "clip.wav"
+            self._write_wav(wav, 12000)
+            engine.running = True
+            engine.transcriber = Transcriber()
+            engine.translator = Translator()
+            engine._process_segments("speaker", Worker(wav))
+
+        self.assertIn("speaker", statuses[-1])
+        self.assertIn("本機免費模式", statuses[-1])
+        self.assertIn("provider local", statuses[-1])
+        self.assertIn("latency", statuses[-1])
 
     def test_engine_uses_openai_tts_provider_for_mic_output(self):
         import realtime_audio_translator.engine as engine_module

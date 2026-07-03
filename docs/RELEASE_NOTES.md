@@ -5,7 +5,8 @@
 1. 到 GitHub Releases 下載 `RealtimeAudioTranslator-<tag>-win-x64.zip`。
 2. 解壓後執行 `RealtimeAudioTranslator.exe`。
 3. 第一次開啟會提示 runtime / model 診斷；可用 `Scenario` 選場景，按 `Apply scenario` 套用預設，也可按 `Optimize settings` 依硬體調整模型與延遲，再按 `Run diagnostics` 檢查設定。
-4. 若提示缺 runtime，下載並解壓這兩個檔案：
+4. 狀態列會顯示信心提示、延遲、provider、本機/雲端模式與是否可能產生費用。
+5. 若提示缺 runtime，下載並解壓這兩個檔案：
 
 ```text
 RealtimeAudioTranslator-runtime-cuda12-core-<tag>.7z

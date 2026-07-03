@@ -6,6 +6,7 @@ from typing import Callable
 
 from .asr import AudioTranscriber
 from .audio import SegmentWorker, audio_segment_active, device_name_from_label, find_device
+from .ai_confidence import build_confidence_snapshot, format_confidence_status
 from .config import APP_DIR
 from .logbook import ConversationLog
 from .providers import TextToSpeech, Translator
@@ -140,14 +141,24 @@ class RealtimeEngine:
                 started = time.perf_counter()
                 if not audio_segment_active(wav, self.config.get("speech_threshold", 0.01)):
                     continue
+                asr_started = time.perf_counter()
                 text = self.transcriber.transcribe(wav, source)
+                asr_latency = time.perf_counter() - asr_started
                 if not text:
                     continue
                 detected_source = getattr(self.transcriber, "last_language", None) if source == "auto" else None
                 source_for_output = detected_source or source
+                language_confidence = getattr(self.transcriber, "last_language_probability", None)
+                asr_confidence = getattr(self.transcriber, "last_confidence", None)
+                translation_confidence = None
+                translation_latency = None
+                tts_latency = None
                 translation_failed = False
                 try:
+                    translation_started = time.perf_counter()
                     translated = self.translator.translate(text, source_for_output, target)
+                    translation_latency = time.perf_counter() - translation_started
+                    translation_confidence = getattr(self.translator, "last_confidence", None)
                 except Exception as exc:
                     translated = text
                     translation_failed = True
@@ -162,6 +173,7 @@ class RealtimeEngine:
                     self.overlay("", overlay_text)
                     if self.config.get("tts_enabled", True) and not self.muted and translated and not translation_failed:
                         tts_device = self.config.get("tts_output_device", "CABLE Input")
+                        tts_started = time.perf_counter()
                         if self.config.get("tts_provider") == "local":
                             self.tts.speak_local(translated, tts_device)
                         elif self.config.get("tts_provider") == "openai":
@@ -170,10 +182,23 @@ class RealtimeEngine:
                         else:
                             audio = self.tts.synthesize_google_linear16(translated, target)
                             play_linear16(audio, tts_device)
+                        tts_latency = time.perf_counter() - tts_started
                 latency = time.perf_counter() - started
+                self.config["last_latency_seconds"] = latency
                 if self.log:
                     self.log.append(direction, source_for_output, target, text, translated, self.config["provider"], latency_seconds=latency)
                 if not translation_failed:
-                    self.status(f"{direction} latency {latency:.2f}s")
+                    snapshot = build_confidence_snapshot(
+                        self.config,
+                        source_for_output,
+                        target,
+                        asr_latency_seconds=asr_latency,
+                        translation_latency_seconds=translation_latency,
+                        tts_latency_seconds=tts_latency,
+                        language_confidence=language_confidence,
+                        asr_confidence=asr_confidence,
+                        translation_confidence=translation_confidence,
+                    )
+                    self.status(f"{direction} latency {latency:.2f}s; {format_confidence_status(snapshot, bool(self.config.get('advanced_mode')))}")
             except Exception as exc:
                 self.status(f"{direction}: {exc}")

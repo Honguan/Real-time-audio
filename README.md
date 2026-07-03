@@ -66,6 +66,7 @@ RealtimeAudioTranslator-runtime-cuda12-dlls-<tag>.7z
 - `Apply scenario`：套用遊戲、Discord、會議、字幕-only 或雙向翻譯預設。
 - `Optimize settings`：依硬體與延遲建議切換模型、裝置與低延遲設定。
 - `Run diagnostics`：顯示目前缺少的 runtime、模型、音訊或 API 設定。
+- 狀態列會顯示信心提示、延遲、provider、本機/雲端模式與是否可能產生費用。
 
 `Push to talk` 會 hold it to unmute TTS output，按住才輸出我方翻譯語音。
 
