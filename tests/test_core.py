@@ -642,9 +642,8 @@ class CoreTests(unittest.TestCase):
     def test_package_script_builds_release_zip_with_readme(self):
         script = Path("scripts/package.ps1").read_text(encoding="utf-8")
         self.assertIn("RealtimeAudioTranslator-$Version-win-x64.zip", script)
-        self.assertIn("RealtimeAudioTranslator-runtime-cuda12-$Version.zip", script)
-        self.assertNotIn("RealtimeAudioTranslator-runtime-cuda12-core-$Version.zip", script)
-        self.assertNotIn("RealtimeAudioTranslator-runtime-cuda12-dlls-$Version.zip", script)
+        self.assertIn("RealtimeAudioTranslator-runtime-cuda12-core-$Version.zip", script)
+        self.assertIn("RealtimeAudioTranslator-runtime-cuda12-dlls-$Version.zip", script)
         self.assertIn("README.md", script)
         self.assertIn("RELEASE_NOTES.md", script)
 
@@ -692,7 +691,8 @@ class CoreTests(unittest.TestCase):
 
         self.assertIn("最快使用", notes)
         self.assertIn("RealtimeAudioTranslator.exe", notes)
-        self.assertIn("RealtimeAudioTranslator-runtime-cuda12-<tag>.zip", notes)
+        self.assertIn("RealtimeAudioTranslator-runtime-cuda12-core-<tag>.zip", notes)
+        self.assertIn("RealtimeAudioTranslator-runtime-cuda12-dlls-<tag>.zip", notes)
         self.assertIn("%USERPROFILE%\\.realtime-audio\\runtime\\cuda12", notes)
         self.assertIn("%USERPROFILE%\\.realtime-audio\\models", notes)
         self.assertIn("VB-CABLE", notes)
@@ -705,7 +705,8 @@ class CoreTests(unittest.TestCase):
         quick_start = Path("docs/README_QUICK_START_zh-TW.txt").read_text(encoding="utf-8")
 
         self.assertIn("RealtimeAudioTranslator.exe", quick_start)
-        self.assertIn("RealtimeAudioTranslator-runtime-cuda12-<tag>.zip", quick_start)
+        self.assertIn("RealtimeAudioTranslator-runtime-cuda12-core-<tag>.zip", quick_start)
+        self.assertIn("RealtimeAudioTranslator-runtime-cuda12-dlls-<tag>.zip", quick_start)
         self.assertIn("%USERPROFILE%\\.realtime-audio\\runtime\\cuda12", quick_start)
         self.assertIn("%USERPROFILE%\\.realtime-audio\\models", quick_start)
         self.assertIn("Local translate URL", quick_start)
