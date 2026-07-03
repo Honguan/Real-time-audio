@@ -2,9 +2,10 @@
 
 ## 最快使用
 
-1. 下載 `RealtimeAudioTranslator-<tag>-win-x64.zip`。
+1. 到 GitHub Releases 下載 `RealtimeAudioTranslator-<tag>-win-x64.zip`。
 2. 解壓後執行 `RealtimeAudioTranslator.exe`。
-3. 若提示缺 runtime，下載並解壓這兩個檔案：
+3. 第一次開啟會提示 runtime / model 診斷；可用 `Scenario` 選場景，按 `Apply scenario` 套用預設，再按 `Run diagnostics` 檢查設定。
+4. 若提示缺 runtime，下載並解壓這兩個檔案：
 
 ```text
 RealtimeAudioTranslator-runtime-cuda12-core-<tag>.7z
@@ -34,6 +35,8 @@ RealtimeAudioTranslator-runtime-cuda12-dlls-<tag>.7z
 
 主程式不需要安裝 Python。
 
+若 Release 沒有 runtime 檔案，可到 https://github.com/Purfview/whisper-standalone-win/releases 下載 Faster-Whisper-XXL Windows runtime 和 `cuBLAS.and.cuDNN_CUDA12_win_v3.7z`。本機翻譯可在 `Local translate URL` 填入 LibreTranslate 端點。
+
 ## VB-CABLE 設定
 
 1. 會議軟體或 Discord 的麥克風選 `CABLE Output (VB-Audio Virtual Cable)`。
@@ -44,9 +47,10 @@ RealtimeAudioTranslator-runtime-cuda12-dlls-<tag>.7z
 ## 常見問題
 
 - 沒有字幕：確認 `Show overlay` 已開啟，並按 `Subtitle test`。
+- 聽不到對方聲音：確認喇叭來源選的是 Discord 或遊戲正在播放的裝置，再按 `Speaker test`。
 - 找不到 runtime：確認兩個 runtime 檔案都已解壓到 `%USERPROFILE%\.realtime-audio\runtime\cuda12`。
 - 找不到模型：在工具內下載模型，或解壓模型 zip 到 `%USERPROFILE%\.realtime-audio\models`。
 - 對方聽不到翻譯語音：確認 `Speak translations` 已開啟，且 `TTS output` 選 `CABLE Input`。
-- Discord 沒有收到聲音：Discord 麥克風請選 `CABLE Output (VB-Audio Virtual Cable)`。
+- Discord 沒有收到虛擬麥克風聲音：Discord 麥克風請選 `CABLE Output (VB-Audio Virtual Cable)`。
 - 字幕延遲太高：把 `Performance mode` 改成 `low_latency`，並先用較小模型測試。
 - GPU 無法使用：把 `Device` 改成 CPU，或確認 CUDA12 runtime 已正確解壓。

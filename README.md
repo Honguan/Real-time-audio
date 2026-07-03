@@ -39,9 +39,11 @@ RealtimeAudioTranslator-runtime-cuda12-dlls-<tag>.7z
 1. 安裝 VB-Audio Virtual Cable。
 2. 開啟 `RealtimeAudioTranslator.exe`。
 3. 選擇喇叭、麥克風、`TTS output`、來源語言與目標語言。
-4. 按 `Subtitle test` 確認字幕 bar 會出現。
-5. 按 `Speaker test`、`Mic test`、`TTS test` 確認聲音路由。
-6. 按 `Start` 開始翻譯。
+4. 選擇 `Scenario` 後按 `Apply scenario` 套用常用場景。
+5. 按 `Run diagnostics` 檢查 runtime、模型、音訊與 API 設定。
+6. 按 `Subtitle test` 確認字幕 bar 會出現。
+7. 按 `Speaker test`、`Mic test`、`TTS test` 確認聲音路由。
+8. 按 `Start` 開始翻譯。
 
 ## VB-CABLE 路由
 
@@ -59,6 +61,12 @@ RealtimeAudioTranslator-runtime-cuda12-dlls-<tag>.7z
 - `Push to talk`：按住才送出我方翻譯語音。
 - `Record logs`：儲存對話紀錄。
 - `Open logs`：開啟紀錄資料夾。
+- `Open app folder`：開啟 `%USERPROFILE%\.realtime-audio`。
+- `Show language`：在字幕前顯示語言代碼。
+- `Apply scenario`：套用遊戲、Discord、會議、字幕-only 或雙向翻譯預設。
+- `Run diagnostics`：顯示目前缺少的 runtime、模型、音訊或 API 設定。
+
+`Push to talk` 會 hold it to unmute TTS output，按住才輸出我方翻譯語音。
 
 ## 翻譯與 TTS
 
@@ -70,13 +78,16 @@ http://127.0.0.1:5000/translate
 
 也可改用 OpenAI 或 Google provider。OpenAI 使用 `OPENAI_API_KEY` 環境變數，Google 使用 service account JSON 路徑。
 
+`TTS provider` 可選本機、OpenAI 或 Google。進階設定可調 `OpenAI model`、`OpenAI TTS voice`、OpenAI TTS model 與 Google TTS voice。
+
 ## 常見問題
 
 - 沒有字幕：確認 `Show overlay` 已開啟，並按 `Subtitle test`。
+- 聽不到對方聲音：確認喇叭來源選的是 Discord 或遊戲正在播放的裝置，再按 `Speaker test`。
 - 找不到 runtime：確認兩個 runtime 檔案都已解壓到 `%USERPROFILE%\.realtime-audio\runtime\cuda12`。
 - 找不到模型：在工具內下載模型，或解壓模型 zip 到 `%USERPROFILE%\.realtime-audio\models`。
 - 對方聽不到翻譯語音：確認 `Speak translations` 已開啟，且 `TTS output` 選 `CABLE Input`。
-- Discord 沒有收到聲音：Discord 麥克風請選 `CABLE Output (VB-Audio Virtual Cable)`。
+- Discord 沒有收到虛擬麥克風聲音：Discord 麥克風請選 `CABLE Output (VB-Audio Virtual Cable)`。
 - 字幕延遲太高：把 `Performance mode` 改成 `low_latency`，並先用較小模型測試。
 - GPU 無法使用：把 `Device` 改成 CPU，或確認 CUDA12 runtime 已正確解壓。
 

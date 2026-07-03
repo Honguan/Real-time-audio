@@ -12,11 +12,13 @@ from realtime_audio_translator.audio import audio_segment_active, device_name_fr
 from realtime_audio_translator.asr import AudioTranscriber, add_runtime_dll_directory, add_xxl_data
 from realtime_audio_translator.commands import parse_help_options
 from realtime_audio_translator.config import DEFAULT_CONFIG, clear_cache, clear_logs, ensure_app_dirs, ensure_glossary_file, load_config, save_config
+from realtime_audio_translator.diagnostics import collect_diagnostics
 from realtime_audio_translator.engine import RealtimeEngine, audio_devices_overlap, drain_queue, overlay_text_from_config
-from realtime_audio_translator.gui import LANGUAGE_CHOICES, PERFORMANCE_CHOICES, PROVIDER_CHOICES, TTS_PROVIDER_CHOICES, TranslatorApp, format_overlay_line, mode_notice, overlay_clipboard_text, overlay_font_size_value, overlay_hold_seconds_value, overlay_opacity_value, overlay_visibility_action, performance_segment_seconds, subtitle_updates_allowed, swap_language_values, troubleshooting_action, visible_setting_keys
+from realtime_audio_translator.gui import LANGUAGE_CHOICES, PERFORMANCE_CHOICES, PROVIDER_CHOICES, TTS_PROVIDER_CHOICES, TranslatorApp, diagnostic_action_label, format_overlay_line, mode_notice, overlay_clipboard_text, overlay_font_size_value, overlay_hold_seconds_value, overlay_opacity_value, overlay_visibility_action, performance_segment_seconds, subtitle_updates_allowed, swap_language_values, troubleshooting_action, visible_setting_keys
 from realtime_audio_translator.logbook import ConversationLog
 from realtime_audio_translator.models import cuda_hardware_from_check_output, list_models, model_available, model_download_command, model_install_message, recommend_model
 from realtime_audio_translator.providers import TextToSpeech, Translator, build_google_translate_request, build_openai_translation_request
+from realtime_audio_translator.scenarios import SCENARIO_CHOICES, apply_scenario
 
 
 class CoreTests(unittest.TestCase):
@@ -250,11 +252,89 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(DEFAULT_CONFIG["provider"], "local")
         self.assertEqual(DEFAULT_CONFIG["tts_provider"], "local")
         self.assertFalse(DEFAULT_CONFIG["advanced_mode"])
+        self.assertEqual(DEFAULT_CONFIG["scenario"], "discord_chat")
+        self.assertTrue(DEFAULT_CONFIG["ai_auto_optimize"])
+        self.assertTrue(DEFAULT_CONFIG["ai_self_diagnosis"])
         self.assertEqual(DEFAULT_CONFIG["performance_mode"], "balanced")
         notice = mode_notice(DEFAULT_CONFIG["provider"], DEFAULT_CONFIG["tts_provider"])
         self.assertIn("目前模式：本機免費模式", notice)
         self.assertIn("語音是否上傳：否", notice)
         self.assertIn("是否可能產生 API 費用：否", notice)
+
+    def test_diagnostics_report_runtime_model_feedback_and_provider_setup(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config = DEFAULT_CONFIG.copy()
+            config["runtime_dir"] = str(root / "runtime")
+            config["model"] = "missing-model"
+            config["provider"] = "openai"
+            config["speaker_device"] = "CABLE Input [Windows WASAPI]"
+            config["tts_output_device"] = "CABLE Input"
+
+            issues = collect_diagnostics(config, root)
+            codes = [issue.code for issue in issues]
+
+        self.assertIn("runtime_missing", codes)
+        self.assertIn("model_missing", codes)
+        self.assertIn("feedback_risk", codes)
+        self.assertIn("cloud_credentials_missing", codes)
+        self.assertTrue(all(isinstance(issue.title, str) for issue in issues))
+        self.assertTrue(all(issue.action for issue in issues))
+
+    def test_local_provider_without_translate_url_is_info_not_fatal(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            runtime = root / "runtime"
+            model = root / "models" / "medium"
+            runtime.mkdir()
+            model.mkdir(parents=True)
+            (runtime / "faster-whisper-xxl.exe").write_text("exe", encoding="utf-8")
+            (runtime / "ffmpeg.exe").write_text("ff", encoding="utf-8")
+            (runtime / "_xxl_data").mkdir()
+            config = DEFAULT_CONFIG.copy()
+            config["runtime_dir"] = str(runtime)
+            config["model"] = "medium"
+            config["provider"] = "local"
+            config["local_translate_url"] = ""
+
+            issues = collect_diagnostics(config, root)
+
+        local_issue = next(issue for issue in issues if issue.code == "local_translate_url_missing")
+        self.assertEqual(local_issue.severity, "info")
+        self.assertNotIn("runtime_missing", [issue.code for issue in issues])
+        self.assertNotIn("model_missing", [issue.code for issue in issues])
+
+    def test_scenarios_apply_expected_existing_settings(self):
+        self.assertEqual(SCENARIO_CHOICES, ("game_voice", "discord_chat", "meeting", "subtitle_only", "two_way"))
+        base = DEFAULT_CONFIG.copy()
+
+        game = apply_scenario(base, "game_voice")
+        meeting = apply_scenario(base, "meeting")
+        subtitle = apply_scenario(base, "subtitle_only")
+        two_way = apply_scenario(base, "two_way")
+
+        self.assertEqual(game["performance_mode"], "low_latency")
+        self.assertEqual(game["segment_seconds"], 1.5)
+        self.assertTrue(meeting["record_logs"])
+        self.assertFalse(subtitle["tts_enabled"])
+        self.assertTrue(two_way["speaker_enabled"])
+        self.assertTrue(two_way["microphone_enabled"])
+        self.assertEqual(base["performance_mode"], DEFAULT_CONFIG["performance_mode"])
+
+    def test_gui_exposes_scenarios_and_diagnostics(self):
+        gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
+
+        self.assertIn('("Scenario", "scenario")', gui_source)
+        self.assertIn("SCENARIO_CHOICES", gui_source)
+        self.assertIn('("Apply scenario", self._apply_scenario)', gui_source)
+        self.assertIn('("Run diagnostics", self._run_diagnostics)', gui_source)
+        self.assertIn("def _show_first_run_wizard", gui_source)
+        self.assertIn("collect_diagnostics", gui_source)
+
+    def test_diagnostic_action_label_shows_user_button_names(self):
+        self.assertEqual(diagnostic_action_label("open_runtime"), "Open runtime folder / Download runtime files")
+        self.assertEqual(diagnostic_action_label("download_model"), "Download model")
+        self.assertEqual(diagnostic_action_label("unknown"), "unknown")
 
     def test_performance_mode_controls_segment_seconds(self):
         self.assertEqual(PERFORMANCE_CHOICES, ("low_latency", "balanced", "quality"))

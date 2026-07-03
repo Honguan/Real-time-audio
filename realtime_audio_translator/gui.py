@@ -8,11 +8,13 @@ from tkinter import filedialog, messagebox, ttk
 from .audio import audio_segment_active, capture_wav, find_device, format_device_label, list_audio_devices
 from .commands import refresh_commands
 from .config import APP_DIR, clear_cache, clear_logs, ensure_glossary_file, load_config, save_config
+from .diagnostics import collect_diagnostics
 from .engine import RealtimeEngine
 from .models import cuda_hardware_from_check_output, download_model, list_models, model_available, model_install_message, recommend_model
 from .paths import resource_root
 from .providers import TextToSpeech, Translator, google_access_token
 from .runtime import DEFAULT_RUNTIME_DIR, RUNTIME_RELEASE_URL, UPSTREAM_RUNTIME_RELEASE_URL, install_runtime_from, runtime_dir, runtime_install_message, runtime_status, whisper_exe
+from .scenarios import SCENARIO_CHOICES, apply_scenario
 from .tts import list_windows_sapi_voices, play_linear16
 
 
@@ -26,6 +28,7 @@ SETTING_ROWS = (
     ("Target language", "target_language"),
     ("Provider", "provider"),
     ("TTS provider", "tts_provider"),
+    ("Scenario", "scenario"),
     ("Performance mode", "performance_mode"),
     ("Local translate URL", "local_translate_url"),
     ("OpenAI model", "openai_model"),
@@ -57,6 +60,7 @@ BASIC_SETTING_KEYS = {
     "target_language",
     "provider",
     "tts_provider",
+    "scenario",
     "performance_mode",
     "local_translate_url",
     "model",
@@ -142,6 +146,16 @@ def troubleshooting_action(issue: str) -> tuple[str, str]:
     return actions[issue]
 
 
+def diagnostic_action_label(action: str) -> str:
+    return {
+        "open_runtime": "Open runtime folder / Download runtime files",
+        "download_model": "Download model",
+        "audio_settings": "Speaker test / Mic test / TTS test",
+        "api_settings": "API test",
+        "local_translation": "Fix local translation",
+    }.get(action, action)
+
+
 def mode_notice(provider: str, tts_provider: str, record_logs: bool = False, local_translate_url: str = "") -> str:
     cloud = [name for name in dict.fromkeys((provider, tts_provider)) if name in CLOUD_PROVIDERS]
     logs = "對話紀錄：開啟" if record_logs else "對話紀錄：關閉"
@@ -215,6 +229,8 @@ class TranslatorApp(tk.Tk):
         self._build()
         self._set_overlay_visible(bool(self.config.get("overlay_visible", True)))
         self._refresh_lists()
+        if self.config.get("ai_self_diagnosis", True):
+            self.after(250, self._show_first_run_wizard)
 
     def _build(self) -> None:
         frame = ttk.Frame(self, padding=12)
@@ -241,8 +257,8 @@ class TranslatorApp(tk.Tk):
             if key in ("source_language", "target_language"):
                 widget = ttk.Combobox(frame, textvariable=self.vars[key], values=LANGUAGE_CHOICES)
                 widget.bind("<<ComboboxSelected>>", lambda _event: self._save())
-            elif key in ("provider", "tts_provider", "performance_mode"):
-                values = PERFORMANCE_CHOICES if key == "performance_mode" else TTS_PROVIDER_CHOICES if key == "tts_provider" else PROVIDER_CHOICES
+            elif key in ("provider", "tts_provider", "performance_mode", "scenario"):
+                values = SCENARIO_CHOICES if key == "scenario" else PERFORMANCE_CHOICES if key == "performance_mode" else TTS_PROVIDER_CHOICES if key == "tts_provider" else PROVIDER_CHOICES
                 widget = ttk.Combobox(frame, textvariable=self.vars[key], values=values, state="readonly")
                 widget.bind("<<ComboboxSelected>>", lambda _event, name=key: self._apply_performance_mode() if name == "performance_mode" else self._save())
             elif key.endswith("device") or key in ("model", "tts_voice_name"):
@@ -316,8 +332,10 @@ class TranslatorApp(tk.Tk):
             ("Setup guide", self._show_setup_guide),
             ("Refresh", self._refresh_lists),
             ("Swap languages", self._swap_languages),
+            ("Apply scenario", self._apply_scenario),
             ("Recommend model", self._recommend),
             ("Download model", self._download_model),
+            ("Run diagnostics", self._run_diagnostics),
             ("Update command config", self._refresh_commands),
             ("Open app folder", self._open_app_dir),
             ("Open glossary", self._open_glossary),
@@ -523,6 +541,24 @@ class TranslatorApp(tk.Tk):
         else:
             self.runtime_text.set(runtime_install_message(runtime_dir(config)))
 
+    def _diagnostic_message(self) -> str:
+        issues = collect_diagnostics(self._config_from_vars(), self.repo_root)
+        if not issues:
+            return "目前沒有發現需要處理的設定問題。"
+        lines = []
+        for issue in issues:
+            lines.append(f"[{issue.severity}] {issue.title}\n{issue.detail}\n修復：{issue.fix}\n可用按鈕：{diagnostic_action_label(issue.action)}")
+        return "\n\n".join(lines)
+
+    def _show_first_run_wizard(self) -> None:
+        issues = collect_diagnostics(self._config_from_vars(), self.repo_root)
+        if not any(issue.code in ("runtime_missing", "model_missing") for issue in issues):
+            return
+        messagebox.showinfo("First run setup", self._diagnostic_message())
+
+    def _run_diagnostics(self) -> None:
+        messagebox.showinfo("Diagnostics", self._diagnostic_message())
+
     def _show_setup_guide(self) -> None:
         messagebox.showinfo(
             "Setup guide",
@@ -544,6 +580,23 @@ class TranslatorApp(tk.Tk):
         prefer_quality = self.vars["performance_mode"].get() == "quality"
         self.vars["model"].set(recommend_model(devices, vram_gb, prefer_quality))
         self._apply_performance_mode()
+
+    def _apply_scenario(self) -> None:
+        updated = apply_scenario(self._config_from_vars(), self.vars["scenario"].get())
+        for key, variable in self.vars.items():
+            if key in updated:
+                variable.set(str(updated[key]))
+        self.overlay_visible.set(bool(updated.get("overlay_visible", self.overlay_visible.get())))
+        self.overlay_topmost.set(bool(updated.get("overlay_topmost", self.overlay_topmost.get())))
+        self.show_language_labels.set(bool(updated.get("show_language_labels", self.show_language_labels.get())))
+        self.show_original_text.set(bool(updated.get("show_original_text", self.show_original_text.get())))
+        self.show_translated_text.set(bool(updated.get("show_translated_text", self.show_translated_text.get())))
+        self.tts_enabled.set(bool(updated.get("tts_enabled", self.tts_enabled.get())))
+        self.speaker_enabled.set(bool(updated.get("speaker_enabled", self.speaker_enabled.get())))
+        self.microphone_enabled.set(bool(updated.get("microphone_enabled", self.microphone_enabled.get())))
+        self.record_logs.set(bool(updated.get("record_logs", self.record_logs.get())))
+        self._save()
+        self.status.set(f"scenario applied: {updated['scenario']}")
 
     def _download_model(self) -> None:
         self._save()
