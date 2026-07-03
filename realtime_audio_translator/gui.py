@@ -6,6 +6,7 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from .audio import audio_segment_active, capture_wav, find_device, format_device_label, list_audio_devices
+from .ai_auto_tuner import apply_tuning, recommend_tuning
 from .commands import refresh_commands
 from .config import APP_DIR, clear_cache, clear_logs, ensure_glossary_file, load_config, save_config
 from .diagnostics import collect_diagnostics
@@ -153,6 +154,7 @@ def diagnostic_action_label(action: str) -> str:
         "audio_settings": "Speaker test / Mic test / TTS test",
         "api_settings": "API test",
         "local_translation": "Fix local translation",
+        "optimize_settings": "Optimize settings",
     }.get(action, action)
 
 
@@ -333,6 +335,7 @@ class TranslatorApp(tk.Tk):
             ("Refresh", self._refresh_lists),
             ("Swap languages", self._swap_languages),
             ("Apply scenario", self._apply_scenario),
+            ("Optimize settings", self._optimize_settings),
             ("Recommend model", self._recommend),
             ("Download model", self._download_model),
             ("Run diagnostics", self._run_diagnostics),
@@ -583,6 +586,11 @@ class TranslatorApp(tk.Tk):
 
     def _apply_scenario(self) -> None:
         updated = apply_scenario(self._config_from_vars(), self.vars["scenario"].get())
+        self._load_config_into_widgets(updated)
+        self._save()
+        self.status.set(f"scenario applied: {updated['scenario']}")
+
+    def _load_config_into_widgets(self, updated: dict) -> None:
         for key, variable in self.vars.items():
             if key in updated:
                 variable.set(str(updated[key]))
@@ -595,8 +603,23 @@ class TranslatorApp(tk.Tk):
         self.speaker_enabled.set(bool(updated.get("speaker_enabled", self.speaker_enabled.get())))
         self.microphone_enabled.set(bool(updated.get("microphone_enabled", self.microphone_enabled.get())))
         self.record_logs.set(bool(updated.get("record_logs", self.record_logs.get())))
+
+    def _optimize_settings(self) -> None:
+        config = self._config_from_vars()
+        exe = whisper_exe(runtime_dir(config))
+        devices = 0
+        vram_gb = 0
+        if exe.exists():
+            cuda = subprocess.run([str(exe), "--checkcuda"], capture_output=True, text=True, check=False)
+            devices, vram_gb = cuda_hardware_from_check_output(cuda.stdout + cuda.stderr)
+        recommendations = recommend_tuning(config, devices, vram_gb)
+        if not recommendations:
+            self.status.set("settings already optimized")
+            return
+        updated = apply_tuning(config, recommendations)
+        self._load_config_into_widgets(updated)
         self._save()
-        self.status.set(f"scenario applied: {updated['scenario']}")
+        self.status.set("; ".join(item.title for item in recommendations))
 
     def _download_model(self) -> None:
         self._save()

@@ -2,6 +2,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from .ai_auto_tuner import recommend_tuning
 from .audio import device_name_from_label, find_device
 from .config import APP_DIR
 from .models import model_available
@@ -86,4 +87,20 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
             "啟動 LibreTranslate 後填入 http://127.0.0.1:5000/translate，或改用雲端 provider",
             "local_translation",
         ))
+    if config.get("ai_auto_optimize", True):
+        latency = config.get("last_latency_seconds")
+        try:
+            latency = float(latency) if latency not in (None, "") else None
+        except Exception:
+            latency = None
+        tuning = recommend_tuning(config, cuda_devices=1, vram_gb=4, latency_seconds=latency)
+        if tuning:
+            issues.append(DiagnosticIssue(
+                "auto_tune_recommended",
+                "info",
+                "可套用自動優化建議",
+                "；".join(item.title for item in tuning),
+                "按 Optimize settings 套用建議設定",
+                "optimize_settings",
+            ))
     return issues

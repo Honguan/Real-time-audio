@@ -12,6 +12,7 @@ from realtime_audio_translator.audio import audio_segment_active, device_name_fr
 from realtime_audio_translator.asr import AudioTranscriber, add_runtime_dll_directory, add_xxl_data
 from realtime_audio_translator.commands import parse_help_options
 from realtime_audio_translator.config import DEFAULT_CONFIG, clear_cache, clear_logs, ensure_app_dirs, ensure_glossary_file, load_config, save_config
+from realtime_audio_translator.ai_auto_tuner import apply_tuning, recommend_tuning
 from realtime_audio_translator.diagnostics import collect_diagnostics
 from realtime_audio_translator.engine import RealtimeEngine, audio_devices_overlap, drain_queue, overlay_text_from_config
 from realtime_audio_translator.gui import LANGUAGE_CHOICES, PERFORMANCE_CHOICES, PROVIDER_CHOICES, TTS_PROVIDER_CHOICES, TranslatorApp, diagnostic_action_label, format_overlay_line, mode_notice, overlay_clipboard_text, overlay_font_size_value, overlay_hold_seconds_value, overlay_opacity_value, overlay_visibility_action, performance_segment_seconds, subtitle_updates_allowed, swap_language_values, troubleshooting_action, visible_setting_keys
@@ -304,6 +305,29 @@ class CoreTests(unittest.TestCase):
         self.assertNotIn("runtime_missing", [issue.code for issue in issues])
         self.assertNotIn("model_missing", [issue.code for issue in issues])
 
+    def test_diagnostics_include_auto_tune_recommendations(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            runtime = root / "runtime"
+            model = root / "models" / "medium"
+            runtime.mkdir()
+            model.mkdir(parents=True)
+            (runtime / "faster-whisper-xxl.exe").write_text("exe", encoding="utf-8")
+            (runtime / "ffmpeg.exe").write_text("ff", encoding="utf-8")
+            (runtime / "_xxl_data").mkdir()
+            config = DEFAULT_CONFIG.copy()
+            config["runtime_dir"] = str(runtime)
+            config["model"] = "medium"
+            config["scenario"] = "game_voice"
+            config["performance_mode"] = "quality"
+            config["ai_auto_optimize"] = True
+
+            issues = collect_diagnostics(config, root)
+
+        auto_issue = next(issue for issue in issues if issue.code == "auto_tune_recommended")
+        self.assertEqual(auto_issue.severity, "info")
+        self.assertIn("遊戲場景使用低延遲模式", auto_issue.detail)
+
     def test_scenarios_apply_expected_existing_settings(self):
         self.assertEqual(SCENARIO_CHOICES, ("game_voice", "discord_chat", "meeting", "subtitle_only", "two_way"))
         base = DEFAULT_CONFIG.copy()
@@ -321,15 +345,52 @@ class CoreTests(unittest.TestCase):
         self.assertTrue(two_way["microphone_enabled"])
         self.assertEqual(base["performance_mode"], DEFAULT_CONFIG["performance_mode"])
 
+    def test_auto_tuner_recommends_cpu_medium_without_cuda(self):
+        config = DEFAULT_CONFIG.copy()
+        config["device"] = "cuda"
+        config["model"] = "large-v3-turbo"
+
+        recommendations = recommend_tuning(config, cuda_devices=0, vram_gb=0)
+        tuned = apply_tuning(config, recommendations)
+
+        self.assertIn("use_cpu_medium", [item.code for item in recommendations])
+        self.assertEqual(tuned["device"], "cpu")
+        self.assertEqual(tuned["model"], "medium")
+        self.assertEqual(config["device"], "cuda")
+
+    def test_auto_tuner_reduces_latency_settings(self):
+        config = DEFAULT_CONFIG.copy()
+        config["performance_mode"] = "quality"
+        config["segment_seconds"] = 3.0
+
+        recommendations = recommend_tuning(config, cuda_devices=1, vram_gb=6, latency_seconds=4.2)
+        tuned = apply_tuning(config, recommendations)
+
+        self.assertIn("reduce_latency", [item.code for item in recommendations])
+        self.assertEqual(tuned["performance_mode"], "low_latency")
+        self.assertEqual(tuned["segment_seconds"], 1.5)
+
+    def test_auto_tuner_recommends_medium_for_low_vram(self):
+        config = DEFAULT_CONFIG.copy()
+        config["model"] = "large-v2"
+
+        recommendations = recommend_tuning(config, cuda_devices=1, vram_gb=3)
+        tuned = apply_tuning(config, recommendations)
+
+        self.assertIn("low_vram_medium", [item.code for item in recommendations])
+        self.assertEqual(tuned["model"], "medium")
+
     def test_gui_exposes_scenarios_and_diagnostics(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
 
         self.assertIn('("Scenario", "scenario")', gui_source)
         self.assertIn("SCENARIO_CHOICES", gui_source)
         self.assertIn('("Apply scenario", self._apply_scenario)', gui_source)
+        self.assertIn('("Optimize settings", self._optimize_settings)', gui_source)
         self.assertIn('("Run diagnostics", self._run_diagnostics)', gui_source)
         self.assertIn("def _show_first_run_wizard", gui_source)
         self.assertIn("collect_diagnostics", gui_source)
+        self.assertIn("recommend_tuning", gui_source)
 
     def test_diagnostic_action_label_shows_user_button_names(self):
         self.assertEqual(diagnostic_action_label("open_runtime"), "Open runtime folder / Download runtime files")
