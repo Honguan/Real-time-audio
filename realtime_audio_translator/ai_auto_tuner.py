@@ -31,7 +31,7 @@ def recommend_tuning(config: dict, cuda_devices: int, vram_gb: int, latency_seco
             "reduce_latency",
             "降低字幕延遲",
             f"目前延遲約 {latency_seconds:.1f} 秒，建議使用低延遲分段",
-            {"performance_mode": "low_latency", "segment_seconds": 1.5},
+            {"performance_mode": "low_latency", "segment_seconds": 1.5, "speech_threshold": 0.02},
         ))
     if config.get("scenario") == "game_voice" and config.get("performance_mode") != "low_latency":
         recommendations.append(TuningRecommendation(

@@ -524,6 +524,7 @@ class CoreTests(unittest.TestCase):
         self.assertIn("reduce_latency", [item.code for item in recommendations])
         self.assertEqual(tuned["performance_mode"], "low_latency")
         self.assertEqual(tuned["segment_seconds"], 1.5)
+        self.assertEqual(tuned["speech_threshold"], 0.02)
 
     def test_auto_tuner_recommends_medium_for_low_vram(self):
         config = DEFAULT_CONFIG.copy()
