@@ -56,9 +56,12 @@ DEFAULT_CONFIG = {
 
 def ensure_app_dirs(root: Path = APP_DIR) -> None:
     root.mkdir(parents=True, exist_ok=True)
-    for relative in ("models", "logs", "cache/audio", "cache/temp_audio", "runtime/cuda12", "exports/subtitles"):
+    for relative in ("config", "models", "logs", "cache/audio", "cache/temp_audio", "runtime/cuda12", "exports/subtitles"):
         (root / relative).mkdir(parents=True, exist_ok=True)
     ensure_glossary_file(root / "glossary.json")
+    devices = root / "config" / "audio_devices.json"
+    if not devices.exists():
+        devices.write_text("[]\n", encoding="utf-8")
     commands = root / "commands.json"
     if not commands.exists():
         commands.write_text("{}\n", encoding="utf-8")
@@ -91,6 +94,14 @@ def save_config(root: Path, config: dict) -> None:
     ensure_app_dirs(root)
     with (root / "config.json").open("w", encoding="utf-8", newline="\n") as handle:
         json.dump(config, handle, ensure_ascii=False, indent=2)
+
+
+def save_audio_devices(root: Path, devices: list[dict]) -> Path:
+    ensure_app_dirs(root)
+    path = root / "config" / "audio_devices.json"
+    with path.open("w", encoding="utf-8", newline="\n") as handle:
+        json.dump(devices, handle, ensure_ascii=False, indent=2)
+    return path
 
 
 def clear_logs(root: Path = APP_DIR, log_dir: Path | None = None) -> None:

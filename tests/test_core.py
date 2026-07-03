@@ -11,7 +11,7 @@ from unittest.mock import patch
 from realtime_audio_translator.audio import audio_segment_active, device_name_from_label
 from realtime_audio_translator.asr import AudioTranscriber, add_runtime_dll_directory, add_xxl_data
 from realtime_audio_translator.commands import parse_help_options
-from realtime_audio_translator.config import DEFAULT_CONFIG, clear_cache, clear_logs, ensure_app_dirs, ensure_glossary_file, load_config, save_config
+from realtime_audio_translator.config import DEFAULT_CONFIG, clear_cache, clear_logs, ensure_app_dirs, ensure_glossary_file, load_config, save_audio_devices, save_config
 from realtime_audio_translator.ai_orchestrator import plan_session
 from realtime_audio_translator.ai_auto_tuner import apply_tuning, recommend_tuning
 from realtime_audio_translator.ai_confidence import build_confidence_snapshot, format_confidence_status
@@ -39,6 +39,8 @@ class CoreTests(unittest.TestCase):
             save_config(root, config)
             self.assertEqual(load_config(root)["target_language"], "ja")
             self.assertTrue((root / "models").is_dir())
+            self.assertTrue((root / "config").is_dir())
+            self.assertEqual(json.loads((root / "config" / "audio_devices.json").read_text(encoding="utf-8")), [])
             self.assertTrue((root / "logs").is_dir())
             self.assertTrue((root / "logs" / "app.log").is_file())
             self.assertTrue((root / "cache" / "audio").is_dir())
@@ -119,6 +121,7 @@ class CoreTests(unittest.TestCase):
         self.assertIn('def _export_subtitles(self) -> None:', gui_source)
         self.assertIn("export_jsonl_to_srt", gui_source)
         self.assertIn("append_app_log", gui_source)
+        self.assertIn("save_audio_devices", gui_source)
         self.assertIn('subprocess.Popen(["explorer", str(path)])', gui_source)
 
     def test_open_app_folder_button_opens_app_dir(self):
@@ -540,6 +543,14 @@ class CoreTests(unittest.TestCase):
             self.assertEqual(row["event"], "start")
             self.assertEqual(row["model"], "small")
             self.assertIn("timestamp", row)
+
+    def test_audio_device_snapshot_writes_config_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = save_audio_devices(Path(tmp), [{"index": 0, "name": "Speakers", "hostapi": "WASAPI"}])
+
+            self.assertEqual(path, Path(tmp) / "config" / "audio_devices.json")
+            devices = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(devices[0]["name"], "Speakers")
 
     def test_parse_help_options_extracts_choices_and_flags(self):
         help_text = """
@@ -1118,6 +1129,7 @@ class CoreTests(unittest.TestCase):
 
         self.assertIn("Open app folder", readme)
         self.assertIn("%USERPROFILE%\\.realtime-audio", readme)
+        self.assertIn("audio_devices.json", readme)
 
     def test_readme_and_release_notes_mention_subtitle_export(self):
         readme = Path("README.md").read_text(encoding="utf-8")

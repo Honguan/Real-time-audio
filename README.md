@@ -62,7 +62,7 @@ RealtimeAudioTranslator-runtime-cuda12-dlls-<tag>.7z
 - `Record logs`：儲存對話紀錄。
 - `Open logs`：開啟紀錄資料夾，`app.log` 會記錄開始、停止、缺模型與字幕匯出事件。
 - `Export subtitles`：把最新 JSONL 對話紀錄匯出成 SRT，檔案放在 `%USERPROFILE%\.realtime-audio\exports\subtitles`。
-- `Open app folder`：開啟 `%USERPROFILE%\.realtime-audio`。
+- `Open app folder`：開啟 `%USERPROFILE%\.realtime-audio`，音訊裝置快照在 `config\audio_devices.json`。
 - `Show language`：在字幕前顯示語言代碼。
 - `Apply scenario`：套用遊戲、Discord、會議、字幕-only 或雙向翻譯預設。
 - `Optimize settings`：使用 AI 決策中樞依場景、硬體、延遲與診斷結果切換模型、裝置與低延遲設定。

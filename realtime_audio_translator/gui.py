@@ -9,7 +9,7 @@ from .audio import audio_segment_active, capture_wav, find_device, format_device
 from .ai_orchestrator import plan_session
 from .app_log import append_app_log
 from .commands import refresh_commands
-from .config import APP_DIR, clear_cache, clear_logs, ensure_glossary_file, load_config, save_config
+from .config import APP_DIR, clear_cache, clear_logs, ensure_glossary_file, load_config, save_audio_devices, save_config
 from .diagnostics import collect_diagnostics
 from .engine import RealtimeEngine
 from .models import cuda_hardware_from_check_output, download_model, list_models, model_available, model_install_message, recommend_model
@@ -383,7 +383,9 @@ class TranslatorApp(tk.Tk):
         self._apply_mode(save=False)
 
     def _refresh_lists(self) -> None:
-        devices = [format_device_label(d) for d in list_audio_devices()]
+        raw_devices = list_audio_devices()
+        save_audio_devices(APP_DIR, raw_devices)
+        devices = [format_device_label(d) for d in raw_devices]
         models = list_models(self.repo_root / "_models", APP_DIR / "models")
         for key, widget in self.comboboxes.items():
             if key == "model":
