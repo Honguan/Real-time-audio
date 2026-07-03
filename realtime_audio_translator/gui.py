@@ -7,6 +7,7 @@ from tkinter import filedialog, messagebox, ttk
 
 from .audio import audio_segment_active, capture_wav, find_device, format_device_label, list_audio_devices
 from .ai_orchestrator import plan_session
+from .app_log import append_app_log
 from .commands import refresh_commands
 from .config import APP_DIR, clear_cache, clear_logs, ensure_glossary_file, load_config, save_config
 from .diagnostics import collect_diagnostics
@@ -747,15 +748,18 @@ class TranslatorApp(tk.Tk):
     def _start(self) -> None:
         self._save()
         if not model_available(self.config["model"], self.repo_root / "_models", APP_DIR / "models"):
+            append_app_log(APP_DIR, "model_missing", model=self.config["model"])
             messagebox.showerror("Model missing", model_install_message(self.config["model"], APP_DIR / "models"))
             self.status.set(f"model missing: {self.config['model']}")
             return
+        append_app_log(APP_DIR, "start", model=self.config["model"], provider=self.config["provider"])
         self.engine = RealtimeEngine(self.repo_root, self.config, self._overlay_update, self.status.set)
         threading.Thread(target=self.engine.start, daemon=True).start()
 
     def _stop(self) -> None:
         if self.engine:
             self.engine.stop()
+            append_app_log(APP_DIR, "stop")
 
     def _quit(self) -> None:
         self._stop()
@@ -810,8 +814,10 @@ class TranslatorApp(tk.Tk):
         logs = sorted(log_dir.glob("*.jsonl"), key=lambda path: path.stat().st_mtime, reverse=True)
         if not logs:
             self.status.set("no logs to export")
+            append_app_log(APP_DIR, "subtitle_export_empty")
             return
         srt = export_jsonl_to_srt(logs[0], APP_DIR / "exports" / "subtitles")
+        append_app_log(APP_DIR, "subtitle_export", source=logs[0], output=srt)
         self.status.set(f"subtitles exported: {srt}")
 
     def _clear_logs(self) -> None:

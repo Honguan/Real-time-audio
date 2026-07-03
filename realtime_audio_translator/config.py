@@ -62,6 +62,9 @@ def ensure_app_dirs(root: Path = APP_DIR) -> None:
     commands = root / "commands.json"
     if not commands.exists():
         commands.write_text("{}\n", encoding="utf-8")
+    app_log = root / "logs" / "app.log"
+    if not app_log.exists():
+        app_log.write_text("", encoding="utf-8")
 
 
 def ensure_glossary_file(glossary: Path) -> Path:

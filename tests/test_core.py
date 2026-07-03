@@ -16,6 +16,7 @@ from realtime_audio_translator.ai_orchestrator import plan_session
 from realtime_audio_translator.ai_auto_tuner import apply_tuning, recommend_tuning
 from realtime_audio_translator.ai_confidence import build_confidence_snapshot, format_confidence_status
 from realtime_audio_translator.ai_memory import add_glossary_term, cache_translation, cached_translation
+from realtime_audio_translator.app_log import append_app_log
 from realtime_audio_translator.diagnostics import collect_diagnostics
 from realtime_audio_translator.engine import RealtimeEngine, audio_devices_overlap, drain_queue, overlay_text_from_config
 from realtime_audio_translator.gui import LANGUAGE_CHOICES, PERFORMANCE_CHOICES, PROVIDER_CHOICES, TTS_PROVIDER_CHOICES, TranslatorApp, diagnostic_action_label, format_overlay_line, mode_notice, overlay_clipboard_text, overlay_font_size_value, overlay_hold_seconds_value, overlay_opacity_value, overlay_visibility_action, performance_segment_seconds, subtitle_updates_allowed, swap_language_values, troubleshooting_action, visible_setting_keys
@@ -39,6 +40,7 @@ class CoreTests(unittest.TestCase):
             self.assertEqual(load_config(root)["target_language"], "ja")
             self.assertTrue((root / "models").is_dir())
             self.assertTrue((root / "logs").is_dir())
+            self.assertTrue((root / "logs" / "app.log").is_file())
             self.assertTrue((root / "cache" / "audio").is_dir())
             self.assertTrue((root / "cache" / "temp_audio").is_dir())
             self.assertTrue((root / "exports" / "subtitles").is_dir())
@@ -116,6 +118,7 @@ class CoreTests(unittest.TestCase):
         self.assertIn('def _open_logs(self) -> None:', gui_source)
         self.assertIn('def _export_subtitles(self) -> None:', gui_source)
         self.assertIn("export_jsonl_to_srt", gui_source)
+        self.assertIn("append_app_log", gui_source)
         self.assertIn('subprocess.Popen(["explorer", str(path)])', gui_source)
 
     def test_open_app_folder_button_opens_app_dir(self):
@@ -525,9 +528,18 @@ class CoreTests(unittest.TestCase):
             clear_logs(root)
             clear_cache(root)
 
-            self.assertEqual(list((root / "logs").iterdir()), [])
+            self.assertEqual([path.name for path in (root / "logs").iterdir()], ["app.log"])
             self.assertEqual(list((root / "cache" / "audio").iterdir()), [])
             self.assertEqual(list((root / "cache" / "temp_audio").iterdir()), [])
+
+    def test_app_log_appends_json_lines(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = append_app_log(Path(tmp), "start", model="small")
+
+            row = json.loads(path.read_text(encoding="utf-8").splitlines()[0])
+            self.assertEqual(row["event"], "start")
+            self.assertEqual(row["model"], "small")
+            self.assertIn("timestamp", row)
 
     def test_parse_help_options_extracts_choices_and_flags(self):
         help_text = """
@@ -1098,6 +1110,7 @@ class CoreTests(unittest.TestCase):
         readme = Path("README.md").read_text(encoding="utf-8")
 
         self.assertIn("Open logs", readme)
+        self.assertIn("app.log", readme)
         self.assertIn("開啟紀錄資料夾", readme)
 
     def test_readme_mentions_open_app_folder(self):
