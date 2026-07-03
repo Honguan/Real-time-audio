@@ -30,7 +30,7 @@ DEFAULT_CONFIG = {
     "overlay_font_size": 18,
     "overlay_hold_seconds": 8.0,
     "show_language_labels": True,
-    "show_original_text": False,
+    "show_original_text": True,
     "show_translated_text": True,
     "tts_enabled": True,
     "record_logs": False,

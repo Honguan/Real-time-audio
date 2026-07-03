@@ -73,6 +73,7 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(DEFAULT_CONFIG["tts_rate"], 0)
         self.assertEqual(DEFAULT_CONFIG["tts_volume"], 100)
         self.assertEqual(DEFAULT_CONFIG["tts_voice_name"], "")
+        self.assertTrue(DEFAULT_CONFIG["show_original_text"])
         self.assertTrue(DEFAULT_CONFIG["show_translated_text"])
 
     def test_advanced_settings_expose_openai_tts_options(self):
@@ -1047,7 +1048,7 @@ class CoreTests(unittest.TestCase):
             engine._process_segments("speaker", Worker(wav))
 
         self.assertEqual(calls, [("konnichiwa", "ja", "zh")])
-        self.assertEqual(overlays[0][0], "zh: 你好")
+        self.assertEqual(overlays[0][0], "ja: konnichiwa\nzh: 你好")
 
     def test_overlay_text_can_toggle_original_and_translation(self):
         config = DEFAULT_CONFIG.copy()
