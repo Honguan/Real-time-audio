@@ -13,6 +13,7 @@ from realtime_audio_translator.asr import AudioTranscriber, add_runtime_dll_dire
 from realtime_audio_translator.commands import parse_help_options
 from realtime_audio_translator.config import DEFAULT_CONFIG, clear_cache, clear_logs, ensure_app_dirs, ensure_glossary_file, load_config, save_config
 from realtime_audio_translator.ai_auto_tuner import apply_tuning, recommend_tuning
+from realtime_audio_translator.ai_memory import add_glossary_term, cache_translation, cached_translation
 from realtime_audio_translator.diagnostics import collect_diagnostics
 from realtime_audio_translator.engine import RealtimeEngine, audio_devices_overlap, drain_queue, overlay_text_from_config
 from realtime_audio_translator.gui import LANGUAGE_CHOICES, PERFORMANCE_CHOICES, PROVIDER_CHOICES, TTS_PROVIDER_CHOICES, TranslatorApp, diagnostic_action_label, format_overlay_line, mode_notice, overlay_clipboard_text, overlay_font_size_value, overlay_hold_seconds_value, overlay_opacity_value, overlay_visibility_action, performance_segment_seconds, subtitle_updates_allowed, swap_language_values, troubleshooting_action, visible_setting_keys
@@ -465,11 +466,13 @@ class CoreTests(unittest.TestCase):
         os.environ["OPENAI_API_KEY"] = "test-key"
         providers_module.requests.post = lambda *args, **kwargs: calls.append((args, kwargs)) or Response()
         try:
-            config = DEFAULT_CONFIG.copy()
-            config["provider"] = "openai"
-            translator = Translator(config)
-            self.assertEqual(translator.translate("hello", "en", "zh-TW"), "你好")
-            self.assertEqual(translator.translate("hello", "en", "zh-TW"), "你好")
+            with tempfile.TemporaryDirectory() as tmp:
+                config = DEFAULT_CONFIG.copy()
+                config["provider"] = "openai"
+                config["translation_cache_path"] = str(Path(tmp) / "translation_cache.db")
+                translator = Translator(config)
+                self.assertEqual(translator.translate("hello", "en", "zh-TW"), "你好")
+                self.assertEqual(translator.translate("hello", "en", "zh-TW"), "你好")
         finally:
             providers_module.requests.post = original_post
             if original_key is None:
@@ -478,6 +481,57 @@ class CoreTests(unittest.TestCase):
                 os.environ["OPENAI_API_KEY"] = original_key
 
         self.assertEqual(len(calls), 1)
+
+    def test_translation_memory_persists_cached_translation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "translation_cache.db"
+
+            cache_translation(db, "openai", "en", "zh-TW", "hello", "你好")
+
+            self.assertEqual(cached_translation(db, "openai", "en", "zh-TW", "hello"), "你好")
+            self.assertIsNone(cached_translation(db, "google", "en", "zh-TW", "hello"))
+
+    def test_translator_uses_persistent_translation_cache(self):
+        import os
+        import realtime_audio_translator.providers as providers_module
+
+        calls = []
+
+        class Response:
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return {"output_text": "你好"}
+
+        original_key = os.environ.get("OPENAI_API_KEY")
+        original_post = providers_module.requests.post
+        os.environ["OPENAI_API_KEY"] = "test-key"
+        providers_module.requests.post = lambda *args, **kwargs: calls.append((args, kwargs)) or Response()
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                config = DEFAULT_CONFIG.copy()
+                config["provider"] = "openai"
+                config["translation_cache_path"] = str(Path(tmp) / "translation_cache.db")
+                self.assertEqual(Translator(config).translate("hello", "en", "zh-TW"), "你好")
+                self.assertEqual(Translator(config).translate("hello", "en", "zh-TW"), "你好")
+        finally:
+            providers_module.requests.post = original_post
+            if original_key is None:
+                os.environ.pop("OPENAI_API_KEY", None)
+            else:
+                os.environ["OPENAI_API_KEY"] = original_key
+
+        self.assertEqual(len(calls), 1)
+
+    def test_add_glossary_term_preserves_existing_terms(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            glossary = Path(tmp) / "glossary.json"
+            glossary.write_text(json.dumps({"boss": "王"}), encoding="utf-8")
+
+            add_glossary_term(glossary, "cooldown", "冷卻")
+
+            self.assertEqual(json.loads(glossary.read_text(encoding="utf-8")), {"boss": "王", "cooldown": "冷卻"})
 
     def test_local_provider_returns_text_without_cloud_request(self):
         config = DEFAULT_CONFIG.copy()
@@ -561,12 +615,14 @@ class CoreTests(unittest.TestCase):
         original_post = providers_module.requests.post
         providers_module.requests.post = lambda *args, **kwargs: calls.append((args, kwargs)) or Response()
         try:
-            config = DEFAULT_CONFIG.copy()
-            config["provider"] = "local"
-            config["local_translate_url"] = "http://127.0.0.1:5000/translate"
-            translator = Translator(config)
+            with tempfile.TemporaryDirectory() as tmp:
+                config = DEFAULT_CONFIG.copy()
+                config["provider"] = "local"
+                config["local_translate_url"] = "http://127.0.0.1:5000/translate"
+                config["translation_cache_path"] = str(Path(tmp) / "translation_cache.db")
+                translator = Translator(config)
 
-            self.assertEqual(translator.translate("hello", "en", "zh-TW"), "你好")
+                self.assertEqual(translator.translate("hello", "en", "zh-TW"), "你好")
         finally:
             providers_module.requests.post = original_post
 

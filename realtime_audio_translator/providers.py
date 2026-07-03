@@ -7,6 +7,7 @@ from pathlib import Path
 
 import requests
 
+from .ai_memory import cache_translation, cached_translation
 from .tts import speak_windows_sapi
 
 
@@ -61,6 +62,13 @@ class Translator:
         cache_key = (provider, source_language, target_language, text.strip())
         if cache_key in self.cache:
             return self._apply_glossary(self.cache[cache_key])
+        db_path = Path(self.config.get("translation_cache_path", ""))
+        persistent_cache_enabled = self.config.get("translation_cache_enabled", True) and not (provider == "local" and not self.config.get("local_translate_url", "").strip())
+        if persistent_cache_enabled and db_path:
+            cached = cached_translation(db_path, provider, source_language, target_language, text)
+            if cached is not None:
+                self.cache[cache_key] = cached
+                return self._apply_glossary(cached)
         if provider == "local":
             translated = self._local_translate(text, source_language, target_language)
         elif provider == "openai":
@@ -68,6 +76,8 @@ class Translator:
         else:
             translated = self._google_translate(text, source_language, target_language)
         self.cache[cache_key] = translated
+        if persistent_cache_enabled and db_path:
+            cache_translation(db_path, provider, source_language, target_language, text, translated)
         return self._apply_glossary(translated)
 
     def _apply_glossary(self, text: str) -> str:

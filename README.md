@@ -81,6 +81,8 @@ http://127.0.0.1:5000/translate
 
 `TTS provider` 可選本機、OpenAI 或 Google。進階設定可調 `OpenAI model`、`OpenAI TTS voice`、OpenAI TTS model 與 Google TTS voice。
 
+翻譯快取會保存在 `%USERPROFILE%\.realtime-audio\cache\translation_cache.db`，術語表保存在 `glossary.json`，可按 `Open glossary` 手動加入固定翻譯。
+
 ## 常見問題
 
 - 沒有字幕：確認 `Show overlay` 已開啟，並按 `Subtitle test`。

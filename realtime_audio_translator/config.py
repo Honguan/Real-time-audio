@@ -42,6 +42,8 @@ DEFAULT_CONFIG = {
     "google_project_id": "",
     "google_service_account_json": "",
     "glossary_path": str(APP_DIR / "glossary.json"),
+    "translation_cache_path": str(APP_DIR / "cache" / "translation_cache.db"),
+    "translation_cache_enabled": True,
     "local_translate_url": "",
     "openai_model": "gpt-4.1-mini",
     "openai_tts_model": "gpt-4o-mini-tts",
