@@ -14,6 +14,7 @@ from .engine import RealtimeEngine
 from .models import cuda_hardware_from_check_output, download_model, list_models, model_available, model_install_message, recommend_model
 from .paths import resource_root
 from .providers import TextToSpeech, Translator, google_access_token
+from .release_updater import RELEASES_URL, current_version, latest_release_tag, release_update_message
 from .runtime import DEFAULT_RUNTIME_DIR, RUNTIME_RELEASE_URL, UPSTREAM_RUNTIME_RELEASE_URL, install_runtime_from, runtime_dir, runtime_install_message, runtime_status, whisper_exe
 from .scenarios import SCENARIO_CHOICES, apply_scenario
 from .tts import list_windows_sapi_voices, play_linear16
@@ -340,6 +341,7 @@ class TranslatorApp(tk.Tk):
             ("Recommend model", self._recommend),
             ("Download model", self._download_model),
             ("Run diagnostics", self._run_diagnostics),
+            ("Check updates", self._check_updates),
             ("Update command config", self._refresh_commands),
             ("Open app folder", self._open_app_dir),
             ("Open glossary", self._open_glossary),
@@ -562,6 +564,19 @@ class TranslatorApp(tk.Tk):
 
     def _run_diagnostics(self) -> None:
         messagebox.showinfo("Diagnostics", self._diagnostic_message())
+
+    def _check_updates(self) -> None:
+        self.status.set("checking updates")
+
+        def run() -> None:
+            try:
+                latest = latest_release_tag()
+                message = release_update_message(current_version(self.repo_root), latest)
+            except Exception as exc:
+                message = f"update check failed: {exc}; {RELEASES_URL}"
+            self.after(0, self.status.set, message)
+
+        threading.Thread(target=run, daemon=True).start()
 
     def _show_setup_guide(self) -> None:
         messagebox.showinfo(

@@ -22,6 +22,7 @@ from realtime_audio_translator.gui import LANGUAGE_CHOICES, PERFORMANCE_CHOICES,
 from realtime_audio_translator.logbook import ConversationLog
 from realtime_audio_translator.models import cuda_hardware_from_check_output, list_models, model_available, model_download_command, model_install_message, recommend_model
 from realtime_audio_translator.providers import TextToSpeech, Translator, build_google_translate_request, build_openai_translation_request
+from realtime_audio_translator.release_updater import RELEASES_URL, current_version, is_newer_version, latest_release_tag_from_json, release_update_message
 from realtime_audio_translator.scenarios import SCENARIO_CHOICES, apply_scenario
 
 
@@ -40,6 +41,17 @@ class CoreTests(unittest.TestCase):
             self.assertTrue((root / "cache" / "audio").is_dir())
             self.assertTrue((root / "cache" / "temp_audio").is_dir())
             self.assertTrue((root / "exports" / "subtitles").is_dir())
+
+    def test_release_updater_compares_versions_and_reads_latest_tag(self):
+        self.assertTrue(is_newer_version("v0.2.0", "v0.1.9"))
+        self.assertFalse(is_newer_version("v0.1.0", "v0.1.0"))
+        self.assertEqual(latest_release_tag_from_json(b'{"tag_name":"v1.2.3"}'), "v1.2.3")
+        self.assertIn("v0.2.0", release_update_message("v0.1.0", "v0.2.0"))
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "release_version.txt").write_text("v9.9.9\n", encoding="utf-8")
+            self.assertEqual(current_version(root), "v9.9.9")
 
     def test_app_dirs_create_empty_glossary_without_overwriting(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -477,6 +489,8 @@ class CoreTests(unittest.TestCase):
         self.assertIn("def _show_first_run_wizard", gui_source)
         self.assertIn("collect_diagnostics", gui_source)
         self.assertIn("plan_session", gui_source)
+        self.assertIn('("Check updates", self._check_updates)', gui_source)
+        self.assertIn("latest_release_tag", gui_source)
 
     def test_diagnostic_action_label_shows_user_button_names(self):
         self.assertEqual(diagnostic_action_label("open_runtime"), "Open runtime folder / Download runtime files")
@@ -1042,6 +1056,14 @@ class CoreTests(unittest.TestCase):
         for text in (readme, notes):
             self.assertIn("語言判斷", text)
             self.assertIn("Source language", text)
+
+    def test_readme_and_release_notes_mention_check_updates(self):
+        readme = Path("README.md").read_text(encoding="utf-8")
+        notes = Path("docs/RELEASE_NOTES.md").read_text(encoding="utf-8")
+
+        for text in (readme, notes):
+            self.assertIn("Check updates", text)
+            self.assertIn("GitHub Releases", text)
 
     def test_readme_mentions_open_logs(self):
         readme = Path("README.md").read_text(encoding="utf-8")
