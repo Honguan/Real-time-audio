@@ -111,6 +111,19 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
                 "若字幕語言跳動，請把 Source language 從 auto 改成固定語言。",
                 "language_settings",
             ))
+    try:
+        current_latency = float(config.get("last_latency_seconds", 0))
+    except Exception:
+        current_latency = 0
+    if current_latency > 3.0:
+        issues.append(DiagnosticIssue(
+            "subtitle_latency_high",
+            "warning",
+            "字幕延遲過高",
+            f"最近一次處理延遲約 {current_latency:.1f} 秒",
+            "按 Optimize settings 套用低延遲分段與 VAD 設定",
+            "optimize_settings",
+        ))
     if config.get("ai_auto_optimize", True):
         latency = config.get("last_latency_seconds")
         try:
