@@ -54,7 +54,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Download Faster-Whisper-XXL runtime
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.build_runtime == 'true' }}
+        if: ${{ github.event_name == 'push' || inputs.build_runtime == 'true' }}
         continue-on-error: ${{ github.event_name == 'workflow_dispatch' && inputs.require_runtime_asset == 'false' }}
         shell: pwsh
         run: |

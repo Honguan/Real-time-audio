@@ -38,8 +38,10 @@ class RuntimeTests(unittest.TestCase):
         message = runtime_install_message(Path("runtime"))
 
         self.assertIn("runtime", message)
+        self.assertIn("RealtimeAudioTranslator-runtime-cuda12-<version>.zip", message)
+        self.assertIn("runtime zip", message)
         self.assertIn("Faster-Whisper-XXL Windows runtime", message)
-        self.assertNotIn("runtime zip", message)
+        self.assertIn("https://github.com/Honguan/Real-time-audio/releases", message)
         self.assertIn("https://github.com/Purfview/whisper-standalone-win/releases", message)
         self.assertIn("cuBLAS.and.cuDNN_CUDA12_win_v3.7z", message)
         self.assertIn("faster-whisper-xxl.exe", message)
@@ -142,11 +144,9 @@ class RuntimeTests(unittest.TestCase):
             )
 
             app_zip = out / "RealtimeAudioTranslator-v0.0.0-test-win-x64.zip"
-            runtime_zip = out / "RealtimeAudioTranslator-runtime-cuda12-core-v0.0.0-test.zip"
-            cuda_zip = out / "RealtimeAudioTranslator-runtime-cuda12-dlls-v0.0.0-test.zip"
+            runtime_zip = out / "RealtimeAudioTranslator-runtime-cuda12-v0.0.0-test.zip"
             self.assertTrue(app_zip.exists())
             self.assertTrue(runtime_zip.exists())
-            self.assertTrue(cuda_zip.exists())
             self.assertTrue((out / "SHA256SUMS.txt").exists())
             self.assertFalse(list(out.glob("*.bin")))
             self.assertFalse((out / "RealtimeAudioTranslatorSetup.exe").exists())
@@ -160,14 +160,11 @@ class RuntimeTests(unittest.TestCase):
             with zipfile.ZipFile(runtime_zip) as archive:
                 self.assertIn("faster-whisper-xxl.exe", archive.namelist())
                 self.assertIn("ffmpeg.exe", archive.namelist())
-                self.assertNotIn("cublas64_12.dll", archive.namelist())
-                self.assertIn("_xxl_data/data.txt", archive.namelist())
-                self.assertIn("runtime_manifest.json", archive.namelist())
-            with zipfile.ZipFile(cuda_zip) as archive:
                 self.assertIn("cublas64_12.dll", archive.namelist())
                 self.assertIn("cublasLt64_12.dll", archive.namelist())
                 self.assertIn("cudnn64_9.dll", archive.namelist())
-                self.assertIn("CUDA_README.txt", archive.namelist())
+                self.assertIn("_xxl_data/data.txt", archive.namelist())
+                self.assertIn("runtime_manifest.json", archive.namelist())
 
     def test_package_script_rejects_incomplete_runtime_source(self):
         root = Path(__file__).parents[1]

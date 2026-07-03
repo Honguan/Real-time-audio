@@ -642,8 +642,9 @@ class CoreTests(unittest.TestCase):
     def test_package_script_builds_release_zip_with_readme(self):
         script = Path("scripts/package.ps1").read_text(encoding="utf-8")
         self.assertIn("RealtimeAudioTranslator-$Version-win-x64.zip", script)
-        self.assertIn("RealtimeAudioTranslator-runtime-cuda12-core-$Version.zip", script)
-        self.assertIn("RealtimeAudioTranslator-runtime-cuda12-dlls-$Version.zip", script)
+        self.assertIn("RealtimeAudioTranslator-runtime-cuda12-$Version.zip", script)
+        self.assertNotIn("RealtimeAudioTranslator-runtime-cuda12-core-$Version.zip", script)
+        self.assertNotIn("RealtimeAudioTranslator-runtime-cuda12-dlls-$Version.zip", script)
         self.assertIn("README.md", script)
         self.assertIn("RELEASE_NOTES.md", script)
 
@@ -662,7 +663,7 @@ class CoreTests(unittest.TestCase):
         self.assertIn("workflow_dispatch", workflow)
         self.assertIn("build_runtime", workflow)
         self.assertIn("require_runtime_asset", workflow)
-        self.assertIn("github.event_name == 'workflow_dispatch' && inputs.build_runtime == 'true'", workflow)
+        self.assertIn("github.event_name == 'push' || inputs.build_runtime == 'true'", workflow)
         self.assertIn("python -m pip install -r requirements.txt", workflow)
         self.assertIn("unittest discover -s tests -v", workflow)
         self.assertIn("if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }", workflow)
@@ -691,6 +692,7 @@ class CoreTests(unittest.TestCase):
 
         self.assertIn("最快使用", notes)
         self.assertIn("RealtimeAudioTranslator.exe", notes)
+        self.assertIn("RealtimeAudioTranslator-runtime-cuda12-<tag>.zip", notes)
         self.assertIn("%USERPROFILE%\\.realtime-audio\\runtime\\cuda12", notes)
         self.assertIn("%USERPROFILE%\\.realtime-audio\\models", notes)
         self.assertIn("VB-CABLE", notes)
@@ -703,9 +705,9 @@ class CoreTests(unittest.TestCase):
         quick_start = Path("docs/README_QUICK_START_zh-TW.txt").read_text(encoding="utf-8")
 
         self.assertIn("RealtimeAudioTranslator.exe", quick_start)
+        self.assertIn("RealtimeAudioTranslator-runtime-cuda12-<tag>.zip", quick_start)
         self.assertIn("%USERPROFILE%\\.realtime-audio\\runtime\\cuda12", quick_start)
         self.assertIn("%USERPROFILE%\\.realtime-audio\\models", quick_start)
-        self.assertIn("https://github.com/Purfview/whisper-standalone-win/releases", quick_start)
         self.assertIn("Local translate URL", quick_start)
 
     def test_readme_and_release_notes_cover_required_faq(self):
@@ -916,8 +918,10 @@ class CoreTests(unittest.TestCase):
     def test_runtime_controls_link_cuda12_dependency(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
 
-        self.assertIn('text="Download CUDA12 dependency"', gui_source)
+        self.assertIn('text="Download runtime zip"', gui_source)
+        self.assertIn('text="Fallback runtime source"', gui_source)
         self.assertIn("RUNTIME_RELEASE_URL", gui_source)
+        self.assertIn("UPSTREAM_RUNTIME_RELEASE_URL", gui_source)
 
     def test_import_runtime_refreshes_commands_json(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
