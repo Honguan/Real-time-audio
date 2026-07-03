@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Callable
 
 from .asr import AudioTranscriber
-from .audio import SegmentWorker, audio_segment_active, find_device
+from .audio import SegmentWorker, audio_segment_active, device_name_from_label, find_device
 from .config import APP_DIR
 from .logbook import ConversationLog
 from .providers import TextToSpeech, Translator
@@ -33,6 +33,12 @@ def overlay_text_from_config(original: str, translated: str, source_language: st
     if config.get("show_translated_text", True):
         lines.append(f"{target_language}: {translated}" if config.get("show_language_labels") else translated)
     return "\n".join(line for line in lines if line)
+
+
+def audio_devices_overlap(left: str, right: str) -> bool:
+    left_name = device_name_from_label(left).lower().strip()
+    right_name = device_name_from_label(right).lower().strip()
+    return bool(left_name and right_name and (left_name in right_name or right_name in left_name))
 
 
 class RealtimeEngine:
@@ -69,12 +75,16 @@ class RealtimeEngine:
             self.status(str(exc))
             return
         started = []
+        skipped_feedback = False
         if self.config.get("speaker_enabled", True):
-            started.append(self._start_direction("speaker", self.config.get("speaker_device", ""), True))
+            if self.config.get("tts_enabled", True) and audio_devices_overlap(self.config.get("speaker_device", ""), self.config.get("tts_output_device", "")):
+                skipped_feedback = True
+            else:
+                started.append(self._start_direction("speaker", self.config.get("speaker_device", ""), True))
         if self.config.get("microphone_enabled", True):
             started.append(self._start_direction("me", self.config.get("microphone_device", ""), False))
         if any(started):
-            self.status("running")
+            self.status("running; speaker capture skipped: matches TTS output" if skipped_feedback else "running")
         else:
             self.running = False
             self.status("no audio devices")
