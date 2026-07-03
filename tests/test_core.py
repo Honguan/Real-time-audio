@@ -40,6 +40,7 @@ class CoreTests(unittest.TestCase):
             self.assertEqual(load_config(root)["target_language"], "ja")
             self.assertTrue((root / "models").is_dir())
             self.assertTrue((root / "config").is_dir())
+            self.assertEqual(json.loads((root / "config" / "settings.json").read_text(encoding="utf-8"))["target_language"], "ja")
             self.assertEqual(json.loads((root / "config" / "audio_devices.json").read_text(encoding="utf-8")), [])
             self.assertTrue((root / "logs").is_dir())
             self.assertTrue((root / "logs" / "app.log").is_file())
@@ -79,6 +80,14 @@ class CoreTests(unittest.TestCase):
             commands.write_text(json.dumps({"model": {"choices": ["medium"]}}), encoding="utf-8")
             ensure_app_dirs(root)
             self.assertEqual(json.loads(commands.read_text(encoding="utf-8")), {"model": {"choices": ["medium"]}})
+
+    def test_load_config_accepts_config_settings_json(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ensure_app_dirs(root)
+            (root / "config" / "settings.json").write_text(json.dumps({"target_language": "ko"}), encoding="utf-8")
+
+            self.assertEqual(load_config(root)["target_language"], "ko")
 
     def test_ensure_glossary_file_creates_parent_and_preserves_existing(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1129,6 +1138,7 @@ class CoreTests(unittest.TestCase):
 
         self.assertIn("Open app folder", readme)
         self.assertIn("%USERPROFILE%\\.realtime-audio", readme)
+        self.assertIn("settings.json", readme)
         self.assertIn("audio_devices.json", readme)
 
     def test_readme_and_release_notes_mention_subtitle_export(self):

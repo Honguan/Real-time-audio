@@ -80,9 +80,12 @@ def ensure_glossary_file(glossary: Path) -> Path:
 def load_config(root: Path = APP_DIR) -> dict:
     ensure_app_dirs(root)
     path = root / "config.json"
+    settings_path = root / "config" / "settings.json"
     if not path.exists():
-        save_config(root, DEFAULT_CONFIG.copy())
-        return DEFAULT_CONFIG.copy()
+        if not settings_path.exists():
+            save_config(root, DEFAULT_CONFIG.copy())
+            return DEFAULT_CONFIG.copy()
+        path = settings_path
     with path.open("r", encoding="utf-8") as handle:
         loaded = json.load(handle)
     config = DEFAULT_CONFIG.copy()
@@ -93,6 +96,8 @@ def load_config(root: Path = APP_DIR) -> dict:
 def save_config(root: Path, config: dict) -> None:
     ensure_app_dirs(root)
     with (root / "config.json").open("w", encoding="utf-8", newline="\n") as handle:
+        json.dump(config, handle, ensure_ascii=False, indent=2)
+    with (root / "config" / "settings.json").open("w", encoding="utf-8", newline="\n") as handle:
         json.dump(config, handle, ensure_ascii=False, indent=2)
 
 
