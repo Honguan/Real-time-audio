@@ -19,6 +19,7 @@ class AudioTranscriber:
         self.model_dir = model_dir
         self.exe_path = whisper_exe(runtime_dir(config))
         self.model = None
+        self.last_language: str | None = None
         try:
             from faster_whisper import WhisperModel
 
@@ -39,7 +40,7 @@ class AudioTranscriber:
             language = None
         if self.model is None:
             return self._transcribe_with_exe(wav_path, language)
-        segments, _ = self.model.transcribe(
+        segments, info = self.model.transcribe(
             str(wav_path),
             language=language or None,
             vad_filter=True,
@@ -47,11 +48,13 @@ class AudioTranscriber:
             condition_on_previous_text=False,
             without_timestamps=True,
         )
+        self.last_language = getattr(info, "language", None) or language
         return " ".join(segment.text.strip() for segment in segments).strip()
 
     def _transcribe_with_exe(self, wav_path: Path, language: str | None = None) -> str:
         if language == "auto":
             language = None
+        self.last_language = language
         with tempfile.TemporaryDirectory() as tmp:
             out_dir = Path(tmp)
             command = [

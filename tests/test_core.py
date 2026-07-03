@@ -852,6 +852,23 @@ class CoreTests(unittest.TestCase):
 
         self.assertNotIn("--language", calls[0])
 
+    def test_whisper_model_stores_detected_language(self):
+        transcriber = AudioTranscriber.__new__(AudioTranscriber)
+        transcriber.model_name = "medium"
+        transcriber.model_dir = Path("models")
+
+        class Segment:
+            text = " hello "
+
+        class Model:
+            def transcribe(self, *args, **kwargs):
+                return [Segment()], type("Info", (), {"language": "ja"})()
+
+        transcriber.model = Model()
+
+        self.assertEqual(transcriber.transcribe(Path("clip.wav"), "auto"), "hello")
+        self.assertEqual(transcriber.last_language, "ja")
+
     def test_troubleshooting_actions_cover_common_setup_issues(self):
         self.assertEqual(troubleshooting_action("speaker_audio"), ("open", "ms-settings:sound"))
         self.assertEqual(troubleshooting_action("mic_output"), ("open", "https://vb-audio.com/Cable/"))
@@ -951,6 +968,42 @@ class CoreTests(unittest.TestCase):
             engine._process_segments("speaker", Worker(wav))
 
         self.assertEqual(overlays[0][0], "en: hello\nzh: 你好")
+
+    def test_engine_uses_detected_language_when_source_is_auto(self):
+        overlays = []
+        calls = []
+        config = DEFAULT_CONFIG.copy()
+        config["record_logs"] = False
+        config["target_language"] = "auto"
+        engine = RealtimeEngine(Path("."), config, lambda speaker, mine: overlays.append((speaker, mine)), lambda status: None)
+
+        class Transcriber:
+            last_language = "ja"
+
+            def transcribe(self, wav, source_language):
+                return "konnichiwa"
+
+        class Translator:
+            def translate(self, text, source_language, target_language):
+                calls.append((text, source_language, target_language))
+                engine.running = False
+                return "你好"
+
+        class Worker:
+            def __init__(self, wav):
+                self.queue = queue.Queue()
+                self.queue.put(wav)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            wav = Path(tmp) / "clip.wav"
+            self._write_wav(wav, 12000)
+            engine.running = True
+            engine.transcriber = Transcriber()
+            engine.translator = Translator()
+            engine._process_segments("speaker", Worker(wav))
+
+        self.assertEqual(calls, [("konnichiwa", "ja", "zh")])
+        self.assertEqual(overlays[0][0], "zh: 你好")
 
     def test_overlay_text_can_toggle_original_and_translation(self):
         config = DEFAULT_CONFIG.copy()

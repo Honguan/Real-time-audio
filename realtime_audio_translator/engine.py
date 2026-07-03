@@ -133,17 +133,19 @@ class RealtimeEngine:
                 text = self.transcriber.transcribe(wav, source)
                 if not text:
                     continue
+                detected_source = getattr(self.transcriber, "last_language", None) if source == "auto" else None
+                source_for_output = detected_source or source
                 translation_failed = False
                 try:
-                    translated = self.translator.translate(text, source, target)
+                    translated = self.translator.translate(text, source_for_output, target)
                 except Exception as exc:
                     translated = text
                     translation_failed = True
                     self.status(f"{direction}: translation failed: {exc}")
                 if translation_failed:
-                    overlay_text = f"{source}: {text}" if self.config.get("show_language_labels") else text
+                    overlay_text = f"{source_for_output}: {text}" if self.config.get("show_language_labels") else text
                 else:
-                    overlay_text = overlay_text_from_config(text, translated, source, target, self.config)
+                    overlay_text = overlay_text_from_config(text, translated, source_for_output, target, self.config)
                 if direction == "speaker":
                     self.overlay(overlay_text, "")
                 else:
@@ -160,7 +162,7 @@ class RealtimeEngine:
                             play_linear16(audio, tts_device)
                 latency = time.perf_counter() - started
                 if self.log:
-                    self.log.append(direction, source, target, text, translated, self.config["provider"], latency_seconds=latency)
+                    self.log.append(direction, source_for_output, target, text, translated, self.config["provider"], latency_seconds=latency)
                 if not translation_failed:
                     self.status(f"{direction} latency {latency:.2f}s")
             except Exception as exc:
