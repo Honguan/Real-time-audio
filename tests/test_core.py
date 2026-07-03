@@ -1,5 +1,6 @@
 import json
 import queue
+import sqlite3
 import sys
 import tempfile
 import unittest
@@ -47,6 +48,12 @@ class CoreTests(unittest.TestCase):
             self.assertTrue((root / "logs" / "app.log").is_file())
             self.assertTrue((root / "cache" / "audio").is_dir())
             self.assertTrue((root / "cache" / "temp_audio").is_dir())
+            db = sqlite3.connect(root / "cache" / "translation_cache.db")
+            try:
+                row = db.execute("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'translations'").fetchone()
+            finally:
+                db.close()
+            self.assertEqual(row[0], "translations")
             self.assertTrue((root / "exports" / "subtitles").is_dir())
 
     def test_release_updater_compares_versions_and_reads_latest_tag(self):

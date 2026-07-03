@@ -3,6 +3,8 @@ import os
 import shutil
 from pathlib import Path
 
+from .ai_memory import _ensure_cache
+
 
 APP_DIR = Path(os.environ.get("REALTIME_AUDIO_HOME", Path.home() / ".realtime-audio"))
 
@@ -72,6 +74,7 @@ def ensure_app_dirs(root: Path = APP_DIR) -> None:
     app_log = root / "logs" / "app.log"
     if not app_log.exists():
         app_log.write_text("", encoding="utf-8")
+    _ensure_cache(root / "cache" / "translation_cache.db")
 
 
 def ensure_glossary_file(glossary: Path) -> Path:
