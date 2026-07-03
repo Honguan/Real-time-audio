@@ -31,6 +31,7 @@ DEFAULT_CONFIG = {
     "overlay_hold_seconds": 8.0,
     "show_language_labels": True,
     "show_original_text": False,
+    "show_translated_text": True,
     "tts_enabled": True,
     "record_logs": False,
     "log_dir": str(APP_DIR / "logs"),

@@ -11,7 +11,7 @@ from realtime_audio_translator.audio import audio_segment_active, device_name_fr
 from realtime_audio_translator.asr import AudioTranscriber
 from realtime_audio_translator.commands import parse_help_options
 from realtime_audio_translator.config import DEFAULT_CONFIG, clear_cache, clear_logs, ensure_app_dirs, ensure_glossary_file, load_config, save_config
-from realtime_audio_translator.engine import RealtimeEngine, drain_queue
+from realtime_audio_translator.engine import RealtimeEngine, drain_queue, overlay_text_from_config
 from realtime_audio_translator.gui import LANGUAGE_CHOICES, PERFORMANCE_CHOICES, PROVIDER_CHOICES, TTS_PROVIDER_CHOICES, TranslatorApp, format_overlay_line, mode_notice, overlay_clipboard_text, overlay_font_size_value, overlay_hold_seconds_value, overlay_opacity_value, overlay_visibility_action, performance_segment_seconds, subtitle_updates_allowed, swap_language_values, troubleshooting_action, visible_setting_keys
 from realtime_audio_translator.logbook import ConversationLog
 from realtime_audio_translator.models import cuda_hardware_from_check_output, list_models, model_available, model_download_command, model_install_message, recommend_model
@@ -72,6 +72,7 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(DEFAULT_CONFIG["tts_rate"], 0)
         self.assertEqual(DEFAULT_CONFIG["tts_volume"], 100)
         self.assertEqual(DEFAULT_CONFIG["tts_voice_name"], "")
+        self.assertTrue(DEFAULT_CONFIG["show_translated_text"])
 
     def test_advanced_settings_expose_openai_tts_options(self):
         settings = visible_setting_keys(True)
@@ -84,6 +85,7 @@ class CoreTests(unittest.TestCase):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
 
         self.assertIn('ttk.Checkbutton(frame, text="Record logs", variable=self.record_logs, command=self._save)', gui_source)
+        self.assertIn('ttk.Checkbutton(frame, text="Show translation", variable=self.show_translated_text, command=self._save)', gui_source)
 
     def test_open_logs_button_opens_configured_log_dir(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
@@ -949,6 +951,19 @@ class CoreTests(unittest.TestCase):
             engine._process_segments("speaker", Worker(wav))
 
         self.assertEqual(overlays[0][0], "hello\n你好")
+
+    def test_overlay_text_can_toggle_original_and_translation(self):
+        config = DEFAULT_CONFIG.copy()
+        config["show_original_text"] = True
+        config["show_translated_text"] = True
+        self.assertEqual(overlay_text_from_config("source", "translated", config), "source\ntranslated")
+
+        config["show_original_text"] = False
+        self.assertEqual(overlay_text_from_config("source", "translated", config), "translated")
+
+        config["show_original_text"] = True
+        config["show_translated_text"] = False
+        self.assertEqual(overlay_text_from_config("source", "translated", config), "source")
 
     def test_engine_shows_original_when_translation_fails(self):
         overlays = []

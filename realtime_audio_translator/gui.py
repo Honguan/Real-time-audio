@@ -224,6 +224,7 @@ class TranslatorApp(tk.Tk):
         self.overlay_topmost = tk.BooleanVar(value=bool(self.config["overlay_topmost"]))
         self.show_language_labels = tk.BooleanVar(value=bool(self.config["show_language_labels"]))
         self.show_original_text = tk.BooleanVar(value=bool(self.config["show_original_text"]))
+        self.show_translated_text = tk.BooleanVar(value=bool(self.config.get("show_translated_text", True)))
         self.tts_enabled = tk.BooleanVar(value=bool(self.config.get("tts_enabled", True)))
         self.speaker_enabled = tk.BooleanVar(value=bool(self.config.get("speaker_enabled", True)))
         self.microphone_enabled = tk.BooleanVar(value=bool(self.config.get("microphone_enabled", True)))
@@ -293,14 +294,15 @@ class TranslatorApp(tk.Tk):
         ttk.Checkbutton(frame, text="Overlay topmost", variable=self.overlay_topmost, command=self._apply_overlay).grid(row=next_row + 3, column=1, sticky="w")
         ttk.Checkbutton(frame, text="Show language", variable=self.show_language_labels, command=self._save).grid(row=next_row + 3, column=2, sticky="w")
         ttk.Checkbutton(frame, text="Show original", variable=self.show_original_text, command=self._save).grid(row=next_row + 4, column=0, sticky="w")
-        ttk.Checkbutton(frame, text="Speak translations", variable=self.tts_enabled, command=self._save).grid(row=next_row + 4, column=1, sticky="w")
-        ttk.Checkbutton(frame, text="Record logs", variable=self.record_logs, command=self._save).grid(row=next_row + 4, column=2, sticky="w")
+        ttk.Checkbutton(frame, text="Show translation", variable=self.show_translated_text, command=self._save).grid(row=next_row + 4, column=1, sticky="w")
+        ttk.Checkbutton(frame, text="Speak translations", variable=self.tts_enabled, command=self._save).grid(row=next_row + 4, column=2, sticky="w")
         ttk.Checkbutton(frame, text="Speaker capture", variable=self.speaker_enabled, command=self._save).grid(row=next_row + 5, column=0, sticky="w")
         ttk.Checkbutton(frame, text="Mic capture", variable=self.microphone_enabled, command=self._save).grid(row=next_row + 5, column=1, sticky="w")
         ttk.Checkbutton(frame, text="Advanced settings", variable=self.advanced_mode, command=self._apply_mode).grid(row=next_row + 5, column=2, sticky="w")
+        ttk.Checkbutton(frame, text="Record logs", variable=self.record_logs, command=self._save).grid(row=next_row + 6, column=0, sticky="w")
 
         buttons = ttk.Frame(frame)
-        buttons.grid(row=next_row + 6, column=0, columnspan=3, sticky="ew", pady=12)
+        buttons.grid(row=next_row + 7, column=0, columnspan=3, sticky="ew", pady=12)
         def copy_overlay() -> None:
             text = overlay_clipboard_text(self.overlay.speaker.get(), self.overlay.mine.get())
             if not text:
@@ -349,7 +351,7 @@ class TranslatorApp(tk.Tk):
         ptt_button.bind("<ButtonRelease-1>", lambda _event: self._push_to_talk(False))
         ptt_button.pack(side="left", padx=3)
 
-        ttk.Label(frame, textvariable=self.status).grid(row=next_row + 7, column=0, columnspan=3, sticky="ew")
+        ttk.Label(frame, textvariable=self.status).grid(row=next_row + 8, column=0, columnspan=3, sticky="ew")
         frame.grid_columnconfigure(1, weight=1)
         self._apply_mode(save=False)
 
@@ -386,6 +388,7 @@ class TranslatorApp(tk.Tk):
         config["overlay_topmost"] = self.overlay_topmost.get()
         config["show_language_labels"] = self.show_language_labels.get()
         config["show_original_text"] = self.show_original_text.get()
+        config["show_translated_text"] = self.show_translated_text.get()
         config["tts_enabled"] = self.tts_enabled.get()
         config["speaker_enabled"] = self.speaker_enabled.get()
         config["microphone_enabled"] = self.microphone_enabled.get()
