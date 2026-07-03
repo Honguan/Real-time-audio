@@ -9,6 +9,12 @@ from .ai_memory import _ensure_cache
 APP_DIR = Path(os.environ.get("REALTIME_AUDIO_HOME", Path.home() / ".realtime-audio"))
 
 DEFAULT_CONFIG = {
+    "app_language": "zh-TW",
+    "ui_mode": "simple",
+    "asr_engine": "faster-whisper-xxl",
+    "asr_model": "small",
+    "translation_engine": "local",
+    "tts_engine": "system",
     "source_language": "zh",
     "target_language": "en",
     "provider": "local",
@@ -32,11 +38,15 @@ DEFAULT_CONFIG = {
     "overlay_opacity": 0.86,
     "overlay_font_size": 18,
     "overlay_hold_seconds": 8.0,
+    "subtitle_always_on_top": True,
     "show_language_labels": True,
     "show_original_text": True,
     "show_translated_text": True,
     "tts_enabled": True,
     "record_logs": False,
+    "save_conversation_history": False,
+    "cloud_api_enabled": False,
+    "virtual_mic_enabled": False,
     "log_dir": str(APP_DIR / "logs"),
     "advanced_mode": False,
     "ai_auto_optimize": True,
@@ -53,6 +63,8 @@ DEFAULT_CONFIG = {
     "segment_seconds": 2.0,
     "speech_threshold": 0.01,
     "runtime_dir": str(APP_DIR / "runtime" / "cuda12"),
+    "runtime_path": str(APP_DIR / "runtime" / "cuda12"),
+    "models_path": str(APP_DIR / "models"),
 }
 
 

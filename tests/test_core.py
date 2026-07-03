@@ -298,6 +298,18 @@ class CoreTests(unittest.TestCase):
             self.assertEqual(engine.log.jsonl_path.parent, log_dir)
 
     def test_default_mode_uses_free_local_providers(self):
+        self.assertEqual(DEFAULT_CONFIG["app_language"], "zh-TW")
+        self.assertEqual(DEFAULT_CONFIG["ui_mode"], "simple")
+        self.assertEqual(DEFAULT_CONFIG["asr_engine"], "faster-whisper-xxl")
+        self.assertEqual(DEFAULT_CONFIG["asr_model"], "small")
+        self.assertEqual(DEFAULT_CONFIG["translation_engine"], "local")
+        self.assertEqual(DEFAULT_CONFIG["tts_engine"], "system")
+        self.assertEqual(DEFAULT_CONFIG["runtime_path"], str(Path.home() / ".realtime-audio" / "runtime" / "cuda12"))
+        self.assertEqual(DEFAULT_CONFIG["models_path"], str(Path.home() / ".realtime-audio" / "models"))
+        self.assertFalse(DEFAULT_CONFIG["save_conversation_history"])
+        self.assertFalse(DEFAULT_CONFIG["cloud_api_enabled"])
+        self.assertTrue(DEFAULT_CONFIG["subtitle_always_on_top"])
+        self.assertFalse(DEFAULT_CONFIG["virtual_mic_enabled"])
         self.assertEqual(DEFAULT_CONFIG["provider"], "local")
         self.assertEqual(DEFAULT_CONFIG["tts_provider"], "local")
         self.assertFalse(DEFAULT_CONFIG["advanced_mode"])
