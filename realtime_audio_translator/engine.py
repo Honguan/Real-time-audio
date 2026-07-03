@@ -26,12 +26,12 @@ def drain_queue(items) -> int:
             return removed
 
 
-def overlay_text_from_config(original: str, translated: str, config: dict) -> str:
+def overlay_text_from_config(original: str, translated: str, source_language: str, target_language: str, config: dict) -> str:
     lines = []
     if config.get("show_original_text"):
-        lines.append(original)
+        lines.append(f"{source_language}: {original}" if config.get("show_language_labels") else original)
     if config.get("show_translated_text", True):
-        lines.append(translated)
+        lines.append(f"{target_language}: {translated}" if config.get("show_language_labels") else translated)
     return "\n".join(line for line in lines if line)
 
 
@@ -140,7 +140,10 @@ class RealtimeEngine:
                     translated = text
                     translation_failed = True
                     self.status(f"{direction}: translation failed: {exc}")
-                overlay_text = overlay_text_from_config(text, translated, self.config)
+                if translation_failed:
+                    overlay_text = f"{source}: {text}" if self.config.get("show_language_labels") else text
+                else:
+                    overlay_text = overlay_text_from_config(text, translated, source, target, self.config)
                 if direction == "speaker":
                     self.overlay(overlay_text, "")
                 else:

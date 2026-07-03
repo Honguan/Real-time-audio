@@ -950,20 +950,23 @@ class CoreTests(unittest.TestCase):
             engine.translator = Translator()
             engine._process_segments("speaker", Worker(wav))
 
-        self.assertEqual(overlays[0][0], "hello\n你好")
+        self.assertEqual(overlays[0][0], "en: hello\nzh: 你好")
 
     def test_overlay_text_can_toggle_original_and_translation(self):
         config = DEFAULT_CONFIG.copy()
         config["show_original_text"] = True
         config["show_translated_text"] = True
-        self.assertEqual(overlay_text_from_config("source", "translated", config), "source\ntranslated")
+        self.assertEqual(overlay_text_from_config("source", "translated", "en", "zh", config), "en: source\nzh: translated")
 
         config["show_original_text"] = False
-        self.assertEqual(overlay_text_from_config("source", "translated", config), "translated")
+        self.assertEqual(overlay_text_from_config("source", "translated", "en", "zh", config), "zh: translated")
 
         config["show_original_text"] = True
         config["show_translated_text"] = False
-        self.assertEqual(overlay_text_from_config("source", "translated", config), "source")
+        self.assertEqual(overlay_text_from_config("source", "translated", "en", "zh", config), "en: source")
+
+        config["show_language_labels"] = False
+        self.assertEqual(overlay_text_from_config("source", "translated", "en", "zh", config), "source")
 
     def test_engine_shows_original_when_translation_fails(self):
         overlays = []
@@ -993,7 +996,7 @@ class CoreTests(unittest.TestCase):
             engine.translator = Translator()
             engine._process_segments("speaker", Worker(wav))
 
-        self.assertEqual(overlays[0][0], "hello")
+        self.assertEqual(overlays[0][0], "en: hello")
 
     def test_engine_uses_openai_tts_provider_for_mic_output(self):
         import realtime_audio_translator.engine as engine_module

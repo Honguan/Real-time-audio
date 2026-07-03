@@ -721,8 +721,6 @@ class TranslatorApp(tk.Tk):
             return
         self.overlay_generation += 1
         generation = self.overlay_generation
-        speaker = format_overlay_line(speaker, self.config["source_language"], self.show_language_labels.get())
-        mine = format_overlay_line(mine, self.config["target_language"], self.show_language_labels.get())
         self.after(0, self.overlay.update_lines, speaker, mine)
         hold_ms = int(overlay_hold_seconds_value(self.config.get("overlay_hold_seconds", 8.0)) * 1000)
         self.after(hold_ms, self._clear_overlay_if_current, generation)
