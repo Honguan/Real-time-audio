@@ -1,9 +1,18 @@
+import os
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
 from .runtime import runtime_dir, whisper_exe
+
+
+DLL_DIRECTORIES = []
+
+
+def add_runtime_dll_directory(runtime_root: Path) -> None:
+    if runtime_root.exists() and hasattr(os, "add_dll_directory"):
+        DLL_DIRECTORIES.append(os.add_dll_directory(str(runtime_root)))
 
 
 def add_xxl_data(repo_root: Path, runtime_root: Path | None = None) -> None:
@@ -15,6 +24,7 @@ def add_xxl_data(repo_root: Path, runtime_root: Path | None = None) -> None:
 class AudioTranscriber:
     def __init__(self, repo_root: Path, model_name: str, model_dir: Path, device: str = "cuda", compute_type: str = "auto", config: dict | None = None):
         runtime_root = runtime_dir(config)
+        add_runtime_dll_directory(runtime_root)
         add_xxl_data(repo_root, runtime_root)
         self.model_name = model_name
         self.model_dir = model_dir

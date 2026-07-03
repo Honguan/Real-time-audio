@@ -9,7 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from realtime_audio_translator.audio import audio_segment_active, device_name_from_label
-from realtime_audio_translator.asr import AudioTranscriber, add_xxl_data
+from realtime_audio_translator.asr import AudioTranscriber, add_runtime_dll_directory, add_xxl_data
 from realtime_audio_translator.commands import parse_help_options
 from realtime_audio_translator.config import DEFAULT_CONFIG, clear_cache, clear_logs, ensure_app_dirs, ensure_glossary_file, load_config, save_config
 from realtime_audio_translator.engine import RealtimeEngine, drain_queue, overlay_text_from_config
@@ -867,6 +867,28 @@ class CoreTests(unittest.TestCase):
                 self.assertIn(str(root / "repo" / "_xxl_data"), sys.path)
             finally:
                 sys.path[:] = original_path
+
+    def test_add_runtime_dll_directory_keeps_handle(self):
+        import realtime_audio_translator.asr as asr_module
+
+        with tempfile.TemporaryDirectory() as tmp:
+            runtime = Path(tmp) / "runtime"
+            runtime.mkdir()
+            calls = []
+            original_add = getattr(asr_module.os, "add_dll_directory", None)
+            original_handles = asr_module.DLL_DIRECTORIES[:]
+            asr_module.os.add_dll_directory = lambda path: calls.append(path) or "handle"
+            try:
+                asr_module.DLL_DIRECTORIES.clear()
+                add_runtime_dll_directory(runtime)
+                self.assertEqual(calls, [str(runtime)])
+                self.assertEqual(asr_module.DLL_DIRECTORIES, ["handle"])
+            finally:
+                if original_add is None:
+                    delattr(asr_module.os, "add_dll_directory")
+                else:
+                    asr_module.os.add_dll_directory = original_add
+                asr_module.DLL_DIRECTORIES[:] = original_handles
 
     def test_whisper_model_stores_detected_language(self):
         transcriber = AudioTranscriber.__new__(AudioTranscriber)
