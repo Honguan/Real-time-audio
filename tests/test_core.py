@@ -368,6 +368,29 @@ class CoreTests(unittest.TestCase):
         self.assertTrue(all(isinstance(issue.title, str) for issue in issues))
         self.assertTrue(all(issue.action for issue in issues))
 
+    def test_diagnostics_warn_when_virtual_mic_output_is_not_cable_input(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            runtime = root / "runtime"
+            model = root / "models" / "medium"
+            runtime.mkdir()
+            model.mkdir(parents=True)
+            (runtime / "faster-whisper-xxl.exe").write_text("exe", encoding="utf-8")
+            (runtime / "ffmpeg.exe").write_text("ff", encoding="utf-8")
+            (runtime / "_xxl_data").mkdir()
+            config = DEFAULT_CONFIG.copy()
+            config["runtime_dir"] = str(runtime)
+            config["model"] = "medium"
+            config["tts_enabled"] = True
+            config["tts_output_device"] = "Speakers"
+
+            issues = collect_diagnostics(config, root)
+
+        issue = next(item for item in issues if item.code == "virtual_mic_route")
+        self.assertEqual(issue.action, "audio_settings")
+        self.assertIn("CABLE Input", issue.fix)
+        self.assertIn("CABLE Output", issue.fix)
+
     def test_local_provider_without_translate_url_is_info_not_fatal(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

@@ -69,6 +69,15 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
             "把 TTS output 設為 CABLE Input，喇叭來源設為實際播放對方聲音的裝置",
             "audio_settings",
         ))
+    if config.get("tts_enabled", True) and "cable input" not in str(config.get("tts_output_device", "")).lower():
+        issues.append(DiagnosticIssue(
+            "virtual_mic_route",
+            "warning",
+            "虛擬麥克風輸出可能未設定",
+            "TTS output 目前看起來不是 CABLE Input",
+            "把 TTS output 設為 CABLE Input，並把 Discord 麥克風設為 CABLE Output",
+            "audio_settings",
+        ))
     if config.get("speaker_enabled", True) and not find_device(config.get("speaker_device", ""), want_output=True):
         issues.append(DiagnosticIssue("speaker_device_missing", "warning", "找不到喇叭來源", "未選到可用輸出裝置", "選擇正在播放 Discord 或遊戲語音的喇叭", "audio_settings"))
     if config.get("microphone_enabled", True) and not find_device(config.get("microphone_device", ""), want_output=False):
