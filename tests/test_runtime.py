@@ -38,9 +38,8 @@ class RuntimeTests(unittest.TestCase):
         message = runtime_install_message(Path("runtime"))
 
         self.assertIn("runtime", message)
-        self.assertIn("RealtimeAudioTranslator-runtime-cuda12-core-<version>.zip", message)
-        self.assertIn("RealtimeAudioTranslator-runtime-cuda12-dlls-<version>.zip", message)
-        self.assertIn("runtime zip", message)
+        self.assertIn("RealtimeAudioTranslator-runtime-cuda12-core-<version>.7z", message)
+        self.assertIn("RealtimeAudioTranslator-runtime-cuda12-dlls-<version>.7z", message)
         self.assertIn("Faster-Whisper-XXL Windows runtime", message)
         self.assertIn("https://github.com/Honguan/Real-time-audio/releases", message)
         self.assertIn("https://github.com/Purfview/whisper-standalone-win/releases", message)
@@ -171,6 +170,49 @@ class RuntimeTests(unittest.TestCase):
                 self.assertIn("cublasLt64_12.dll", archive.namelist())
                 self.assertIn("cudnn64_9.dll", archive.namelist())
                 self.assertIn("CUDA_README.txt", archive.namelist())
+
+    def test_package_script_can_copy_runtime_archives(self):
+        root = Path(__file__).parents[1]
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp)
+            dist = work / "RealtimeAudioTranslator"
+            out = work / "release"
+            runtime_archive = work / "runtime.7z"
+            cuda_archive = work / "cuda.7z"
+            (dist / "_internal").mkdir(parents=True)
+            (dist / "RealtimeAudioTranslator.exe").write_text("app", encoding="utf-8")
+            runtime_archive.write_text("runtime", encoding="utf-8")
+            cuda_archive.write_text("cuda", encoding="utf-8")
+
+            subprocess.run(
+                [
+                    "powershell",
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(root / "scripts" / "package.ps1"),
+                    "-SkipBuild",
+                    "-Version",
+                    "v0.0.0-test",
+                    "-OutputDir",
+                    str(out),
+                    "-DistDir",
+                    str(dist),
+                    "-RuntimeCoreArchive",
+                    str(runtime_archive),
+                    "-CudaArchive",
+                    str(cuda_archive),
+                ],
+                cwd=root,
+                check=True,
+            )
+
+            self.assertTrue((out / "RealtimeAudioTranslator-runtime-cuda12-core-v0.0.0-test.7z").exists())
+            self.assertTrue((out / "RealtimeAudioTranslator-runtime-cuda12-dlls-v0.0.0-test.7z").exists())
+            checksums = (out / "SHA256SUMS.txt").read_text(encoding="utf-8")
+            self.assertIn("RealtimeAudioTranslator-runtime-cuda12-core-v0.0.0-test.7z", checksums)
+            self.assertIn("RealtimeAudioTranslator-runtime-cuda12-dlls-v0.0.0-test.7z", checksums)
 
     def test_package_script_rejects_incomplete_runtime_source(self):
         root = Path(__file__).parents[1]

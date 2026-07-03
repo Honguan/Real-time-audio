@@ -3,6 +3,8 @@ param(
   [string]$OutputDir = "",
   [string]$DistDir = "",
   [string]$RuntimeSource = "",
+  [string]$RuntimeCoreArchive = "",
+  [string]$CudaArchive = "",
   [string]$ModelsSource = "",
   [string]$ModelName = "",
   [switch]$SkipBuild
@@ -123,6 +125,24 @@ if (-not [string]::IsNullOrWhiteSpace($RuntimeSource)) {
   $Created += $CudaZip
 } else {
   Write-Warning "Runtime zips skipped. Pass -RuntimeSource to publish runtime core and CUDA DLL zips."
+}
+
+if (-not [string]::IsNullOrWhiteSpace($RuntimeCoreArchive)) {
+  if (-not (Test-Path -LiteralPath $RuntimeCoreArchive)) {
+    throw "RuntimeCoreArchive not found: $RuntimeCoreArchive"
+  }
+  $RuntimeArchiveOut = Join-Path $Out "RealtimeAudioTranslator-runtime-cuda12-core-$Version.7z"
+  Copy-Item -LiteralPath $RuntimeCoreArchive -Destination $RuntimeArchiveOut -Force
+  $Created += $RuntimeArchiveOut
+}
+
+if (-not [string]::IsNullOrWhiteSpace($CudaArchive)) {
+  if (-not (Test-Path -LiteralPath $CudaArchive)) {
+    throw "CudaArchive not found: $CudaArchive"
+  }
+  $CudaArchiveOut = Join-Path $Out "RealtimeAudioTranslator-runtime-cuda12-dlls-$Version.7z"
+  Copy-Item -LiteralPath $CudaArchive -Destination $CudaArchiveOut -Force
+  $Created += $CudaArchiveOut
 }
 
 if (-not [string]::IsNullOrWhiteSpace($ModelsSource)) {
