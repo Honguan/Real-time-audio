@@ -436,6 +436,27 @@ class CoreTests(unittest.TestCase):
         self.assertNotIn("runtime_missing", [issue.code for issue in issues])
         self.assertNotIn("model_missing", [issue.code for issue in issues])
 
+    def test_diagnostics_report_empty_translation_result(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            runtime = root / "runtime"
+            model = root / "models" / "medium"
+            runtime.mkdir()
+            model.mkdir(parents=True)
+            (runtime / "faster-whisper-xxl.exe").write_text("exe", encoding="utf-8")
+            (runtime / "ffmpeg.exe").write_text("ff", encoding="utf-8")
+            (runtime / "_xxl_data").mkdir()
+            config = DEFAULT_CONFIG.copy()
+            config["runtime_dir"] = str(runtime)
+            config["model"] = "medium"
+            config["last_translation_empty"] = True
+
+            issues = collect_diagnostics(config, root)
+
+        issue = next(item for item in issues if item.code == "translation_empty")
+        self.assertEqual(issue.severity, "warning")
+        self.assertEqual(issue.action, "local_translation")
+
     def test_diagnostics_include_auto_tune_recommendations(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -1605,6 +1626,35 @@ class CoreTests(unittest.TestCase):
             engine._process_segments("speaker", Worker(wav))
 
         self.assertEqual(overlays[0][0], "en: hello")
+
+    def test_engine_records_empty_translation_for_diagnostics(self):
+        config = DEFAULT_CONFIG.copy()
+        config["record_logs"] = False
+        engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, lambda status: None)
+
+        class Transcriber:
+            def transcribe(self, wav, source_language):
+                return "hello"
+
+        class Translator:
+            def translate(self, text, source_language, target_language):
+                engine.running = False
+                return ""
+
+        class Worker:
+            def __init__(self, wav):
+                self.queue = queue.Queue()
+                self.queue.put(wav)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            wav = Path(tmp) / "clip.wav"
+            self._write_wav(wav, 12000)
+            engine.running = True
+            engine.transcriber = Transcriber()
+            engine.translator = Translator()
+            engine._process_segments("speaker", Worker(wav))
+
+        self.assertTrue(engine.config["last_translation_empty"])
 
     def test_engine_reports_confidence_status_after_successful_segment(self):
         statuses = []

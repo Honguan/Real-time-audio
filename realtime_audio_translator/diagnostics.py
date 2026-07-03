@@ -96,6 +96,15 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
             "啟動 LibreTranslate 後填入 http://127.0.0.1:5000/translate，或改用雲端 provider",
             "local_translation",
         ))
+    if config.get("last_translation_empty"):
+        issues.append(DiagnosticIssue(
+            "translation_empty",
+            "warning",
+            "翻譯結果空白",
+            "最近一次翻譯沒有回傳文字",
+            "檢查翻譯 provider、Local translate URL 或改用其他翻譯服務",
+            "local_translation",
+        ))
     if config.get("source_language") == "auto":
         try:
             language_confidence = float(config.get("last_language_confidence", 1.0))
