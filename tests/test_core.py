@@ -255,7 +255,10 @@ class CoreTests(unittest.TestCase):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
 
         self.assertIn('("TTS test", self._test_tts)', gui_source)
+        self.assertIn('("Virtual mic test", self._test_virtual_mic)', gui_source)
         self.assertIn('def _test_tts(self) -> None:', gui_source)
+        self.assertIn('def _test_virtual_mic(self) -> None:', gui_source)
+        self.assertIn("self._test_tts()", gui_source)
         self.assertIn('provider = config.get("tts_provider", "local")', gui_source)
         self.assertIn('tts.speak_local("Translation output test", device)', gui_source)
         self.assertIn('audio = tts.synthesize_openai_linear16("Translation output test")', gui_source)
@@ -1206,6 +1209,7 @@ class CoreTests(unittest.TestCase):
         readme = Path("README.md").read_text(encoding="utf-8")
 
         self.assertIn("TTS test", readme)
+        self.assertIn("Virtual mic test", readme)
         self.assertIn("TTS provider", readme)
         self.assertIn("OpenAI model", readme)
         self.assertIn("OpenAI TTS voice", readme)

@@ -44,7 +44,7 @@ Whisper 模型可放在 `models\whisper-small`；翻譯模型放在 `models\tran
 4. 選擇 `Scenario` 後按 `Apply scenario` 套用常用場景。
 5. 按 `Run diagnostics` 檢查 runtime、模型、音訊與 API 設定。
 6. 按 `Subtitle test` 確認字幕 bar 會出現。
-7. 按 `Speaker test`、`Mic test`、`TTS test` 確認聲音路由。
+7. 按 `Speaker test`、`Mic test`、`TTS test`、`Virtual mic test` 確認聲音路由。
 8. 按 `Start` 開始翻譯。
 
 ## VB-CABLE 路由

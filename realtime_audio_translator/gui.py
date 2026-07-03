@@ -154,7 +154,7 @@ def diagnostic_action_label(action: str) -> str:
     return {
         "open_runtime": "Open runtime folder / Download runtime files",
         "download_model": "Download model",
-        "audio_settings": "Speaker test / Mic test / TTS test",
+        "audio_settings": "Speaker test / Mic test / Virtual mic test",
         "api_settings": "API test",
         "local_translation": "Fix local translation",
         "optimize_settings": "Optimize settings",
@@ -350,6 +350,7 @@ class TranslatorApp(tk.Tk):
             ("API test", self._test_api),
             ("Device tone", self._test_tone),
             ("TTS test", self._test_tts),
+            ("Virtual mic test", self._test_virtual_mic),
             ("Speaker test", self._test_speaker),
             ("Mic test", self._test_mic),
             ("Subtitle test", self._test_subtitles),
@@ -590,7 +591,7 @@ class TranslatorApp(tk.Tk):
             "2. Download model or put model zip under the models folder.\n"
             "3. Select speaker, microphone, and TTS output.\n"
             "4. For Discord, select CABLE Output as microphone and CABLE Input as TTS output.\n"
-            "5. Run Subtitle test, Speaker test, Mic test, and TTS test before Start.",
+            "5. Run Subtitle test, Speaker test, Mic test, and Virtual mic test before Start.",
         )
 
     def _recommend(self) -> None:
@@ -704,6 +705,9 @@ class TranslatorApp(tk.Tk):
             self.status.set("tts output tested")
         except Exception as exc:
             messagebox.showerror("TTS test failed", str(exc))
+
+    def _test_virtual_mic(self) -> None:
+        self._test_tts()
 
     def _test_speaker(self) -> None:
         try:
