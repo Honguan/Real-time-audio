@@ -6,7 +6,7 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from .audio import audio_segment_active, capture_wav, find_device, format_device_label, list_audio_devices
-from .ai_auto_tuner import apply_tuning, recommend_tuning
+from .ai_orchestrator import plan_session
 from .commands import refresh_commands
 from .config import APP_DIR, clear_cache, clear_logs, ensure_glossary_file, load_config, save_config
 from .diagnostics import collect_diagnostics
@@ -612,14 +612,13 @@ class TranslatorApp(tk.Tk):
         if exe.exists():
             cuda = subprocess.run([str(exe), "--checkcuda"], capture_output=True, text=True, check=False)
             devices, vram_gb = cuda_hardware_from_check_output(cuda.stdout + cuda.stderr)
-        recommendations = recommend_tuning(config, devices, vram_gb)
-        if not recommendations:
+        decision = plan_session(config, self.repo_root, devices, vram_gb)
+        if not decision.recommendations:
             self.status.set("settings already optimized")
             return
-        updated = apply_tuning(config, recommendations)
-        self._load_config_into_widgets(updated)
+        self._load_config_into_widgets(decision.config)
         self._save()
-        self.status.set("; ".join(item.title for item in recommendations))
+        self.status.set(decision.summary)
 
     def _download_model(self) -> None:
         self._save()

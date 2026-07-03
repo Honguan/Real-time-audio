@@ -12,6 +12,7 @@ from realtime_audio_translator.audio import audio_segment_active, device_name_fr
 from realtime_audio_translator.asr import AudioTranscriber, add_runtime_dll_directory, add_xxl_data
 from realtime_audio_translator.commands import parse_help_options
 from realtime_audio_translator.config import DEFAULT_CONFIG, clear_cache, clear_logs, ensure_app_dirs, ensure_glossary_file, load_config, save_config
+from realtime_audio_translator.ai_orchestrator import plan_session
 from realtime_audio_translator.ai_auto_tuner import apply_tuning, recommend_tuning
 from realtime_audio_translator.ai_confidence import build_confidence_snapshot, format_confidence_status
 from realtime_audio_translator.ai_memory import add_glossary_term, cache_translation, cached_translation
@@ -347,6 +348,29 @@ class CoreTests(unittest.TestCase):
         self.assertTrue(two_way["microphone_enabled"])
         self.assertEqual(base["performance_mode"], DEFAULT_CONFIG["performance_mode"])
 
+    def test_ai_orchestrator_combines_scenario_tuning_and_diagnostics_without_enabling_cloud(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config = DEFAULT_CONFIG.copy()
+            config["provider"] = "local"
+            config["tts_provider"] = "local"
+            config["scenario"] = "game_voice"
+            config["performance_mode"] = "quality"
+            config["device"] = "cuda"
+            config["model"] = "large-v3-turbo"
+
+            decision = plan_session(config, root, cuda_devices=0, vram_gb=0)
+
+        self.assertEqual(decision.config["scenario"], "game_voice")
+        self.assertEqual(decision.config["performance_mode"], "low_latency")
+        self.assertEqual(decision.config["device"], "cpu")
+        self.assertEqual(decision.config["model"], "medium")
+        self.assertEqual(decision.config["provider"], "local")
+        self.assertEqual(decision.config["tts_provider"], "local")
+        self.assertIn("use_cpu_medium", [item.code for item in decision.recommendations])
+        self.assertIn("runtime_missing", [item.code for item in decision.issues])
+        self.assertIn("本機免費模式", decision.summary)
+
     def test_auto_tuner_recommends_cpu_medium_without_cuda(self):
         config = DEFAULT_CONFIG.copy()
         config["device"] = "cuda"
@@ -429,7 +453,7 @@ class CoreTests(unittest.TestCase):
         self.assertIn('("Run diagnostics", self._run_diagnostics)', gui_source)
         self.assertIn("def _show_first_run_wizard", gui_source)
         self.assertIn("collect_diagnostics", gui_source)
-        self.assertIn("recommend_tuning", gui_source)
+        self.assertIn("plan_session", gui_source)
 
     def test_diagnostic_action_label_shows_user_button_names(self):
         self.assertEqual(diagnostic_action_label("open_runtime"), "Open runtime folder / Download runtime files")
@@ -979,6 +1003,14 @@ class CoreTests(unittest.TestCase):
             self.assertIn("信心", text)
             self.assertIn("本機/雲端", text)
             self.assertIn("費用", text)
+
+    def test_readme_and_release_notes_mention_ai_orchestrator(self):
+        readme = Path("README.md").read_text(encoding="utf-8")
+        notes = Path("docs/RELEASE_NOTES.md").read_text(encoding="utf-8")
+
+        for text in (readme, notes):
+            self.assertIn("AI 決策中樞", text)
+            self.assertIn("Optimize settings", text)
 
     def test_readme_mentions_open_logs(self):
         readme = Path("README.md").read_text(encoding="utf-8")
