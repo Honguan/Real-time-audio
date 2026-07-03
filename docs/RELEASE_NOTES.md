@@ -8,7 +8,8 @@
 4. 狀態列會顯示信心提示、延遲、provider、本機/雲端模式與是否可能產生費用。
 5. 若語言判斷信心偏低，診斷會提示把 `Source language` 從 `auto` 改成固定語言。
 6. 可按 `Check updates` 檢查 GitHub Releases 是否有新版本。
-7. 若提示缺 runtime，下載並解壓這兩個檔案：
+7. 可按 `Export subtitles` 把最新 JSONL 對話紀錄匯出成 SRT，檔案放在 `%USERPROFILE%\.realtime-audio\exports\subtitles`。
+8. 若提示缺 runtime，下載並解壓這兩個檔案：
 
 ```text
 RealtimeAudioTranslator-runtime-cuda12-core-<tag>.7z

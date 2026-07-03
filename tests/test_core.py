@@ -24,6 +24,7 @@ from realtime_audio_translator.models import cuda_hardware_from_check_output, li
 from realtime_audio_translator.providers import TextToSpeech, Translator, build_google_translate_request, build_openai_translation_request
 from realtime_audio_translator.release_updater import RELEASES_URL, current_version, is_newer_version, latest_release_tag_from_json, release_update_message
 from realtime_audio_translator.scenarios import SCENARIO_CHOICES, apply_scenario
+from realtime_audio_translator.subtitle_export import export_jsonl_to_srt, srt_timestamp
 
 
 class CoreTests(unittest.TestCase):
@@ -111,7 +112,10 @@ class CoreTests(unittest.TestCase):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
 
         self.assertIn('("Open logs", self._open_logs)', gui_source)
+        self.assertIn('("Export subtitles", self._export_subtitles)', gui_source)
         self.assertIn('def _open_logs(self) -> None:', gui_source)
+        self.assertIn('def _export_subtitles(self) -> None:', gui_source)
+        self.assertIn("export_jsonl_to_srt", gui_source)
         self.assertIn('subprocess.Popen(["explorer", str(path)])', gui_source)
 
     def test_open_app_folder_button_opens_app_dir(self):
@@ -881,6 +885,31 @@ class CoreTests(unittest.TestCase):
             row = json.loads((Path(tmp) / "session.jsonl").read_text(encoding="utf-8").splitlines()[0])
             self.assertEqual(row["latency_seconds"], 1.25)
 
+    def test_jsonl_log_exports_to_srt(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            jsonl = root / "session.jsonl"
+            jsonl.write_text(
+                "\n".join(
+                    [
+                        json.dumps({"direction": "speaker", "text": "hello", "translated_text": "你好"}, ensure_ascii=False),
+                        json.dumps({"direction": "microphone", "text": "謝謝", "translated_text": "thanks"}, ensure_ascii=False),
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            srt = export_jsonl_to_srt(jsonl, root / "exports" / "subtitles")
+
+            self.assertEqual(srt, root / "exports" / "subtitles" / "session.srt")
+            text = srt.read_text(encoding="utf-8")
+            self.assertIn("00:00:00,000 --> 00:00:03,000", text)
+            self.assertIn("speaker: 你好", text)
+            self.assertIn("00:00:03,000 --> 00:00:06,000", text)
+            self.assertIn("microphone: thanks", text)
+            self.assertEqual(srt_timestamp(3.25), "00:00:03,250")
+
     def test_pause_discards_stale_audio_segments(self):
         segments = queue.Queue()
         segments.put("old-1.wav")
@@ -1076,6 +1105,14 @@ class CoreTests(unittest.TestCase):
 
         self.assertIn("Open app folder", readme)
         self.assertIn("%USERPROFILE%\\.realtime-audio", readme)
+
+    def test_readme_and_release_notes_mention_subtitle_export(self):
+        readme = Path("README.md").read_text(encoding="utf-8")
+        notes = Path("docs/RELEASE_NOTES.md").read_text(encoding="utf-8")
+
+        for text in (readme, notes):
+            self.assertIn("Export subtitles", text)
+            self.assertIn("%USERPROFILE%\\.realtime-audio\\exports\\subtitles", text)
 
     def test_readme_mentions_tts_test_provider(self):
         readme = Path("README.md").read_text(encoding="utf-8")

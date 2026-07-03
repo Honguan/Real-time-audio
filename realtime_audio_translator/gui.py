@@ -17,6 +17,7 @@ from .providers import TextToSpeech, Translator, google_access_token
 from .release_updater import RELEASES_URL, current_version, latest_release_tag, release_update_message
 from .runtime import DEFAULT_RUNTIME_DIR, RUNTIME_RELEASE_URL, UPSTREAM_RUNTIME_RELEASE_URL, install_runtime_from, runtime_dir, runtime_install_message, runtime_status, whisper_exe
 from .scenarios import SCENARIO_CHOICES, apply_scenario
+from .subtitle_export import export_jsonl_to_srt
 from .tts import list_windows_sapi_voices, play_linear16
 
 
@@ -367,6 +368,7 @@ class TranslatorApp(tk.Tk):
             ("Fix local translation", lambda: self._troubleshoot("local_translation")),
             ("Clear cache", self._clear_cache),
             ("Open logs", self._open_logs),
+            ("Export subtitles", self._export_subtitles),
             ("Clear logs", self._clear_logs),
         ):
             ttk.Button(buttons, text=text, command=command).pack(side="left", padx=3)
@@ -801,6 +803,16 @@ class TranslatorApp(tk.Tk):
         path = Path(self.config.get("log_dir") or APP_DIR / "logs")
         path.mkdir(parents=True, exist_ok=True)
         subprocess.Popen(["explorer", str(path)])
+
+    def _export_subtitles(self) -> None:
+        self._save()
+        log_dir = Path(self.config.get("log_dir") or APP_DIR / "logs")
+        logs = sorted(log_dir.glob("*.jsonl"), key=lambda path: path.stat().st_mtime, reverse=True)
+        if not logs:
+            self.status.set("no logs to export")
+            return
+        srt = export_jsonl_to_srt(logs[0], APP_DIR / "exports" / "subtitles")
+        self.status.set(f"subtitles exported: {srt}")
 
     def _clear_logs(self) -> None:
         self._save()

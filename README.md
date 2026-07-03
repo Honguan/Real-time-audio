@@ -61,6 +61,7 @@ RealtimeAudioTranslator-runtime-cuda12-dlls-<tag>.7z
 - `Push to talk`：按住才送出我方翻譯語音。
 - `Record logs`：儲存對話紀錄。
 - `Open logs`：開啟紀錄資料夾。
+- `Export subtitles`：把最新 JSONL 對話紀錄匯出成 SRT，檔案放在 `%USERPROFILE%\.realtime-audio\exports\subtitles`。
 - `Open app folder`：開啟 `%USERPROFILE%\.realtime-audio`。
 - `Show language`：在字幕前顯示語言代碼。
 - `Apply scenario`：套用遊戲、Discord、會議、字幕-only 或雙向翻譯預設。
