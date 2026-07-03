@@ -103,6 +103,29 @@ class CoreTests(unittest.TestCase):
 
             self.assertEqual(load_config(root)["target_language"], "ko")
 
+    def test_load_config_accepts_public_ui_mode_alias(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ensure_app_dirs(root)
+            (root / "config" / "settings.json").write_text(json.dumps({"ui_mode": "advanced"}), encoding="utf-8")
+
+            self.assertTrue(load_config(root)["advanced_mode"])
+
+    def test_save_config_mirrors_public_mode_and_log_aliases(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config = DEFAULT_CONFIG.copy()
+            config["advanced_mode"] = True
+            config["record_logs"] = True
+            config["overlay_topmost"] = False
+
+            save_config(root, config)
+
+            saved = json.loads((root / "config" / "settings.json").read_text(encoding="utf-8"))
+            self.assertEqual(saved["ui_mode"], "advanced")
+            self.assertTrue(saved["save_conversation_history"])
+            self.assertFalse(saved["subtitle_always_on_top"])
+
     def test_ensure_glossary_file_creates_parent_and_preserves_existing(self):
         with tempfile.TemporaryDirectory() as tmp:
             glossary = Path(tmp) / "nested" / "glossary.json"
