@@ -87,6 +87,21 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
             "啟動 LibreTranslate 後填入 http://127.0.0.1:5000/translate，或改用雲端 provider",
             "local_translation",
         ))
+    if config.get("source_language") == "auto":
+        try:
+            language_confidence = float(config.get("last_language_confidence", 1.0))
+        except Exception:
+            language_confidence = 1.0
+        if language_confidence < 0.7:
+            detected = config.get("last_detected_language") or "目前語言"
+            issues.append(DiagnosticIssue(
+                "language_lock_recommended",
+                "info",
+                "語言判斷信心偏低",
+                f"最近偵測為 {detected}，信心約 {round(language_confidence * 100)}%",
+                "若字幕語言跳動，請把 Source language 從 auto 改成固定語言。",
+                "language_settings",
+            ))
     if config.get("ai_auto_optimize", True):
         latency = config.get("last_latency_seconds")
         try:

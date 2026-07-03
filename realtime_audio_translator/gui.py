@@ -155,6 +155,7 @@ def diagnostic_action_label(action: str) -> str:
         "api_settings": "API test",
         "local_translation": "Fix local translation",
         "optimize_settings": "Optimize settings",
+        "language_settings": "Source language",
     }.get(action, action)
 
 

@@ -331,6 +331,29 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(auto_issue.severity, "info")
         self.assertIn("遊戲場景使用低延遲模式", auto_issue.detail)
 
+    def test_diagnostics_suggest_locking_language_when_auto_detection_is_uncertain(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            runtime = root / "runtime"
+            model = root / "models" / "medium"
+            runtime.mkdir()
+            model.mkdir(parents=True)
+            (runtime / "faster-whisper-xxl.exe").write_text("exe", encoding="utf-8")
+            (runtime / "ffmpeg.exe").write_text("ff", encoding="utf-8")
+            (runtime / "_xxl_data").mkdir()
+            config = DEFAULT_CONFIG.copy()
+            config["runtime_dir"] = str(runtime)
+            config["model"] = "medium"
+            config["source_language"] = "auto"
+            config["last_detected_language"] = "en"
+            config["last_language_confidence"] = 0.42
+
+            issues = collect_diagnostics(config, root)
+
+        issue = next(item for item in issues if item.code == "language_lock_recommended")
+        self.assertEqual(issue.severity, "info")
+        self.assertEqual(issue.action, "language_settings")
+
     def test_scenarios_apply_expected_existing_settings(self):
         self.assertEqual(SCENARIO_CHOICES, ("game_voice", "discord_chat", "meeting", "subtitle_only", "two_way"))
         base = DEFAULT_CONFIG.copy()
@@ -1012,6 +1035,14 @@ class CoreTests(unittest.TestCase):
             self.assertIn("AI 決策中樞", text)
             self.assertIn("Optimize settings", text)
 
+    def test_readme_and_release_notes_mention_language_lock_hint(self):
+        readme = Path("README.md").read_text(encoding="utf-8")
+        notes = Path("docs/RELEASE_NOTES.md").read_text(encoding="utf-8")
+
+        for text in (readme, notes):
+            self.assertIn("語言判斷", text)
+            self.assertIn("Source language", text)
+
     def test_readme_mentions_open_logs(self):
         readme = Path("README.md").read_text(encoding="utf-8")
 
@@ -1411,6 +1442,40 @@ class CoreTests(unittest.TestCase):
         self.assertIn("本機免費模式", statuses[-1])
         self.assertIn("provider local", statuses[-1])
         self.assertIn("latency", statuses[-1])
+
+    def test_engine_records_language_confidence_for_diagnostics(self):
+        config = DEFAULT_CONFIG.copy()
+        config["record_logs"] = False
+        config["source_language"] = "auto"
+        engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, lambda status: None)
+
+        class Transcriber:
+            last_language = "en"
+            last_language_probability = 0.42
+
+            def transcribe(self, wav, source_language):
+                return "hello"
+
+        class Translator:
+            def translate(self, text, source_language, target_language):
+                engine.running = False
+                return "你好"
+
+        class Worker:
+            def __init__(self, wav):
+                self.queue = queue.Queue()
+                self.queue.put(wav)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            wav = Path(tmp) / "clip.wav"
+            self._write_wav(wav, 12000)
+            engine.running = True
+            engine.transcriber = Transcriber()
+            engine.translator = Translator()
+            engine._process_segments("me", Worker(wav))
+
+        self.assertEqual(engine.config["last_detected_language"], "en")
+        self.assertEqual(engine.config["last_language_confidence"], 0.42)
 
     def test_engine_uses_openai_tts_provider_for_mic_output(self):
         import realtime_audio_translator.engine as engine_module

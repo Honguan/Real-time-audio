@@ -149,6 +149,10 @@ class RealtimeEngine:
                 detected_source = getattr(self.transcriber, "last_language", None) if source == "auto" else None
                 source_for_output = detected_source or source
                 language_confidence = getattr(self.transcriber, "last_language_probability", None)
+                if detected_source:
+                    self.config["last_detected_language"] = detected_source
+                if language_confidence is not None:
+                    self.config["last_language_confidence"] = language_confidence
                 asr_confidence = getattr(self.transcriber, "last_confidence", None)
                 translation_confidence = None
                 translation_latency = None

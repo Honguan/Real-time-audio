@@ -6,7 +6,8 @@
 2. 解壓後執行 `RealtimeAudioTranslator.exe`。
 3. 第一次開啟會提示 runtime / model 診斷；可用 `Scenario` 選場景，按 `Apply scenario` 套用預設，也可按 `Optimize settings` 讓 AI 決策中樞依場景、硬體、延遲與診斷結果調整設定，再按 `Run diagnostics` 檢查設定。
 4. 狀態列會顯示信心提示、延遲、provider、本機/雲端模式與是否可能產生費用。
-5. 若提示缺 runtime，下載並解壓這兩個檔案：
+5. 若語言判斷信心偏低，診斷會提示把 `Source language` 從 `auto` 改成固定語言。
+6. 若提示缺 runtime，下載並解壓這兩個檔案：
 
 ```text
 RealtimeAudioTranslator-runtime-cuda12-core-<tag>.7z

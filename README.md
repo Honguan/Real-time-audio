@@ -67,6 +67,7 @@ RealtimeAudioTranslator-runtime-cuda12-dlls-<tag>.7z
 - `Optimize settings`：使用 AI 決策中樞依場景、硬體、延遲與診斷結果切換模型、裝置與低延遲設定。
 - `Run diagnostics`：顯示目前缺少的 runtime、模型、音訊或 API 設定。
 - 狀態列會顯示信心提示、延遲、provider、本機/雲端模式與是否可能產生費用。
+- 若語言判斷信心偏低，診斷會提示把 `Source language` 從 `auto` 改成固定語言。
 
 `Push to talk` 會 hold it to unmute TTS output，按住才輸出我方翻譯語音。
 
