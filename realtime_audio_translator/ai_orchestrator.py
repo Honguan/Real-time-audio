@@ -15,7 +15,10 @@ class SessionPlan:
 
 
 def plan_session(config: dict, repo_root: Path, cuda_devices: int = 0, vram_gb: float = 0, latency_seconds: float | None = None) -> SessionPlan:
+    record_logs_enabled = bool(config.get("record_logs", False))
     planned = apply_scenario(config, str(config.get("scenario", "discord_chat")))
+    if not record_logs_enabled:
+        planned["record_logs"] = False
     recommendations = recommend_tuning(planned, cuda_devices, vram_gb, latency_seconds)
     planned = apply_tuning(planned, recommendations)
     issues = collect_diagnostics(planned, repo_root)

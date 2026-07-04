@@ -777,6 +777,16 @@ class CoreTests(unittest.TestCase):
         self.assertIn("runtime_missing", [item.code for item in decision.issues])
         self.assertIn("本機免費模式", decision.summary)
 
+    def test_ai_orchestrator_does_not_enable_logs_without_consent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = DEFAULT_CONFIG.copy()
+            config["scenario"] = "meeting"
+            config["record_logs"] = False
+
+            decision = plan_session(config, Path(tmp), cuda_devices=1, vram_gb=6)
+
+        self.assertFalse(decision.config["record_logs"])
+
     def test_auto_tuner_recommends_cpu_medium_without_cuda(self):
         config = DEFAULT_CONFIG.copy()
         config["device"] = "cuda"
