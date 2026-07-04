@@ -974,6 +974,7 @@ class CoreTests(unittest.TestCase):
             (root / "logs" / "session.jsonl").write_text("secret", encoding="utf-8")
             (root / "cache" / "audio" / "clip.wav").write_bytes(b"audio")
             (root / "cache" / "temp_audio" / "clip.wav").write_bytes(b"audio")
+            cache_translation(root / "cache" / "translation_cache.db", "local", "en", "zh", "hello", "你好")
 
             clear_logs(root)
             clear_cache(root)
@@ -981,6 +982,7 @@ class CoreTests(unittest.TestCase):
             self.assertEqual([path.name for path in (root / "logs").iterdir()], ["app.log"])
             self.assertEqual(list((root / "cache" / "audio").iterdir()), [])
             self.assertEqual(list((root / "cache" / "temp_audio").iterdir()), [])
+            self.assertIsNone(cached_translation(root / "cache" / "translation_cache.db", "local", "en", "zh", "hello"))
 
     def test_app_log_appends_json_lines(self):
         with tempfile.TemporaryDirectory() as tmp:

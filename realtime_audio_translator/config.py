@@ -181,4 +181,5 @@ def clear_logs(root: Path = APP_DIR, log_dir: Path | None = None) -> None:
 def clear_cache(root: Path = APP_DIR) -> None:
     shutil.rmtree(root / "cache" / "audio", ignore_errors=True)
     shutil.rmtree(root / "cache" / "temp_audio", ignore_errors=True)
+    (root / "cache" / "translation_cache.db").unlink(missing_ok=True)
     ensure_app_dirs(root)
