@@ -228,6 +228,10 @@ def cloud_activation_requires_confirmation(old_provider: str, old_tts_provider: 
     return bool(new_cloud - old_cloud)
 
 
+def record_logs_requires_confirmation(old_record_logs: bool, new_record_logs: bool) -> bool:
+    return not old_record_logs and new_record_logs
+
+
 class Overlay(tk.Toplevel):
     def __init__(self, master: tk.Tk, topmost: bool, opacity: float, font_size: int):
         super().__init__(master)
@@ -722,6 +726,9 @@ class TranslatorApp(tk.Tk):
 
     def _apply_scenario(self) -> None:
         updated = apply_scenario(self._config_from_vars(), self.vars["scenario"].get())
+        if record_logs_requires_confirmation(bool(self.config.get("record_logs", False)), bool(updated.get("record_logs", False))):
+            if not messagebox.askyesno("Enable conversation logs?", "這個場景會開啟對話紀錄。\n是否允許本機保存本次對話紀錄？"):
+                updated["record_logs"] = False
         self._load_config_into_widgets(updated)
         self._save()
         self.status.set(f"scenario applied: {updated['scenario']}")
