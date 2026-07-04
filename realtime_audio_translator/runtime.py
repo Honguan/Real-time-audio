@@ -47,9 +47,9 @@ def runtime_status(root: Path = DEFAULT_RUNTIME_DIR) -> dict:
 def runtime_install_message(root: Path = DEFAULT_RUNTIME_DIR) -> str:
     return (
         "尚未找到語音辨識 runtime。\n"
-        f"請到 {RUNTIME_RELEASE_URL} 下載兩個 runtime 壓縮檔：\n"
+        f"請到 {RUNTIME_RELEASE_URL} 下載 runtime 壓縮檔：\n"
         "RealtimeAudioTranslator-runtime-cuda12-<version>.zip\n"
-        f"兩個都解壓到：\n{root}\n"
+        f"解壓到：\n{root}\n"
         "或點選「選擇 runtime 資料夾」手動指定位置。\n"
         f"備用來源：{UPSTREAM_RUNTIME_RELEASE_URL} 的 Faster-Whisper-XXL Windows runtime 和 {CUDA_PACKAGE_NAME}。\n"
         f"資料夾需要直接包含：{', '.join(REQUIRED_RUNTIME_ITEMS)}。\n"

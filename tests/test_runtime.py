@@ -59,6 +59,8 @@ class RuntimeTests(unittest.TestCase):
 
         self.assertIn("runtime", message)
         self.assertIn("RealtimeAudioTranslator-runtime-cuda12-<version>.zip", message)
+        self.assertNotIn("兩個 runtime", message)
+        self.assertNotIn("兩個都", message)
         self.assertIn("Faster-Whisper-XXL Windows runtime", message)
         self.assertIn("https://github.com/Honguan/Real-time-audio/releases", message)
         self.assertIn("https://github.com/Purfview/whisper-standalone-win/releases", message)

@@ -40,7 +40,7 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
             "error",
             "找不到語音辨識 runtime",
             f"缺少：{', '.join(status['missing'])}",
-            f"下載 runtime core 與 CUDA12 DLL，解壓到 {status['path']}",
+            f"下載 RealtimeAudioTranslator-runtime-cuda12-<version>.zip，解壓到 {status['path']}",
             "open_runtime",
         ))
     if status["ready"] and status["warnings"]:
@@ -139,7 +139,7 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
             "error",
             "ffmpeg 無法呼叫",
             "最近一次 runtime 檢查無法執行 ffmpeg",
-            "重新解壓 runtime core，確認 ffmpeg.exe 直接放在 runtime 資料夾",
+            "重新解壓 runtime zip，確認 ffmpeg.exe 直接放在 runtime 資料夾",
             "open_runtime",
         ))
     if config.get("last_mic_quiet"):

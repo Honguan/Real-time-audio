@@ -55,7 +55,7 @@ RealtimeAudioTranslator-runtime-cuda12-<tag>.zip
 
 - 沒有字幕：確認 `Show overlay` 已開啟，並按 `Subtitle test`。
 - 聽不到對方聲音：確認喇叭來源選的是 Discord 或遊戲正在播放的裝置，再按 `Speaker test`。
-- 找不到 runtime：確認兩個 runtime 檔案都已解壓到 `%USERPROFILE%\.realtime-audio\runtime\cuda12`。
+- 找不到 runtime：確認 `RealtimeAudioTranslator-runtime-cuda12-<tag>.zip` 已解壓到 `%USERPROFILE%\.realtime-audio\runtime\cuda12`。
 - 找不到模型：在工具內下載模型，或解壓模型 zip 到 `%USERPROFILE%\.realtime-audio\models`。
 - 對方聽不到翻譯語音：確認 `Speak translations` 與 `Virtual mic output` 已開啟，且 `TTS output` 選 `CABLE Input`。
 - Discord 沒有收到虛擬麥克風聲音：Discord 麥克風請選 `CABLE Output (VB-Audio Virtual Cable)`。

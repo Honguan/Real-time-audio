@@ -420,6 +420,9 @@ class CoreTests(unittest.TestCase):
         self.assertIn("model_missing", codes)
         self.assertIn("feedback_risk", codes)
         self.assertIn("cloud_credentials_missing", codes)
+        runtime_issue = next(issue for issue in issues if issue.code == "runtime_missing")
+        self.assertIn("RealtimeAudioTranslator-runtime-cuda12-<version>.zip", runtime_issue.fix)
+        self.assertNotIn("runtime core", runtime_issue.fix)
         self.assertTrue(all(isinstance(issue.title, str) for issue in issues))
         self.assertTrue(all(issue.action for issue in issues))
 
@@ -1544,6 +1547,7 @@ class CoreTests(unittest.TestCase):
         self.assertIn("https://github.com/Purfview/whisper-standalone-win/releases", notes)
         self.assertIn("cuBLAS.and.cuDNN_CUDA12_win_v3.7z", notes)
         self.assertIn("Local translate URL", notes)
+        self.assertNotIn("兩個 runtime", notes)
 
     def test_quick_start_doc_exists_for_app_zip(self):
         quick_start = Path("docs/README_QUICK_START_zh-TW.txt").read_text(encoding="utf-8")
@@ -1568,6 +1572,7 @@ class CoreTests(unittest.TestCase):
 
         for path in (Path("README.md"), Path("docs/RELEASE_NOTES.md")):
             text = path.read_text(encoding="utf-8")
+            self.assertNotIn("兩個 runtime", text)
             for item in required:
                 self.assertIn(item, text)
 
