@@ -838,6 +838,8 @@ class CoreTests(unittest.TestCase):
             "Run diagnostics",
             "API test",
             "Virtual mic test",
+            "Speaker test",
+            "Subtitle test",
             "Start",
             "Clear cache",
             "Push to talk",
@@ -849,6 +851,8 @@ class CoreTests(unittest.TestCase):
         self.assertIn("Setup guide", simple)
         self.assertIn("Run diagnostics", simple)
         self.assertIn("Virtual mic test", simple)
+        self.assertIn("Speaker test", simple)
+        self.assertIn("Subtitle test", simple)
         self.assertIn("Start", simple)
         self.assertIn("Push to talk", simple)
         self.assertNotIn("Refresh", simple)

@@ -79,6 +79,8 @@ BASIC_BUTTON_TEXTS = {
     "Start",
     "Stop",
     "Mic test",
+    "Speaker test",
+    "Subtitle test",
     "Virtual mic test",
     "Push to talk",
     "Quit",
