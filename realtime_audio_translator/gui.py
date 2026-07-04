@@ -82,6 +82,7 @@ BASIC_BUTTON_TEXTS = {
     "Download model",
     "Run diagnostics",
     "Lock language",
+    "Fix last translation",
     "API test",
     "Open app folder",
     "Start",
@@ -424,6 +425,7 @@ class TranslatorApp(tk.Tk):
             ("Open app folder", self._open_app_dir),
             ("Open glossary", self._open_glossary),
             ("Add glossary term", self._add_glossary_term),
+            ("Fix last translation", self._fix_last_translation),
             ("API test", self._test_api),
             ("Device tone", self._test_tone),
             ("TTS test", self._test_tts),
@@ -629,6 +631,19 @@ class TranslatorApp(tk.Tk):
         path = ensure_glossary_file(Path(self.config.get("glossary_path") or APP_DIR / "glossary.json"))
         add_glossary_term(path, source, target)
         self.status.set("glossary term added")
+
+    def _fix_last_translation(self) -> None:
+        self._save()
+        source = str(self.config.get("last_source_text") or "").strip()
+        if not source:
+            self.status.set("no recent translation to fix")
+            return
+        target = simpledialog.askstring("Fix last translation", f"Correct translation for:\n{source}", initialvalue=str(self.config.get("last_translated_text") or ""))
+        if not target:
+            return
+        path = ensure_glossary_file(Path(self.config.get("glossary_path") or APP_DIR / "glossary.json"))
+        add_glossary_term(path, source, target)
+        self.status.set("translation fix added to glossary")
 
     def _import_runtime(self) -> None:
         source = filedialog.askdirectory(title="Select extracted Faster-Whisper-XXL folder")

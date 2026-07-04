@@ -42,7 +42,7 @@ RealtimeAudioTranslator-runtime-cuda12-<tag>.zip
 
 若 Release 沒有 runtime 檔案，可到 https://github.com/Purfview/whisper-standalone-win/releases 下載 Faster-Whisper-XXL Windows runtime 和 `cuBLAS.and.cuDNN_CUDA12_win_v3.7z`。本機翻譯可在 `Local translate URL` 填入 LibreTranslate 端點。
 
-翻譯快取會保存在 `%USERPROFILE%\.realtime-audio\cache\translation_cache.db`，術語可用 `Add glossary term` 加入，或用 `Open glossary` 編輯。
+翻譯快取會保存在 `%USERPROFILE%\.realtime-audio\cache\translation_cache.db`，術語可用 `Add glossary term` 加入，也可用 `Fix last translation` 修正最近一句，或用 `Open glossary` 編輯。
 
 ## VB-CABLE 設定
 

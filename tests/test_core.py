@@ -1163,6 +1163,8 @@ class CoreTests(unittest.TestCase):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
 
         self.assertIn('("Add glossary term", self._add_glossary_term)', gui_source)
+        self.assertIn('("Fix last translation", self._fix_last_translation)', gui_source)
+        self.assertIn("last_source_text", gui_source)
         self.assertIn("simpledialog.askstring", gui_source)
         self.assertIn("add_glossary_term", gui_source)
 
@@ -1695,6 +1697,7 @@ class CoreTests(unittest.TestCase):
 
         for text in (readme, notes):
             self.assertIn("Add glossary term", text)
+            self.assertIn("Fix last translation", text)
             self.assertIn("術語", text)
 
     def test_readme_mentions_tts_test_provider(self):
@@ -2166,6 +2169,36 @@ class CoreTests(unittest.TestCase):
             engine._process_segments("speaker", Worker(wav))
 
         self.assertTrue(engine.config["last_translation_empty"])
+
+    def test_engine_remembers_last_translation_for_glossary_fix(self):
+        config = DEFAULT_CONFIG.copy()
+        config["record_logs"] = False
+        engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, lambda status: None)
+
+        class Transcriber:
+            def transcribe(self, wav, source_language):
+                return "push mid"
+
+        class Translator:
+            def translate(self, text, source_language, target_language):
+                engine.running = False
+                return "推中"
+
+        class Worker:
+            def __init__(self, wav):
+                self.queue = queue.Queue()
+                self.queue.put(wav)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            wav = Path(tmp) / "clip.wav"
+            self._write_wav(wav, 12000)
+            engine.running = True
+            engine.transcriber = Transcriber()
+            engine.translator = Translator()
+            engine._process_segments("me", Worker(wav))
+
+        self.assertEqual(engine.config["last_source_text"], "push mid")
+        self.assertEqual(engine.config["last_translated_text"], "推中")
 
     def test_engine_reports_confidence_status_after_successful_segment(self):
         statuses = []

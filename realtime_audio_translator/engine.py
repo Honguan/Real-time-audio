@@ -172,6 +172,9 @@ class RealtimeEngine:
                     translation_failed = True
                     self.status(f"{direction}: translation failed: {exc}")
                 self.config["last_translation_empty"] = not translation_failed and not bool(str(translated).strip())
+                if not translation_failed:
+                    self.config["last_source_text"] = text
+                    self.config["last_translated_text"] = translated
                 if translation_failed:
                     overlay_text = f"{source_for_output}: {text}" if self.config.get("show_language_labels") else text
                 else:
