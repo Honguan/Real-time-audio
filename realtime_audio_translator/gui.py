@@ -79,6 +79,7 @@ BASIC_BUTTON_TEXTS = {
     "Optimize settings",
     "Download model",
     "Run diagnostics",
+    "API test",
     "Start",
     "Stop",
     "Mic test",

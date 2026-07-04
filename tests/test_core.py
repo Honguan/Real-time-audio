@@ -861,6 +861,7 @@ class CoreTests(unittest.TestCase):
         self.assertIn("Optimize settings", simple)
         self.assertIn("Download model", simple)
         self.assertIn("Run diagnostics", simple)
+        self.assertIn("API test", simple)
         self.assertIn("Virtual mic test", simple)
         self.assertIn("Speaker test", simple)
         self.assertIn("Subtitle test", simple)
@@ -871,7 +872,6 @@ class CoreTests(unittest.TestCase):
         self.assertIn("Open logs", simple)
         self.assertIn("Clear logs", simple)
         self.assertNotIn("Refresh", simple)
-        self.assertNotIn("API test", simple)
         self.assertEqual(advanced, buttons)
 
     def test_clear_logs_and_cache_keep_app_dirs(self):
