@@ -1386,9 +1386,11 @@ class CoreTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             app_models = Path(tmp) / "models"
             (app_models / "faster-whisper-medium").mkdir(parents=True)
+            (app_models / "whisper-small").mkdir(parents=True)
 
             models = list_models(Path(tmp) / "missing", app_models)
 
+            self.assertIn("small", models)
             self.assertIn("medium", models)
             self.assertIn("large-v3-turbo", models)
 
@@ -1396,8 +1398,10 @@ class CoreTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             app_models = Path(tmp) / "models"
             (app_models / "faster-whisper-medium").mkdir(parents=True)
+            (app_models / "whisper-small").mkdir(parents=True)
 
             self.assertTrue(model_available("medium", Path(tmp) / "missing", app_models))
+            self.assertTrue(model_available("small", Path(tmp) / "missing", app_models))
             self.assertFalse(model_available("large-v3-turbo", Path(tmp) / "missing", app_models))
 
     def test_model_install_message_shows_model_folder(self):

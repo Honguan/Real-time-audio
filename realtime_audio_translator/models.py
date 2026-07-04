@@ -4,7 +4,7 @@ import wave
 from pathlib import Path
 
 
-KNOWN_MODELS = ("medium", "large-v3-turbo", "large-v2")
+KNOWN_MODELS = ("small", "medium", "large-v3-turbo", "large-v2")
 
 
 def model_path(model: str, local_models: Path, app_models: Path) -> Path | None:
@@ -12,7 +12,7 @@ def model_path(model: str, local_models: Path, app_models: Path) -> Path | None:
     if candidate.exists():
         return candidate
     for root in (local_models, app_models):
-        for name in (model, f"faster-whisper-{model}"):
+        for name in (model, f"faster-whisper-{model}", f"whisper-{model}"):
             path = root / name
             if path.exists():
                 return path
@@ -38,7 +38,7 @@ def list_models(local_models: Path, app_models: Path) -> list[str]:
             continue
         for path in root.iterdir():
             if path.is_dir():
-                found.add(path.name.replace("faster-whisper-", ""))
+                found.add(path.name.replace("faster-whisper-", "").replace("whisper-", ""))
     return sorted(found)
 
 
