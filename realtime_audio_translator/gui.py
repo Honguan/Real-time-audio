@@ -120,6 +120,14 @@ def first_run_wizard_needed(issues) -> bool:
     return any(issue.code in FIRST_RUN_ISSUE_CODES for issue in issues)
 
 
+def first_diagnostic_action(issues) -> str:
+    actions = ("open_runtime", "download_model", "audio_settings", "optimize_settings", "language_settings", "local_translation", "api_settings")
+    for action in actions:
+        if any(issue.action == action for issue in issues):
+            return action
+    return ""
+
+
 def performance_segment_seconds(mode: str) -> float:
     return {"low_latency": 1.5, "balanced": 2.0, "quality": 3.0, "offline_light": 2.5}.get(mode, 2.0)
 
@@ -685,9 +693,10 @@ class TranslatorApp(tk.Tk):
         else:
             self.runtime_text.set(runtime_install_message(runtime_dir(config)))
 
-    def _diagnostic_message(self) -> str:
+    def _diagnostic_message(self, issues=None) -> str:
         config = self._config_from_vars()
-        issues = collect_diagnostics(config, self.repo_root)
+        if issues is None:
+            issues = collect_diagnostics(config, self.repo_root)
         if not issues:
             return "目前沒有發現需要處理的設定問題。"
         log_path = Path(config.get("log_dir") or APP_DIR / "logs") / "app.log"
@@ -708,10 +717,36 @@ class TranslatorApp(tk.Tk):
         issues = collect_diagnostics(self._config_from_vars(), self.repo_root)
         if not first_run_wizard_needed(issues):
             return
-        messagebox.showinfo("First run setup", self._diagnostic_message())
+        self._show_diagnostics("First run setup", issues)
 
     def _run_diagnostics(self) -> None:
-        messagebox.showinfo("Diagnostics", self._diagnostic_message())
+        self._show_diagnostics("Diagnostics", collect_diagnostics(self._config_from_vars(), self.repo_root))
+
+    def _show_diagnostics(self, title: str, issues) -> None:
+        action = first_diagnostic_action(issues)
+        message = self._diagnostic_message(issues)
+        if action and messagebox.askyesno(title, f"{message}\n\n現在執行第一個修復動作：{diagnostic_action_label(action)}？"):
+            self._run_diagnostic_action(action)
+            return
+        if not action:
+            messagebox.showinfo(title, message)
+
+    def _run_diagnostic_action(self, action: str) -> None:
+        if action == "open_runtime":
+            self._open_runtime_dir()
+            webbrowser.open(RUNTIME_RELEASE_URL)
+        elif action == "download_model":
+            self._download_model()
+        elif action == "audio_settings":
+            self._show_setup_guide()
+        elif action == "optimize_settings":
+            self._optimize_settings()
+        elif action == "language_settings":
+            self._lock_language()
+        elif action == "local_translation":
+            self._troubleshoot("local_translation")
+        elif action == "api_settings":
+            self._test_api()
 
     def _lock_language(self) -> None:
         locked = language_lock_value(self.vars["source_language"].get(), self.config.get("last_detected_language", ""))

@@ -21,7 +21,7 @@ from realtime_audio_translator.ai_memory import add_glossary_term, cache_transla
 from realtime_audio_translator.app_log import append_app_log
 from realtime_audio_translator.diagnostics import DiagnosticIssue, collect_diagnostics
 from realtime_audio_translator.engine import RealtimeEngine, audio_devices_overlap, drain_queue, overlay_text_from_config
-from realtime_audio_translator.gui import LANGUAGE_CHOICES, PERFORMANCE_CHOICES, PROVIDER_CHOICES, TTS_PROVIDER_CHOICES, TranslatorApp, diagnostic_action_label, first_run_wizard_needed, format_overlay_line, language_lock_value, main_status_summary, mode_notice, overlay_clipboard_text, overlay_font_size_value, overlay_hold_seconds_value, overlay_opacity_value, overlay_visibility_action, performance_segment_seconds, record_logs_requires_confirmation, subtitle_updates_allowed, swap_language_values, troubleshooting_action, visible_button_texts, visible_setting_keys
+from realtime_audio_translator.gui import LANGUAGE_CHOICES, PERFORMANCE_CHOICES, PROVIDER_CHOICES, TTS_PROVIDER_CHOICES, TranslatorApp, diagnostic_action_label, first_diagnostic_action, first_run_wizard_needed, format_overlay_line, language_lock_value, main_status_summary, mode_notice, overlay_clipboard_text, overlay_font_size_value, overlay_hold_seconds_value, overlay_opacity_value, overlay_visibility_action, performance_segment_seconds, record_logs_requires_confirmation, subtitle_updates_allowed, swap_language_values, troubleshooting_action, visible_button_texts, visible_setting_keys
 from realtime_audio_translator.logbook import ConversationLog
 from realtime_audio_translator.models import cuda_hardware_from_check_output, list_models, model_available, model_download_command, model_install_message, models_dir, recommend_model
 from realtime_audio_translator.providers import TextToSpeech, Translator, build_google_translate_request, build_openai_translation_request
@@ -327,6 +327,17 @@ class CoreTests(unittest.TestCase):
 
         self.assertTrue(first_run_wizard_needed(issues))
         self.assertFalse(first_run_wizard_needed(info_only))
+
+    def test_first_diagnostic_action_prefers_runtime_then_model_then_audio(self):
+        issues = [
+            DiagnosticIssue("microphone_device_missing", "warning", "找不到麥克風", "", "", "audio_settings"),
+            DiagnosticIssue("model_missing", "error", "找不到模型", "", "", "download_model"),
+            DiagnosticIssue("runtime_missing", "error", "找不到 runtime", "", "", "open_runtime"),
+        ]
+
+        self.assertEqual(first_diagnostic_action(issues), "open_runtime")
+        self.assertEqual(first_diagnostic_action(issues[:2]), "download_model")
+        self.assertEqual(first_diagnostic_action([]), "")
 
     def test_push_to_talk_restores_previous_mute_state(self):
         app = TranslatorApp.__new__(TranslatorApp)
@@ -883,6 +894,9 @@ class CoreTests(unittest.TestCase):
         self.assertIn('("Optimize settings", self._optimize_settings)', gui_source)
         self.assertIn('("Run diagnostics", self._run_diagnostics)', gui_source)
         self.assertIn("def _show_first_run_wizard", gui_source)
+        self.assertIn("def _show_diagnostics", gui_source)
+        self.assertIn("def _run_diagnostic_action", gui_source)
+        self.assertIn("webbrowser.open(RUNTIME_RELEASE_URL)", gui_source)
         self.assertIn("collect_diagnostics", gui_source)
         self.assertIn("問題名稱", gui_source)
         self.assertIn("可能原因", gui_source)
