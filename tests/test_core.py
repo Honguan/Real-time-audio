@@ -839,6 +839,7 @@ class CoreTests(unittest.TestCase):
             "Refresh",
             "Apply scenario",
             "Optimize settings",
+            "Download model",
             "Run diagnostics",
             "API test",
             "Virtual mic test",
@@ -855,6 +856,7 @@ class CoreTests(unittest.TestCase):
         self.assertIn("Setup guide", simple)
         self.assertIn("Apply scenario", simple)
         self.assertIn("Optimize settings", simple)
+        self.assertIn("Download model", simple)
         self.assertIn("Run diagnostics", simple)
         self.assertIn("Virtual mic test", simple)
         self.assertIn("Speaker test", simple)

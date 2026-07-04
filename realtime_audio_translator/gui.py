@@ -77,6 +77,7 @@ BASIC_BUTTON_TEXTS = {
     "Setup guide",
     "Apply scenario",
     "Optimize settings",
+    "Download model",
     "Run diagnostics",
     "Start",
     "Stop",
