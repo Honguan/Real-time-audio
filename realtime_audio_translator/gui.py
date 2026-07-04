@@ -596,7 +596,15 @@ class TranslatorApp(tk.Tk):
         log_path = Path(config.get("log_dir") or APP_DIR / "logs") / "app.log"
         lines = []
         for issue in issues:
-            lines.append(f"[{issue.severity}] {issue.title}\n{issue.detail}\n修復：{issue.fix}\n可用按鈕：{diagnostic_action_label(issue.action)}\n進階日誌：{log_path}")
+            lines.append(
+                f"[{issue.severity}]\n"
+                f"問題名稱：{issue.title}\n"
+                f"可能原因：{issue.detail}\n"
+                f"自動檢查結果：{issue.code}\n"
+                f"建議修復步驟：{issue.fix}\n"
+                f"一鍵修復按鈕：{diagnostic_action_label(issue.action)}\n"
+                f"進階日誌：{log_path}"
+            )
         return "\n\n".join(lines)
 
     def _show_first_run_wizard(self) -> None:
