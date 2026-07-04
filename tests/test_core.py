@@ -20,7 +20,7 @@ from realtime_audio_translator.ai_memory import add_glossary_term, cache_transla
 from realtime_audio_translator.app_log import append_app_log
 from realtime_audio_translator.diagnostics import collect_diagnostics
 from realtime_audio_translator.engine import RealtimeEngine, audio_devices_overlap, drain_queue, overlay_text_from_config
-from realtime_audio_translator.gui import LANGUAGE_CHOICES, PERFORMANCE_CHOICES, PROVIDER_CHOICES, TTS_PROVIDER_CHOICES, TranslatorApp, diagnostic_action_label, format_overlay_line, mode_notice, overlay_clipboard_text, overlay_font_size_value, overlay_hold_seconds_value, overlay_opacity_value, overlay_visibility_action, performance_segment_seconds, subtitle_updates_allowed, swap_language_values, troubleshooting_action, visible_setting_keys
+from realtime_audio_translator.gui import LANGUAGE_CHOICES, PERFORMANCE_CHOICES, PROVIDER_CHOICES, TTS_PROVIDER_CHOICES, TranslatorApp, diagnostic_action_label, format_overlay_line, main_status_summary, mode_notice, overlay_clipboard_text, overlay_font_size_value, overlay_hold_seconds_value, overlay_opacity_value, overlay_visibility_action, performance_segment_seconds, subtitle_updates_allowed, swap_language_values, troubleshooting_action, visible_setting_keys
 from realtime_audio_translator.logbook import ConversationLog
 from realtime_audio_translator.models import cuda_hardware_from_check_output, list_models, model_available, model_download_command, model_install_message, recommend_model
 from realtime_audio_translator.providers import TextToSpeech, Translator, build_google_translate_request, build_openai_translation_request
@@ -1766,6 +1766,23 @@ class CoreTests(unittest.TestCase):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
         self.assertIn("messagebox.askyesno", gui_source)
         self.assertIn("cloud_activation_requires_confirmation", gui_source)
+
+    def test_main_status_summary_shows_required_main_screen_state(self):
+        config = DEFAULT_CONFIG.copy()
+        config["scenario"] = "discord_chat"
+        config["source_language"] = "en"
+        config["target_language"] = "zh"
+        config["speaker_device"] = "Speakers"
+        config["microphone_device"] = "Microphone"
+        config["tts_output_device"] = "CABLE Input"
+        config["overlay_visible"] = True
+        config["tts_enabled"] = True
+        config["virtual_mic_enabled"] = False
+
+        summary = main_status_summary(config)
+
+        for text in ("目前場景：discord_chat", "輸入音源：Speakers / Microphone", "輸出音源：CABLE Input", "來源語言：en", "目標語言：zh", "字幕：開啟", "TTS：開啟", "虛擬麥克風：關閉"):
+            self.assertIn(text, summary)
 
     def test_readme_and_release_notes_mention_cloud_api_confirmation(self):
         readme = Path("README.md").read_text(encoding="utf-8")

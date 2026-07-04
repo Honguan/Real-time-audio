@@ -170,6 +170,21 @@ def mode_notice(provider: str, tts_provider: str, record_logs: bool = False, loc
     return f"目前模式：本機免費模式；語音是否上傳：否；是否可能產生 API 費用：否；{logs}{setup}"
 
 
+def main_status_summary(config: dict) -> str:
+    speaker = str(config.get("speaker_device") or "未選擇")
+    microphone = str(config.get("microphone_device") or "未選擇")
+    return (
+        f"目前場景：{config.get('scenario', '')}；"
+        f"輸入音源：{speaker} / {microphone}；"
+        f"輸出音源：{config.get('tts_output_device') or '未選擇'}；"
+        f"來源語言：{config.get('source_language', '')}；"
+        f"目標語言：{config.get('target_language', '')}；"
+        f"字幕：{'開啟' if config.get('overlay_visible', True) else '關閉'}；"
+        f"TTS：{'開啟' if config.get('tts_enabled', True) else '關閉'}；"
+        f"虛擬麥克風：{'開啟' if config.get('virtual_mic_enabled', False) else '關閉'}"
+    )
+
+
 def cloud_activation_requires_confirmation(old_provider: str, old_tts_provider: str, new_provider: str, new_tts_provider: str) -> bool:
     old_cloud = {name for name in (old_provider, old_tts_provider) if name in CLOUD_PROVIDERS}
     new_cloud = {name for name in (new_provider, new_tts_provider) if name in CLOUD_PROVIDERS}
@@ -228,7 +243,7 @@ class TranslatorApp(tk.Tk):
         self.protocol("WM_DELETE_WINDOW", self._quit)
         self.status = tk.StringVar(value="ready")
         self.runtime_text = tk.StringVar(value="")
-        self.mode_text = tk.StringVar(value=mode_notice(self.config["provider"], self.config["tts_provider"], bool(self.config["record_logs"]), self.config.get("local_translate_url", "")))
+        self.mode_text = tk.StringVar(value=self._mode_text())
         self.overlay_generation = 0
         self._push_to_talk_previous_muted = None
         self.overlay = Overlay(
@@ -464,10 +479,13 @@ class TranslatorApp(tk.Tk):
                 self.status.set("cloud API not enabled")
                 return
         self.config = config
-        self.mode_text.set(mode_notice(self.config["provider"], self.config["tts_provider"], bool(self.config["record_logs"]), self.config.get("local_translate_url", "")))
+        self.mode_text.set(self._mode_text())
         save_config(APP_DIR, self.config)
         if self.engine:
             self.engine.config = self.config
+
+    def _mode_text(self) -> str:
+        return f"{mode_notice(self.config['provider'], self.config['tts_provider'], bool(self.config['record_logs']), self.config.get('local_translate_url', ''))}\n{main_status_summary(self.config)}"
 
     def _apply_mode(self, save: bool = True) -> None:
         for key in ADVANCED_SETTING_KEYS:
