@@ -73,10 +73,24 @@ BASIC_SETTING_KEYS = {
     "runtime_dir",
 }
 ADVANCED_SETTING_KEYS = {key for _label, key in SETTING_ROWS} - BASIC_SETTING_KEYS
+BASIC_BUTTON_TEXTS = {
+    "Setup guide",
+    "Run diagnostics",
+    "Start",
+    "Stop",
+    "Mic test",
+    "Virtual mic test",
+    "Push to talk",
+    "Quit",
+}
 
 
 def visible_setting_keys(advanced: bool) -> list[str]:
     return [key for _label, key in SETTING_ROWS if advanced or key in BASIC_SETTING_KEYS]
+
+
+def visible_button_texts(buttons: list[str], advanced: bool) -> list[str]:
+    return [text for text in buttons if advanced or text in BASIC_BUTTON_TEXTS]
 
 
 def performance_segment_seconds(mode: str) -> float:
@@ -347,6 +361,7 @@ class TranslatorApp(tk.Tk):
 
         buttons = ttk.Frame(frame)
         buttons.grid(row=next_row + 7, column=0, columnspan=3, sticky="ew", pady=12)
+        self.button_widgets: list[tuple[str, ttk.Button]] = []
         def copy_overlay() -> None:
             text = overlay_clipboard_text(self.overlay.speaker.get(), self.overlay.mine.get())
             if not text:
@@ -396,11 +411,12 @@ class TranslatorApp(tk.Tk):
             ("Export subtitles", self._export_subtitles),
             ("Clear logs", self._clear_logs),
         ):
-            ttk.Button(buttons, text=text, command=command).pack(side="left", padx=3)
+            button = ttk.Button(buttons, text=text, command=command)
+            self.button_widgets.append((text, button))
         ptt_button = ttk.Button(buttons, text="Push to talk")
         ptt_button.bind("<ButtonPress-1>", lambda _event: self._push_to_talk(True))
         ptt_button.bind("<ButtonRelease-1>", lambda _event: self._push_to_talk(False))
-        ptt_button.pack(side="left", padx=3)
+        self.button_widgets.append(("Push to talk", ptt_button))
 
         ttk.Label(frame, textvariable=self.status).grid(row=next_row + 8, column=0, columnspan=3, sticky="ew")
         frame.grid_columnconfigure(1, weight=1)
@@ -494,6 +510,12 @@ class TranslatorApp(tk.Tk):
                     widget.grid()
                 else:
                     widget.grid_remove()
+        for _text, button in self.button_widgets:
+            button.pack_forget()
+        visible_buttons = visible_button_texts([text for text, _button in self.button_widgets], self.advanced_mode.get())
+        for text, button in self.button_widgets:
+            if text in visible_buttons:
+                button.pack(side="left", padx=3)
         if save:
             self._save()
 
