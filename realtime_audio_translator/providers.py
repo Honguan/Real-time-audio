@@ -54,13 +54,16 @@ def google_access_token(service_account_json: str) -> str:
 class Translator:
     config: dict
     cache: dict[tuple[str, str, str, str], str] = field(default_factory=dict)
+    last_confidence: float | None = None
 
     def translate(self, text: str, source_language: str, target_language: str) -> str:
         if not text.strip():
+            self.last_confidence = 0.0
             return ""
         provider = self.config.get("provider", "google")
         cache_key = (provider, source_language, target_language, text.strip())
         if cache_key in self.cache:
+            self.last_confidence = 1.0
             return self._apply_glossary(self.cache[cache_key])
         db_path = Path(self.config.get("translation_cache_path", ""))
         persistent_cache_enabled = self.config.get("translation_cache_enabled", True) and not (provider == "local" and not self.config.get("local_translate_url", "").strip())
@@ -68,13 +71,19 @@ class Translator:
             cached = cached_translation(db_path, provider, source_language, target_language, text)
             if cached is not None:
                 self.cache[cache_key] = cached
+                self.last_confidence = 1.0
                 return self._apply_glossary(cached)
         if provider == "local":
             translated = self._local_translate(text, source_language, target_language)
+            self.last_confidence = 0.8 if self.config.get("local_translate_url", "").strip() else 0.3
         elif provider == "openai":
             translated = self._openai_translate(text, source_language, target_language)
+            self.last_confidence = 0.8
         else:
             translated = self._google_translate(text, source_language, target_language)
+            self.last_confidence = 0.8
+        if not translated.strip():
+            self.last_confidence = 0.0
         self.cache[cache_key] = translated
         if persistent_cache_enabled and db_path:
             cache_translation(db_path, provider, source_language, target_language, text, translated)

@@ -915,6 +915,15 @@ class CoreTests(unittest.TestCase):
 
         self.assertEqual(translator.translate("hello", "en", "zh-TW"), "hello")
 
+    def test_translator_sets_confidence_for_local_fallback(self):
+        config = DEFAULT_CONFIG.copy()
+        config["provider"] = "local"
+        translator = Translator(config)
+
+        translator.translate("hello", "en", "zh-TW")
+
+        self.assertEqual(translator.last_confidence, 0.3)
+
     def test_translator_applies_glossary_json(self):
         with tempfile.TemporaryDirectory() as tmp:
             glossary = Path(tmp) / "glossary.json"
