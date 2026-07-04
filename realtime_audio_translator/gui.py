@@ -713,10 +713,14 @@ class TranslatorApp(tk.Tk):
 
     def _test_speaker(self) -> None:
         try:
-            device = find_device(self.vars["speaker_device"].get(), want_output=True)
+            config = self._config_from_vars()
+            device = find_device(config["speaker_device"], want_output=True)
             path = APP_DIR / "cache" / "audio" / "speaker-test.wav"
             capture_wav(path, device, 0.5, loopback=True)
-            active = audio_segment_active(path, float(self.vars["speech_threshold"].get()))
+            active = audio_segment_active(path, float(config["speech_threshold"]))
+            config["last_speaker_quiet"] = not active
+            self.config = config
+            save_config(APP_DIR, self.config)
             self.status.set("speaker audio detected" if active else "speaker audio quiet")
         except Exception as exc:
             messagebox.showerror("Speaker test failed", str(exc))
@@ -726,10 +730,14 @@ class TranslatorApp(tk.Tk):
         import sounddevice as sd
 
         try:
-            device = find_device(self.vars["microphone_device"].get(), want_output=False)
+            config = self._config_from_vars()
+            device = find_device(config["microphone_device"], want_output=False)
             data = sd.rec(int(0.5 * 16000), samplerate=16000, channels=1, dtype="float32", device=device)
             sd.wait()
             level = float(np.sqrt(np.mean(np.square(data))))
+            config["last_mic_quiet"] = level < float(self.vars["speech_threshold"].get())
+            self.config = config
+            save_config(APP_DIR, self.config)
             self.status.set(f"mic level {level:.4f}")
         except Exception as exc:
             messagebox.showerror("Mic test failed", str(exc))

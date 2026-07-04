@@ -114,6 +114,24 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
             "檢查 TTS output、VB-CABLE 與 TTS provider 設定",
             "audio_settings",
         ))
+    if config.get("last_mic_quiet"):
+        issues.append(DiagnosticIssue(
+            "microphone_no_sound",
+            "warning",
+            "麥克風沒有聲音",
+            "最近一次 Mic test 音量低於語音門檻",
+            "確認麥克風輸入裝置、系統音量與權限設定",
+            "audio_settings",
+        ))
+    if config.get("last_speaker_quiet"):
+        issues.append(DiagnosticIssue(
+            "speaker_no_sound",
+            "warning",
+            "系統音訊沒有聲音",
+            "最近一次 Speaker test 沒有偵測到有效聲音",
+            "播放 Discord 或遊戲語音後再測試，並確認喇叭來源選對裝置",
+            "audio_settings",
+        ))
     if config.get("source_language") == "auto":
         try:
             language_confidence = float(config.get("last_language_confidence", 1.0))

@@ -242,6 +242,7 @@ class CoreTests(unittest.TestCase):
         self.assertIn('("Mic test", self._test_mic)', gui_source)
         self.assertIn('def _test_mic(self) -> None:', gui_source)
         self.assertIn('self.status.set(f"mic level {level:.4f}")', gui_source)
+        self.assertIn('config["last_mic_quiet"] = level < float(self.vars["speech_threshold"].get())', gui_source)
 
     def test_speaker_test_button_uses_loopback_capture(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
@@ -250,6 +251,7 @@ class CoreTests(unittest.TestCase):
         self.assertIn('def _test_speaker(self) -> None:', gui_source)
         self.assertIn('capture_wav(path, device, 0.5, loopback=True)', gui_source)
         self.assertIn('self.status.set("speaker audio detected" if active else "speaker audio quiet")', gui_source)
+        self.assertIn('config["last_speaker_quiet"] = not active', gui_source)
 
     def test_tts_test_button_uses_configured_output(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
@@ -477,6 +479,28 @@ class CoreTests(unittest.TestCase):
         issue = next(item for item in issues if item.code == "tts_no_sound")
         self.assertEqual(issue.severity, "warning")
         self.assertEqual(issue.action, "audio_settings")
+
+    def test_diagnostics_report_quiet_audio_tests(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            runtime = root / "runtime"
+            model = root / "models" / "medium"
+            runtime.mkdir()
+            model.mkdir(parents=True)
+            (runtime / "faster-whisper-xxl.exe").write_text("exe", encoding="utf-8")
+            (runtime / "ffmpeg.exe").write_text("ff", encoding="utf-8")
+            (runtime / "_xxl_data").mkdir()
+            config = DEFAULT_CONFIG.copy()
+            config["runtime_dir"] = str(runtime)
+            config["model"] = "medium"
+            config["last_mic_quiet"] = True
+            config["last_speaker_quiet"] = True
+
+            issues = collect_diagnostics(config, root)
+
+        codes = [item.code for item in issues]
+        self.assertIn("microphone_no_sound", codes)
+        self.assertIn("speaker_no_sound", codes)
 
     def test_diagnostics_include_auto_tune_recommendations(self):
         with tempfile.TemporaryDirectory() as tmp:
