@@ -848,6 +848,7 @@ class CoreTests(unittest.TestCase):
             "Start",
             "Fix local translation",
             "Clear cache",
+            "Open logs",
             "Clear logs",
             "Push to talk",
         ]
@@ -867,6 +868,7 @@ class CoreTests(unittest.TestCase):
         self.assertIn("Push to talk", simple)
         self.assertIn("Fix local translation", simple)
         self.assertIn("Clear cache", simple)
+        self.assertIn("Open logs", simple)
         self.assertIn("Clear logs", simple)
         self.assertNotIn("Refresh", simple)
         self.assertNotIn("API test", simple)

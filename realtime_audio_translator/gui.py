@@ -88,6 +88,7 @@ BASIC_BUTTON_TEXTS = {
     "Push to talk",
     "Fix local translation",
     "Clear cache",
+    "Open logs",
     "Clear logs",
     "Quit",
 }
