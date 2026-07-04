@@ -25,9 +25,11 @@ def whisper_exe(root: Path = DEFAULT_RUNTIME_DIR) -> Path:
 def runtime_status(root: Path = DEFAULT_RUNTIME_DIR) -> dict:
     missing = []
     warnings = []
-    for name in REQUIRED_RUNTIME_ITEMS:
-        if not (root / name).exists():
+    for name in (WHISPER_EXE, "ffmpeg.exe"):
+        if not (root / name).is_file():
             missing.append(name)
+    if not (root / "_xxl_data").is_dir():
+        missing.append("_xxl_data")
     for name in CUDA_HINTS:
         if not any(root.rglob(name)):
             warnings.append(name)

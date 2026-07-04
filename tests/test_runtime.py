@@ -30,6 +30,19 @@ class RuntimeTests(unittest.TestCase):
             self.assertTrue(runtime_status(root)["ready"])
             self.assertIn("cublasLt64_12.dll", runtime_status(root)["warnings"])
 
+    def test_runtime_status_rejects_exe_directories(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "faster-whisper-xxl.exe").mkdir()
+            (root / "ffmpeg.exe").mkdir()
+            (root / "_xxl_data").mkdir()
+
+            status = runtime_status(root)
+
+            self.assertFalse(status["ready"])
+            self.assertIn("faster-whisper-xxl.exe", status["missing"])
+            self.assertIn("ffmpeg.exe", status["missing"])
+
     def test_default_runtime_dir_uses_cuda12_folder(self):
         self.assertEqual(DEFAULT_RUNTIME_DIR.name, "cuda12")
         self.assertEqual(DEFAULT_RUNTIME_DIR.parent.name, "runtime")
