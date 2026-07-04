@@ -1417,6 +1417,14 @@ class CoreTests(unittest.TestCase):
             self.assertIn("Export subtitles", text)
             self.assertIn("%USERPROFILE%\\.realtime-audio\\exports\\subtitles", text)
 
+    def test_readme_and_release_notes_mention_add_glossary_term(self):
+        readme = Path("README.md").read_text(encoding="utf-8")
+        notes = Path("docs/RELEASE_NOTES.md").read_text(encoding="utf-8")
+
+        for text in (readme, notes):
+            self.assertIn("Add glossary term", text)
+            self.assertIn("術語", text)
+
     def test_readme_mentions_tts_test_provider(self):
         readme = Path("README.md").read_text(encoding="utf-8")
 
