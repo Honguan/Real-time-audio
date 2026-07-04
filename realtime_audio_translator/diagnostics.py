@@ -105,6 +105,15 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
             "檢查翻譯 provider、Local translate URL 或改用其他翻譯服務",
             "local_translation",
         ))
+    if config.get("last_tts_failed"):
+        issues.append(DiagnosticIssue(
+            "tts_no_sound",
+            "warning",
+            "TTS 沒有聲音",
+            "最近一次翻譯語音播放失敗",
+            "檢查 TTS output、VB-CABLE 與 TTS provider 設定",
+            "audio_settings",
+        ))
     if config.get("source_language") == "auto":
         try:
             language_confidence = float(config.get("last_language_confidence", 1.0))

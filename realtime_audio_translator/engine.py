@@ -179,14 +179,19 @@ class RealtimeEngine:
                     if self.config.get("tts_enabled", True) and not self.muted and translated and not translation_failed:
                         tts_device = self.config.get("tts_output_device", "CABLE Input")
                         tts_started = time.perf_counter()
-                        if self.config.get("tts_provider") == "local":
-                            self.tts.speak_local(translated, tts_device)
-                        elif self.config.get("tts_provider") == "openai":
-                            audio = self.tts.synthesize_openai_linear16(translated)
-                            play_linear16(audio, tts_device)
-                        else:
-                            audio = self.tts.synthesize_google_linear16(translated, target)
-                            play_linear16(audio, tts_device)
+                        try:
+                            if self.config.get("tts_provider") == "local":
+                                self.tts.speak_local(translated, tts_device)
+                            elif self.config.get("tts_provider") == "openai":
+                                audio = self.tts.synthesize_openai_linear16(translated)
+                                play_linear16(audio, tts_device)
+                            else:
+                                audio = self.tts.synthesize_google_linear16(translated, target)
+                                play_linear16(audio, tts_device)
+                            self.config["last_tts_failed"] = False
+                        except Exception as exc:
+                            self.config["last_tts_failed"] = True
+                            self.status(f"{direction}: tts failed: {exc}")
                         tts_latency = time.perf_counter() - tts_started
                 latency = time.perf_counter() - started
                 self.config["last_latency_seconds"] = latency
