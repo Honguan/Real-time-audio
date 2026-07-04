@@ -69,7 +69,7 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
             "把 TTS output 設為 CABLE Input，喇叭來源設為實際播放對方聲音的裝置",
             "audio_settings",
         ))
-    if config.get("tts_enabled", True) and "cable input" not in str(config.get("tts_output_device", "")).lower():
+    if config.get("tts_enabled", True) and config.get("virtual_mic_enabled", False) and "cable input" not in str(config.get("tts_output_device", "")).lower():
         issues.append(DiagnosticIssue(
             "virtual_mic_route",
             "warning",

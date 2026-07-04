@@ -390,8 +390,11 @@ class CoreTests(unittest.TestCase):
             config["tts_output_device"] = "Speakers"
 
             issues = collect_diagnostics(config, root)
+            config["virtual_mic_enabled"] = True
+            enabled_issues = collect_diagnostics(config, root)
 
-        issue = next(item for item in issues if item.code == "virtual_mic_route")
+        self.assertNotIn("virtual_mic_route", [item.code for item in issues])
+        issue = next(item for item in enabled_issues if item.code == "virtual_mic_route")
         self.assertEqual(issue.action, "audio_settings")
         self.assertIn("CABLE Input", issue.fix)
         self.assertIn("CABLE Output", issue.fix)
