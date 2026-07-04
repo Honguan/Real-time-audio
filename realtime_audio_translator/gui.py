@@ -86,6 +86,7 @@ BASIC_BUTTON_TEXTS = {
     "Subtitle test",
     "Virtual mic test",
     "Push to talk",
+    "Fix local translation",
     "Clear cache",
     "Clear logs",
     "Quit",
