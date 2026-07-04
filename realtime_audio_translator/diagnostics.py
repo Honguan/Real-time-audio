@@ -61,13 +61,15 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
             "按 Download model，或把模型 zip 解壓到 models 資料夾",
             "download_model",
         ))
-    if config.get("speaker_enabled", True) and config.get("tts_enabled", True) and _devices_overlap(config.get("speaker_device", ""), config.get("tts_output_device", "")):
+    tts_overlaps_speaker = _devices_overlap(config.get("speaker_device", ""), config.get("tts_output_device", ""))
+    speaker_tts_overlaps_speaker = config.get("speaker_tts_enabled", False) and _devices_overlap(config.get("speaker_device", ""), config.get("speaker_tts_output_device", ""))
+    if config.get("speaker_enabled", True) and config.get("tts_enabled", True) and (tts_overlaps_speaker or speaker_tts_overlaps_speaker):
         issues.append(DiagnosticIssue(
             "feedback_risk",
             "warning",
             "可能發生音訊回授",
-            "喇叭來源與 TTS output 看起來是同一個裝置",
-            "把 TTS output 設為 CABLE Input，喇叭來源設為實際播放對方聲音的裝置",
+            "喇叭來源與翻譯語音輸出看起來是同一個裝置",
+            "把 TTS output 設為 CABLE Input，Speaker TTS output 改成不同喇叭或先關閉 Speak opponent",
             "audio_settings",
         ))
     if config.get("tts_enabled", True) and config.get("virtual_mic_enabled", False) and "cable input" not in str(config.get("tts_output_device", "")).lower():

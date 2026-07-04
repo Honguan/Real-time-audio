@@ -426,6 +426,20 @@ class CoreTests(unittest.TestCase):
         self.assertTrue(all(isinstance(issue.title, str) for issue in issues))
         self.assertTrue(all(issue.action for issue in issues))
 
+    def test_diagnostics_warn_when_speaker_tts_output_matches_speaker_source(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = DEFAULT_CONFIG.copy()
+            config["runtime_dir"] = str(Path(tmp) / "runtime")
+            config["speaker_device"] = "Speakers [Windows WASAPI]"
+            config["tts_output_device"] = "CABLE Input"
+            config["speaker_tts_enabled"] = True
+            config["speaker_tts_output_device"] = "Speakers"
+
+            issues = collect_diagnostics(config, Path(tmp))
+
+        issue = next(item for item in issues if item.code == "feedback_risk")
+        self.assertIn("Speaker TTS output", issue.fix)
+
     def test_diagnostics_warn_when_virtual_mic_output_is_not_cable_input(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
