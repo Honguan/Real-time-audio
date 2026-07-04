@@ -81,6 +81,7 @@ BASIC_BUTTON_TEXTS = {
     "Optimize settings",
     "Download model",
     "Run diagnostics",
+    "Lock language",
     "API test",
     "Open app folder",
     "Start",
@@ -176,6 +177,11 @@ def subtitle_updates_allowed(paused: bool) -> bool:
 
 def swap_language_values(source_language: str, target_language: str) -> tuple[str, str]:
     return target_language, source_language
+
+
+def language_lock_value(source_language: str, detected_language: str) -> str:
+    detected = str(detected_language or "").strip()
+    return detected if source_language == "auto" and detected in LANGUAGE_CHOICES and detected != "auto" else source_language
 
 
 def troubleshooting_action(issue: str) -> tuple[str, str]:
@@ -412,6 +418,7 @@ class TranslatorApp(tk.Tk):
             ("Recommend model", self._recommend),
             ("Download model", self._download_model),
             ("Run diagnostics", self._run_diagnostics),
+            ("Lock language", self._lock_language),
             ("Check updates", self._check_updates),
             ("Update command config", self._refresh_commands),
             ("Open app folder", self._open_app_dir),
@@ -690,6 +697,15 @@ class TranslatorApp(tk.Tk):
 
     def _run_diagnostics(self) -> None:
         messagebox.showinfo("Diagnostics", self._diagnostic_message())
+
+    def _lock_language(self) -> None:
+        locked = language_lock_value(self.vars["source_language"].get(), self.config.get("last_detected_language", ""))
+        if locked == self.vars["source_language"].get():
+            self.status.set("no detected language to lock")
+            return
+        self.vars["source_language"].set(locked)
+        self._save()
+        self.status.set(f"source language locked: {locked}")
 
     def _check_updates(self) -> None:
         self.status.set("checking updates")

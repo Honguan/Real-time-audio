@@ -56,6 +56,8 @@ DEFAULT_CONFIG = {
     "last_ffmpeg_failed": False,
     "last_cuda_devices": "",
     "last_vram_gb": "",
+    "last_detected_language": "",
+    "last_language_confidence": "",
     "google_project_id": "",
     "google_service_account_json": "",
     "glossary_path": str(APP_DIR / "config" / "glossary.json"),
