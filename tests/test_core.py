@@ -527,6 +527,26 @@ class CoreTests(unittest.TestCase):
         self.assertIn("gpu_unavailable", [item.code for item in no_gpu])
         self.assertIn("gpu_low_vram", [item.code for item in low_vram])
 
+    def test_diagnostics_report_asr_runtime_failure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            runtime = root / "runtime"
+            model = root / "models" / "medium"
+            runtime.mkdir()
+            model.mkdir(parents=True)
+            (runtime / "faster-whisper-xxl.exe").write_text("exe", encoding="utf-8")
+            (runtime / "ffmpeg.exe").write_text("ff", encoding="utf-8")
+            (runtime / "_xxl_data").mkdir()
+            config = DEFAULT_CONFIG.copy()
+            config["runtime_dir"] = str(runtime)
+            config["model"] = "medium"
+            config["last_asr_failed"] = True
+
+            issues = collect_diagnostics(config, root)
+
+        issue = next(item for item in issues if item.code == "asr_runtime_failed")
+        self.assertEqual(issue.action, "open_runtime")
+
     def test_diagnostics_include_auto_tune_recommendations(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -2126,6 +2146,7 @@ class CoreTests(unittest.TestCase):
 
         self.assertFalse(engine.running)
         self.assertEqual(statuses[-1], "Runtime missing: faster-whisper-xxl.exe")
+        self.assertTrue(engine.config["last_asr_failed"])
 
     def test_engine_stop_stops_workers(self):
         config = DEFAULT_CONFIG.copy()

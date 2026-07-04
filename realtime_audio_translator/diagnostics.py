@@ -114,6 +114,15 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
             "檢查 TTS output、VB-CABLE 與 TTS provider 設定",
             "audio_settings",
         ))
+    if config.get("last_asr_failed"):
+        issues.append(DiagnosticIssue(
+            "asr_runtime_failed",
+            "error",
+            "faster-whisper-xxl 無法呼叫",
+            "最近一次啟動語音辨識失敗",
+            "確認 runtime 資料夾、faster-whisper-xxl.exe、CUDA12 DLL 與模型路徑",
+            "open_runtime",
+        ))
     if config.get("last_mic_quiet"):
         issues.append(DiagnosticIssue(
             "microphone_no_sound",

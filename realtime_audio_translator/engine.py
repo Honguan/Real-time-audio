@@ -73,8 +73,10 @@ class RealtimeEngine:
             )
         except Exception as exc:
             self.running = False
+            self.config["last_asr_failed"] = True
             self.status(str(exc))
             return
+        self.config["last_asr_failed"] = False
         started = []
         skipped_feedback = False
         if self.config.get("speaker_enabled", True):
