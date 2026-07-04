@@ -3,8 +3,6 @@ param(
   [string]$OutputDir = "",
   [string]$DistDir = "",
   [string]$RuntimeSource = "",
-  [string]$RuntimeCoreArchive = "",
-  [string]$CudaArchive = "",
   [string]$ModelsSource = "",
   [string]$ModelName = "",
   [switch]$SkipBuild
@@ -87,15 +85,11 @@ if (-not [string]::IsNullOrWhiteSpace($RuntimeSource)) {
   $RuntimeStage = Join-Path $Out "_stage_runtime"
   New-Item -ItemType Directory -Path $RuntimeStage | Out-Null
   Copy-Item -Path (Join-Path $RuntimeSource "*") -Destination $RuntimeStage -Recurse -Force
-  foreach ($CudaDll in $CudaDlls) {
-    Remove-Item -LiteralPath (Join-Path $RuntimeStage $CudaDll) -Force
-  }
   @(
     "Extract to:",
     "%USERPROFILE%\.realtime-audio\runtime\cuda12",
     "",
-    "Extract this runtime core zip and the CUDA DLL zip into this same folder.",
-    "The folder should directly contain faster-whisper-xxl.exe and CUDA DLL files."
+    "The folder should directly contain faster-whisper-xxl.exe, ffmpeg.exe, _xxl_data, and CUDA12 DLL files."
   ) | Set-Content -LiteralPath (Join-Path $RuntimeStage "RUNTIME_README.txt") -Encoding UTF8
   @(
     "{",
@@ -105,44 +99,11 @@ if (-not [string]::IsNullOrWhiteSpace($RuntimeSource)) {
     "  ""version"": ""$Version""",
     "}"
   ) | Set-Content -LiteralPath (Join-Path $RuntimeStage "runtime_manifest.json") -Encoding UTF8
-  $RuntimeZip = Join-Path $Out "RealtimeAudioTranslator-runtime-cuda12-core-$Version.zip"
+  $RuntimeZip = Join-Path $Out "RealtimeAudioTranslator-runtime-cuda12-$Version.zip"
   Compress-FolderContents $RuntimeStage $RuntimeZip
   $Created += $RuntimeZip
-
-  $CudaStage = Join-Path $Out "_stage_cuda"
-  New-Item -ItemType Directory -Path $CudaStage | Out-Null
-  foreach ($CudaDll in $CudaDlls) {
-    Copy-Item -LiteralPath (Join-Path $RuntimeSource $CudaDll) -Destination $CudaStage -Force
-  }
-  @(
-    "Extract to:",
-    "%USERPROFILE%\.realtime-audio\runtime\cuda12",
-    "",
-    "Use this together with RealtimeAudioTranslator-runtime-cuda12-core-$Version.zip."
-  ) | Set-Content -LiteralPath (Join-Path $CudaStage "CUDA_README.txt") -Encoding UTF8
-  $CudaZip = Join-Path $Out "RealtimeAudioTranslator-runtime-cuda12-dlls-$Version.zip"
-  Compress-FolderContents $CudaStage $CudaZip
-  $Created += $CudaZip
 } else {
-  Write-Warning "Runtime zips skipped. Pass -RuntimeSource to publish runtime core and CUDA DLL zips."
-}
-
-if (-not [string]::IsNullOrWhiteSpace($RuntimeCoreArchive)) {
-  if (-not (Test-Path -LiteralPath $RuntimeCoreArchive)) {
-    throw "RuntimeCoreArchive not found: $RuntimeCoreArchive"
-  }
-  $RuntimeArchiveOut = Join-Path $Out "RealtimeAudioTranslator-runtime-cuda12-core-$Version.7z"
-  Copy-Item -LiteralPath $RuntimeCoreArchive -Destination $RuntimeArchiveOut -Force
-  $Created += $RuntimeArchiveOut
-}
-
-if (-not [string]::IsNullOrWhiteSpace($CudaArchive)) {
-  if (-not (Test-Path -LiteralPath $CudaArchive)) {
-    throw "CudaArchive not found: $CudaArchive"
-  }
-  $CudaArchiveOut = Join-Path $Out "RealtimeAudioTranslator-runtime-cuda12-dlls-$Version.7z"
-  Copy-Item -LiteralPath $CudaArchive -Destination $CudaArchiveOut -Force
-  $Created += $CudaArchiveOut
+  Write-Warning "Runtime zip skipped. Pass -RuntimeSource to publish the runtime and CUDA DLL zip."
 }
 
 if (-not [string]::IsNullOrWhiteSpace($ModelsSource)) {
@@ -186,7 +147,4 @@ if (Test-Path -LiteralPath (Join-Path $Out "_stage_runtime")) {
 }
 if (Test-Path -LiteralPath (Join-Path $Out "_stage_models")) {
   Remove-Item -LiteralPath (Join-Path $Out "_stage_models") -Recurse -Force
-}
-if (Test-Path -LiteralPath (Join-Path $Out "_stage_cuda")) {
-  Remove-Item -LiteralPath (Join-Path $Out "_stage_cuda") -Recurse -Force
 }

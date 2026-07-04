@@ -110,7 +110,7 @@ jobs:
             throw "Release version must start with v, for example v0.1.1."
           }
           if (Test-Path "runtime-download\runtime.pkg") {
-            & ./scripts/package.ps1 -Version $version -RuntimeCoreArchive "runtime-download\runtime.pkg" -CudaArchive "cuda-download\cuda.7z"
+            & ./scripts/package.ps1 -Version $version -RuntimeSource "downloaded-runtime"
           } else {
             & ./scripts/package.ps1 -Version $version
           }
@@ -122,5 +122,4 @@ jobs:
           body_path: docs/RELEASE_NOTES.md
           files: |
             release-output/*.zip
-            release-output/*.7z
             release-output/SHA256SUMS.txt

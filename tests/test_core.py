@@ -1485,8 +1485,9 @@ class CoreTests(unittest.TestCase):
     def test_package_script_builds_release_zip_with_readme(self):
         script = Path("scripts/package.ps1").read_text(encoding="utf-8")
         self.assertIn("RealtimeAudioTranslator-$Version-win-x64.zip", script)
-        self.assertIn("RealtimeAudioTranslator-runtime-cuda12-core-$Version.zip", script)
-        self.assertIn("RealtimeAudioTranslator-runtime-cuda12-dlls-$Version.zip", script)
+        self.assertIn("RealtimeAudioTranslator-runtime-cuda12-$Version.zip", script)
+        self.assertNotIn("RuntimeCoreArchive", script)
+        self.assertNotIn("CudaArchive", script)
         self.assertIn("README.md", script)
         self.assertIn("RELEASE_NOTES.md", script)
 
@@ -1519,7 +1520,7 @@ class CoreTests(unittest.TestCase):
         self.assertIn("cublasLt64_12.dll", workflow)
         self.assertIn("cudnn64_9.dll", workflow)
         self.assertNotIn("-Filter *.dll", workflow)
-        self.assertIn("& ./scripts/package.ps1 -Version $version -RuntimeCoreArchive \"runtime-download\\runtime.pkg\" -CudaArchive \"cuda-download\\cuda.7z\"", workflow)
+        self.assertIn("& ./scripts/package.ps1 -Version $version -RuntimeSource \"downloaded-runtime\"", workflow)
         self.assertIn("& ./scripts/package.ps1 -Version $version", workflow)
         self.assertNotIn("@args", workflow)
         self.assertNotIn("@packageArgs", workflow)
@@ -1527,7 +1528,7 @@ class CoreTests(unittest.TestCase):
         self.assertIn("tag_name:", workflow)
         self.assertIn("inputs.version || github.ref_name", workflow)
         self.assertIn("release-output/*.zip", workflow)
-        self.assertIn("release-output/*.7z", workflow)
+        self.assertNotIn("release-output/*.7z", workflow)
         self.assertIn("release-output/SHA256SUMS.txt", workflow)
 
     def test_release_notes_include_public_download_instructions(self):
@@ -1535,8 +1536,7 @@ class CoreTests(unittest.TestCase):
 
         self.assertIn("最快使用", notes)
         self.assertIn("RealtimeAudioTranslator.exe", notes)
-        self.assertIn("RealtimeAudioTranslator-runtime-cuda12-core-<tag>.7z", notes)
-        self.assertIn("RealtimeAudioTranslator-runtime-cuda12-dlls-<tag>.7z", notes)
+        self.assertIn("RealtimeAudioTranslator-runtime-cuda12-<tag>.zip", notes)
         self.assertIn("%USERPROFILE%\\.realtime-audio\\runtime\\cuda12", notes)
         self.assertIn("%USERPROFILE%\\.realtime-audio\\models", notes)
         self.assertIn("VB-CABLE", notes)
@@ -1549,8 +1549,7 @@ class CoreTests(unittest.TestCase):
         quick_start = Path("docs/README_QUICK_START_zh-TW.txt").read_text(encoding="utf-8")
 
         self.assertIn("RealtimeAudioTranslator.exe", quick_start)
-        self.assertIn("RealtimeAudioTranslator-runtime-cuda12-core-<tag>.7z", quick_start)
-        self.assertIn("RealtimeAudioTranslator-runtime-cuda12-dlls-<tag>.7z", quick_start)
+        self.assertIn("RealtimeAudioTranslator-runtime-cuda12-<tag>.zip", quick_start)
         self.assertIn("%USERPROFILE%\\.realtime-audio\\runtime\\cuda12", quick_start)
         self.assertIn("%USERPROFILE%\\.realtime-audio\\models", quick_start)
         self.assertIn("Local translate URL", quick_start)

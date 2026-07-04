@@ -14,8 +14,7 @@
 10. 若提示缺 runtime，下載並解壓這兩個檔案：
 
 ```text
-RealtimeAudioTranslator-runtime-cuda12-core-<tag>.7z
-RealtimeAudioTranslator-runtime-cuda12-dlls-<tag>.7z
+RealtimeAudioTranslator-runtime-cuda12-<tag>.zip
 ```
 
 解壓位置：
@@ -29,7 +28,7 @@ RealtimeAudioTranslator-runtime-cuda12-dlls-<tag>.7z
 ## 下載檔案
 
 - 主程式：`RealtimeAudioTranslator-<tag>-win-x64.zip`
-- CUDA12 runtime：`RealtimeAudioTranslator-runtime-cuda12-core-<tag>.7z` 和 `RealtimeAudioTranslator-runtime-cuda12-dlls-<tag>.7z`
+- CUDA12 runtime：`RealtimeAudioTranslator-runtime-cuda12-<tag>.zip`
 - 模型可選包：`RealtimeAudioTranslator-models-<model>-<tag>.zip`
 - 檔案校驗：`SHA256SUMS.txt`
 
