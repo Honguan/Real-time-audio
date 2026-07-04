@@ -86,6 +86,8 @@ BASIC_BUTTON_TEXTS = {
     "Subtitle test",
     "Virtual mic test",
     "Push to talk",
+    "Clear cache",
+    "Clear logs",
     "Quit",
 }
 FIRST_RUN_ISSUE_CODES = {

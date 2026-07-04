@@ -847,6 +847,7 @@ class CoreTests(unittest.TestCase):
             "Subtitle test",
             "Start",
             "Clear cache",
+            "Clear logs",
             "Push to talk",
         ]
 
@@ -863,9 +864,10 @@ class CoreTests(unittest.TestCase):
         self.assertIn("Subtitle test", simple)
         self.assertIn("Start", simple)
         self.assertIn("Push to talk", simple)
+        self.assertIn("Clear cache", simple)
+        self.assertIn("Clear logs", simple)
         self.assertNotIn("Refresh", simple)
         self.assertNotIn("API test", simple)
-        self.assertNotIn("Clear cache", simple)
         self.assertEqual(advanced, buttons)
 
     def test_clear_logs_and_cache_keep_app_dirs(self):
