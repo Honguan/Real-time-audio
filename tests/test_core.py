@@ -972,6 +972,7 @@ class CoreTests(unittest.TestCase):
             root = Path(tmp)
             custom_logs = root / "custom-logs"
             ensure_app_dirs(root)
+            (root / "logs" / "app.log").write_text("app event", encoding="utf-8")
             (root / "logs" / "session.jsonl").write_text("secret", encoding="utf-8")
             custom_logs.mkdir()
             (custom_logs / "session.jsonl").write_text("secret", encoding="utf-8")
@@ -984,6 +985,7 @@ class CoreTests(unittest.TestCase):
             clear_cache(root)
 
             self.assertEqual([path.name for path in (root / "logs").iterdir()], ["app.log"])
+            self.assertEqual((root / "logs" / "app.log").read_text(encoding="utf-8"), "")
             self.assertEqual([path.name for path in custom_logs.iterdir()], ["app.log"])
             self.assertEqual(list((root / "cache" / "audio").iterdir()), [])
             self.assertEqual(list((root / "cache" / "temp_audio").iterdir()), [])

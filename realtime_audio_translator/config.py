@@ -176,6 +176,8 @@ def save_audio_devices(root: Path, devices: list[dict]) -> Path:
 def clear_logs(root: Path = APP_DIR, log_dir: Path | None = None) -> None:
     target = log_dir or root / "logs"
     shutil.rmtree(target, ignore_errors=True)
+    if log_dir and target != root / "logs":
+        shutil.rmtree(root / "logs", ignore_errors=True)
     ensure_app_dirs(root)
     if log_dir:
         target.mkdir(parents=True, exist_ok=True)
