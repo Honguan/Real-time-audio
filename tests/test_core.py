@@ -922,6 +922,18 @@ class CoreTests(unittest.TestCase):
 
         self.assertIn("hello -> 你好", calls[1][1]["json"]["input"])
 
+    def test_short_term_context_keeps_only_recent_items(self):
+        translator = Translator(DEFAULT_CONFIG.copy())
+        for index in range(6):
+            translator._remember_context(f"source {index}", f"target {index}")
+
+        self.assertEqual(translator.context, [
+            ("source 2", "target 2"),
+            ("source 3", "target 3"),
+            ("source 4", "target 4"),
+            ("source 5", "target 5"),
+        ])
+
     def test_translation_memory_persists_cached_translation(self):
         with tempfile.TemporaryDirectory() as tmp:
             db = Path(tmp) / "translation_cache.db"
