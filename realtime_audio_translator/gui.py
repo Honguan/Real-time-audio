@@ -654,6 +654,7 @@ class TranslatorApp(tk.Tk):
         self.show_original_text.set(bool(updated.get("show_original_text", self.show_original_text.get())))
         self.show_translated_text.set(bool(updated.get("show_translated_text", self.show_translated_text.get())))
         self.tts_enabled.set(bool(updated.get("tts_enabled", self.tts_enabled.get())))
+        self.virtual_mic_enabled.set(bool(updated.get("virtual_mic_enabled", self.virtual_mic_enabled.get())))
         self.speaker_enabled.set(bool(updated.get("speaker_enabled", self.speaker_enabled.get())))
         self.microphone_enabled.set(bool(updated.get("microphone_enabled", self.microphone_enabled.get())))
         self.record_logs.set(bool(updated.get("record_logs", self.record_logs.get())))

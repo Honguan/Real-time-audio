@@ -225,6 +225,7 @@ class CoreTests(unittest.TestCase):
         self.assertIn("self.tts_enabled.set(toggle_speech_enabled(self.tts_enabled.get()))", gui_source)
         self.assertIn("Virtual mic output", gui_source)
         self.assertIn('config["virtual_mic_enabled"] = self.virtual_mic_enabled.get()', gui_source)
+        self.assertIn('self.virtual_mic_enabled.set(bool(updated.get("virtual_mic_enabled", self.virtual_mic_enabled.get())))', gui_source)
 
     def test_audio_source_quick_toggles_switch_capture_sources(self):
         import realtime_audio_translator.gui as gui_module
@@ -622,21 +623,29 @@ class CoreTests(unittest.TestCase):
         game = apply_scenario(base, "game_voice")
         meeting = apply_scenario(base, "meeting")
         support = apply_scenario(base, "customer_support")
+        discord = apply_scenario(base, "discord_chat")
         subtitle = apply_scenario(base, "subtitle_only")
         mic = apply_scenario(base, "mic_translate")
         two_way = apply_scenario(base, "two_way")
 
         self.assertEqual(game["performance_mode"], "low_latency")
+        self.assertFalse(game["virtual_mic_enabled"])
         self.assertEqual(game["segment_seconds"], 1.5)
         self.assertTrue(meeting["record_logs"])
+        self.assertFalse(meeting["virtual_mic_enabled"])
+        self.assertTrue(discord["virtual_mic_enabled"])
         self.assertEqual(support["performance_mode"], "quality")
         self.assertTrue(support["record_logs"])
+        self.assertTrue(support["virtual_mic_enabled"])
         self.assertFalse(subtitle["tts_enabled"])
+        self.assertFalse(subtitle["virtual_mic_enabled"])
         self.assertFalse(mic["speaker_enabled"])
         self.assertTrue(mic["microphone_enabled"])
         self.assertTrue(mic["tts_enabled"])
+        self.assertTrue(mic["virtual_mic_enabled"])
         self.assertTrue(two_way["speaker_enabled"])
         self.assertTrue(two_way["microphone_enabled"])
+        self.assertTrue(two_way["virtual_mic_enabled"])
         self.assertEqual(base["performance_mode"], DEFAULT_CONFIG["performance_mode"])
 
     def test_ai_orchestrator_combines_scenario_tuning_and_diagnostics_without_enabling_cloud(self):
