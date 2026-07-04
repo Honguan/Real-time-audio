@@ -125,6 +125,10 @@ def load_config(root: Path = APP_DIR) -> dict:
     config.update(loaded)
     if "model" not in loaded and "asr_model" in loaded:
         config["model"] = loaded["asr_model"]
+    if "provider" not in loaded and loaded.get("translation_engine") in ("local", "google", "openai"):
+        config["provider"] = loaded["translation_engine"]
+    if "tts_provider" not in loaded and loaded.get("tts_engine") in ("system", "local", "google", "openai"):
+        config["tts_provider"] = "local" if loaded["tts_engine"] == "system" else loaded["tts_engine"]
     if "advanced_mode" not in loaded and loaded.get("ui_mode") in ("advanced", "simple"):
         config["advanced_mode"] = loaded["ui_mode"] == "advanced"
     if "record_logs" not in loaded and "save_conversation_history" in loaded:
@@ -139,6 +143,8 @@ def save_config(root: Path, config: dict) -> None:
     config = config.copy()
     config["ui_mode"] = "advanced" if config.get("advanced_mode") else "simple"
     config["asr_model"] = config.get("model", config.get("asr_model", "small"))
+    config["translation_engine"] = config.get("provider", config.get("translation_engine", "local"))
+    config["tts_engine"] = "system" if config.get("tts_provider", "local") == "local" else config.get("tts_provider")
     config["runtime_path"] = config.get("runtime_dir", config.get("runtime_path", str(APP_DIR / "runtime" / "cuda12")))
     config["save_conversation_history"] = bool(config.get("record_logs", False))
     config["subtitle_always_on_top"] = bool(config.get("overlay_topmost", True))

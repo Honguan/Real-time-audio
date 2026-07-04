@@ -119,6 +119,17 @@ class CoreTests(unittest.TestCase):
 
             self.assertEqual(load_config(root)["model"], "medium")
 
+    def test_load_config_accepts_public_provider_aliases(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ensure_app_dirs(root)
+            (root / "config" / "settings.json").write_text(json.dumps({"translation_engine": "openai", "tts_engine": "system"}), encoding="utf-8")
+
+            config = load_config(root)
+
+            self.assertEqual(config["provider"], "openai")
+            self.assertEqual(config["tts_provider"], "local")
+
     def test_save_config_mirrors_public_mode_and_log_aliases(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -127,6 +138,8 @@ class CoreTests(unittest.TestCase):
             config["record_logs"] = True
             config["overlay_topmost"] = False
             config["model"] = "medium"
+            config["provider"] = "openai"
+            config["tts_provider"] = "local"
             config["runtime_dir"] = str(root / "runtime" / "cuda12")
 
             save_config(root, config)
@@ -134,6 +147,8 @@ class CoreTests(unittest.TestCase):
             saved = json.loads((root / "config" / "settings.json").read_text(encoding="utf-8"))
             self.assertEqual(saved["ui_mode"], "advanced")
             self.assertEqual(saved["asr_model"], "medium")
+            self.assertEqual(saved["translation_engine"], "openai")
+            self.assertEqual(saved["tts_engine"], "system")
             self.assertEqual(saved["runtime_path"], str(root / "runtime" / "cuda12"))
             self.assertTrue(saved["save_conversation_history"])
             self.assertFalse(saved["subtitle_always_on_top"])
