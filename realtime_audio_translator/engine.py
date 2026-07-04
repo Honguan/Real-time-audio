@@ -9,6 +9,7 @@ from .audio import SegmentWorker, audio_segment_active, device_name_from_label, 
 from .ai_confidence import build_confidence_snapshot, format_confidence_status
 from .config import APP_DIR
 from .logbook import ConversationLog
+from .models import models_dir
 from .providers import TextToSpeech, Translator
 from .tts import play_linear16
 
@@ -66,7 +67,7 @@ class RealtimeEngine:
             self.transcriber = AudioTranscriber(
                 self.repo_root,
                 self.config["model"],
-                APP_DIR / "models",
+                models_dir(self.config),
                 self.config["device"],
                 self.config["compute_type"],
                 self.config,

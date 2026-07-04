@@ -13,7 +13,7 @@ from .commands import refresh_commands
 from .config import APP_DIR, clear_cache, clear_logs, ensure_glossary_file, load_config, save_audio_devices, save_config
 from .diagnostics import collect_diagnostics
 from .engine import RealtimeEngine
-from .models import cuda_hardware_from_check_output, download_model, list_models, model_available, model_install_message, recommend_model
+from .models import cuda_hardware_from_check_output, download_model, list_models, model_available, model_install_message, models_dir, recommend_model
 from .paths import resource_root
 from .providers import TextToSpeech, Translator, google_access_token
 from .release_updater import RELEASES_URL, current_version, latest_release_tag, release_update_message
@@ -453,7 +453,7 @@ class TranslatorApp(tk.Tk):
         raw_devices = list_audio_devices()
         save_audio_devices(APP_DIR, raw_devices)
         devices = [format_device_label(d) for d in raw_devices]
-        models = list_models(self.repo_root / "_models", APP_DIR / "models")
+        models = list_models(self.repo_root / "_models", models_dir(self._config_from_vars()))
         for key, widget in self.comboboxes.items():
             if key == "model":
                 widget.configure(values=models)
@@ -775,10 +775,11 @@ class TranslatorApp(tk.Tk):
             messagebox.showerror("Runtime missing", runtime_install_message(exe.parent))
             return
         model = self.config["model"]
+        app_models = models_dir(self.config)
         self.status.set(f"downloading model {model}")
 
         def run() -> None:
-            code = download_model(exe, model, APP_DIR / "models")
+            code = download_model(exe, model, app_models)
             self.after(0, self.status.set, "model downloaded" if code == 0 else f"model download failed: {code}")
             self.after(0, self._refresh_lists)
 
@@ -907,9 +908,10 @@ class TranslatorApp(tk.Tk):
 
     def _start(self) -> None:
         self._save()
-        if not model_available(self.config["model"], self.repo_root / "_models", APP_DIR / "models"):
+        app_models = models_dir(self.config)
+        if not model_available(self.config["model"], self.repo_root / "_models", app_models):
             append_app_log(APP_DIR, "model_missing", model=self.config["model"])
-            messagebox.showerror("Model missing", model_install_message(self.config["model"], APP_DIR / "models"))
+            messagebox.showerror("Model missing", model_install_message(self.config["model"], app_models))
             self.status.set(f"model missing: {self.config['model']}")
             return
         append_app_log(APP_DIR, "start", model=self.config["model"], provider=self.config["provider"])

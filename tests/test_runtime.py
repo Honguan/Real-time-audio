@@ -1,3 +1,4 @@
+import os
 import tempfile
 import unittest
 import subprocess
@@ -49,6 +50,9 @@ class RuntimeTests(unittest.TestCase):
 
     def test_runtime_dir_accepts_public_runtime_path_alias(self):
         self.assertEqual(runtime_dir({"runtime_path": "custom-runtime"}), Path("custom-runtime"))
+
+    def test_runtime_dir_expands_windows_environment_variables(self):
+        self.assertEqual(runtime_dir({"runtime_path": r"%USERPROFILE%\runtime"}), Path(os.environ["USERPROFILE"]) / "runtime")
 
     def test_runtime_install_message_includes_release_and_cuda12_package(self):
         message = runtime_install_message(Path("runtime"))

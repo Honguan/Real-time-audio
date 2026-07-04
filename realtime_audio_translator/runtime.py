@@ -1,3 +1,4 @@
+import os
 import shutil
 from pathlib import Path
 
@@ -15,7 +16,7 @@ CUDA_PACKAGE_NAME = "cuBLAS.and.cuDNN_CUDA12_win_v3.7z"
 
 def runtime_dir(config: dict | None = None) -> Path:
     configured = (config or {}).get("runtime_dir") or (config or {}).get("runtime_path")
-    return Path(configured).expanduser() if configured else DEFAULT_RUNTIME_DIR
+    return Path(os.path.expandvars(configured)).expanduser() if configured else DEFAULT_RUNTIME_DIR
 
 
 def whisper_exe(root: Path = DEFAULT_RUNTIME_DIR) -> Path:

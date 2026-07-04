@@ -1,10 +1,18 @@
+import os
 import re
 import subprocess
 import wave
 from pathlib import Path
 
+from .config import APP_DIR
+
 
 KNOWN_MODELS = ("small", "medium", "large-v3-turbo", "large-v2")
+
+
+def models_dir(config: dict | None = None) -> Path:
+    configured = (config or {}).get("models_path")
+    return Path(os.path.expandvars(configured)).expanduser() if configured else APP_DIR / "models"
 
 
 def model_path(model: str, local_models: Path, app_models: Path) -> Path | None:

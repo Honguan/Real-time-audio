@@ -5,7 +5,7 @@ from pathlib import Path
 from .ai_auto_tuner import recommend_tuning
 from .audio import device_name_from_label, find_device
 from .config import APP_DIR
-from .models import model_available
+from .models import model_available, models_dir
 from .runtime import runtime_dir, runtime_status
 
 
@@ -27,7 +27,8 @@ def _devices_overlap(left: str, right: str) -> bool:
 
 def _model_exists(config: dict, repo_root: Path) -> bool:
     model = config.get("model", "")
-    return model_available(model, repo_root / "_models", APP_DIR / "models") or model_available(model, repo_root / "models", APP_DIR / "models")
+    app_models = models_dir(config)
+    return model_available(model, repo_root / "_models", app_models) or model_available(model, repo_root / "models", app_models)
 
 
 def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
