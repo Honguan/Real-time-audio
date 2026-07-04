@@ -249,6 +249,7 @@ class TranslatorApp(tk.Tk):
         self.show_original_text = tk.BooleanVar(value=bool(self.config["show_original_text"]))
         self.show_translated_text = tk.BooleanVar(value=bool(self.config.get("show_translated_text", True)))
         self.tts_enabled = tk.BooleanVar(value=bool(self.config.get("tts_enabled", True)))
+        self.virtual_mic_enabled = tk.BooleanVar(value=bool(self.config.get("virtual_mic_enabled", False)))
         self.speaker_enabled = tk.BooleanVar(value=bool(self.config.get("speaker_enabled", True)))
         self.microphone_enabled = tk.BooleanVar(value=bool(self.config.get("microphone_enabled", True)))
         self.record_logs = tk.BooleanVar(value=bool(self.config["record_logs"]))
@@ -323,6 +324,7 @@ class TranslatorApp(tk.Tk):
         ttk.Checkbutton(frame, text="Mic capture", variable=self.microphone_enabled, command=self._save).grid(row=next_row + 5, column=1, sticky="w")
         ttk.Checkbutton(frame, text="Advanced settings", variable=self.advanced_mode, command=self._apply_mode).grid(row=next_row + 5, column=2, sticky="w")
         ttk.Checkbutton(frame, text="Record logs", variable=self.record_logs, command=self._save).grid(row=next_row + 6, column=0, sticky="w")
+        ttk.Checkbutton(frame, text="Virtual mic output", variable=self.virtual_mic_enabled, command=self._save).grid(row=next_row + 6, column=1, sticky="w")
 
         buttons = ttk.Frame(frame)
         buttons.grid(row=next_row + 7, column=0, columnspan=3, sticky="ew", pady=12)
@@ -422,6 +424,7 @@ class TranslatorApp(tk.Tk):
         config["show_original_text"] = self.show_original_text.get()
         config["show_translated_text"] = self.show_translated_text.get()
         config["tts_enabled"] = self.tts_enabled.get()
+        config["virtual_mic_enabled"] = self.virtual_mic_enabled.get()
         config["speaker_enabled"] = self.speaker_enabled.get()
         config["microphone_enabled"] = self.microphone_enabled.get()
         config["record_logs"] = self.record_logs.get()

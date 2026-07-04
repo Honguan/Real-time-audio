@@ -61,6 +61,7 @@ Whisper 模型可放在 `models\whisper-small`；翻譯模型放在 `models\tran
 - `Show original` / `Show translation`：切換原文與譯文。
 - `Speak translations`：開關翻譯語音輸出。
 - `Push to talk`：按住才送出我方翻譯語音。
+- `Virtual mic output`：開啟後才會把我方翻譯語音送到 `TTS output`。
 - `Record logs`：儲存對話紀錄。
 - `Open logs`：開啟紀錄資料夾，`app.log` 會記錄開始、停止、缺模型與字幕匯出事件。
 - `Export subtitles`：把最新 JSONL 對話紀錄匯出成 SRT，檔案放在 `%USERPROFILE%\.realtime-audio\exports\subtitles`。
@@ -97,7 +98,7 @@ http://127.0.0.1:5000/translate
 - 聽不到對方聲音：確認喇叭來源選的是 Discord 或遊戲正在播放的裝置，再按 `Speaker test`。
 - 找不到 runtime：確認兩個 runtime 檔案都已解壓到 `%USERPROFILE%\.realtime-audio\runtime\cuda12`。
 - 找不到模型：在工具內下載模型，或解壓模型 zip 到 `%USERPROFILE%\.realtime-audio\models`。
-- 對方聽不到翻譯語音：確認 `Speak translations` 已開啟，且 `TTS output` 選 `CABLE Input`。
+- 對方聽不到翻譯語音：確認 `Speak translations` 與 `Virtual mic output` 已開啟，且 `TTS output` 選 `CABLE Input`。
 - Discord 沒有收到虛擬麥克風聲音：Discord 麥克風請選 `CABLE Output (VB-Audio Virtual Cable)`。
 - 字幕延遲太高：把 `Performance mode` 改成 `low_latency`，並先用較小模型測試。
 - GPU 無法使用：把 `Device` 改成 CPU，或確認 CUDA12 runtime 已正確解壓。

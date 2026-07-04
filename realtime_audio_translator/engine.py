@@ -178,7 +178,7 @@ class RealtimeEngine:
                     self.overlay(overlay_text, "")
                 else:
                     self.overlay("", overlay_text)
-                    if self.config.get("tts_enabled", True) and not self.muted and translated and not translation_failed:
+                    if self.config.get("tts_enabled", True) and self.config.get("virtual_mic_enabled", False) and not self.muted and translated and not translation_failed:
                         tts_device = self.config.get("tts_output_device", "CABLE Input")
                         tts_started = time.perf_counter()
                         try:

@@ -223,6 +223,8 @@ class CoreTests(unittest.TestCase):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
         self.assertIn('("Toggle speech", self._toggle_speech)', gui_source)
         self.assertIn("self.tts_enabled.set(toggle_speech_enabled(self.tts_enabled.get()))", gui_source)
+        self.assertIn("Virtual mic output", gui_source)
+        self.assertIn('config["virtual_mic_enabled"] = self.virtual_mic_enabled.get()', gui_source)
 
     def test_audio_source_quick_toggles_switch_capture_sources(self):
         import realtime_audio_translator.gui as gui_module
@@ -1350,6 +1352,13 @@ class CoreTests(unittest.TestCase):
         self.assertIn("Push to talk", readme)
         self.assertIn("hold it to unmute TTS output", readme)
 
+    def test_readme_and_release_notes_mention_virtual_mic_output_switch(self):
+        readme = Path("README.md").read_text(encoding="utf-8")
+        notes = Path("docs/RELEASE_NOTES.md").read_text(encoding="utf-8")
+
+        for text in (readme, notes):
+            self.assertIn("Virtual mic output", text)
+
     def test_readme_and_release_notes_mention_confidence_status(self):
         readme = Path("README.md").read_text(encoding="utf-8")
         notes = Path("docs/RELEASE_NOTES.md").read_text(encoding="utf-8")
@@ -1894,6 +1903,7 @@ class CoreTests(unittest.TestCase):
         config = DEFAULT_CONFIG.copy()
         config["record_logs"] = False
         config["tts_provider"] = "openai"
+        config["virtual_mic_enabled"] = True
         played = []
         engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, lambda status: None)
 
@@ -1940,6 +1950,7 @@ class CoreTests(unittest.TestCase):
         config = DEFAULT_CONFIG.copy()
         config["record_logs"] = False
         config["tts_provider"] = "local"
+        config["virtual_mic_enabled"] = True
         spoken = []
         engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, lambda status: None)
 
@@ -1983,10 +1994,59 @@ class CoreTests(unittest.TestCase):
 
         self.assertEqual(spoken, [("hi", "CABLE Input")])
 
+    def test_engine_requires_virtual_mic_enabled_for_tts_output(self):
+        import realtime_audio_translator.engine as engine_module
+
+        config = DEFAULT_CONFIG.copy()
+        config["record_logs"] = False
+        config["tts_enabled"] = True
+        config["tts_provider"] = "openai"
+        config["virtual_mic_enabled"] = False
+        played = []
+        engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, lambda status: None)
+
+        class Transcriber:
+            def transcribe(self, wav, source_language):
+                return "hello"
+
+        class Translator:
+            def translate(self, text, source_language, target_language):
+                engine.running = False
+                return "hi"
+
+        class TTS:
+            def synthesize_google_linear16(self, text, language_code):
+                return b"\0\0"
+
+            def synthesize_openai_linear16(self, text):
+                return b"\0\0"
+
+        class Worker:
+            def __init__(self, wav):
+                self.queue = queue.Queue()
+                self.queue.put(wav)
+
+        original_play = engine_module.play_linear16
+        engine_module.play_linear16 = lambda audio, device: played.append((audio, device))
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                wav = Path(tmp) / "clip.wav"
+                self._write_wav(wav, 12000)
+                engine.running = True
+                engine.transcriber = Transcriber()
+                engine.translator = Translator()
+                engine.tts = TTS()
+                engine._process_segments("me", Worker(wav))
+        finally:
+            engine_module.play_linear16 = original_play
+
+        self.assertEqual(played, [])
+
     def test_engine_records_tts_failure_for_diagnostics(self):
         config = DEFAULT_CONFIG.copy()
         config["record_logs"] = False
         config["tts_provider"] = "local"
+        config["virtual_mic_enabled"] = True
         engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, lambda status: None)
 
         class Transcriber:
