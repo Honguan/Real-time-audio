@@ -263,7 +263,8 @@ class CoreTests(unittest.TestCase):
         self.assertIn('("Virtual mic test", self._test_virtual_mic)', gui_source)
         self.assertIn('def _test_tts(self) -> None:', gui_source)
         self.assertIn('def _test_virtual_mic(self) -> None:', gui_source)
-        self.assertIn("self._test_tts()", gui_source)
+        self.assertIn('config["last_virtual_mic_failed"] = False', gui_source)
+        self.assertIn('config["last_virtual_mic_failed"] = True', gui_source)
         self.assertIn('provider = config.get("tts_provider", "local")', gui_source)
         self.assertIn('tts.speak_local("Translation output test", device)', gui_source)
         self.assertIn('audio = tts.synthesize_openai_linear16("Translation output test")', gui_source)
@@ -485,6 +486,28 @@ class CoreTests(unittest.TestCase):
         issue = next(item for item in issues if item.code == "tts_no_sound")
         self.assertEqual(issue.severity, "warning")
         self.assertEqual(issue.action, "audio_settings")
+
+    def test_diagnostics_report_virtual_mic_failure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            runtime = root / "runtime"
+            model = root / "models" / "medium"
+            runtime.mkdir()
+            model.mkdir(parents=True)
+            (runtime / "faster-whisper-xxl.exe").write_text("exe", encoding="utf-8")
+            (runtime / "ffmpeg.exe").write_text("ff", encoding="utf-8")
+            (runtime / "_xxl_data").mkdir()
+            config = DEFAULT_CONFIG.copy()
+            config["runtime_dir"] = str(runtime)
+            config["model"] = "medium"
+            config["virtual_mic_enabled"] = True
+            config["last_virtual_mic_failed"] = True
+
+            issues = collect_diagnostics(config, root)
+
+        issue = next(item for item in issues if item.code == "virtual_mic_no_output")
+        self.assertIn("Discord", issue.title)
+        self.assertIn("CABLE Output", issue.fix)
 
     def test_diagnostics_report_quiet_audio_tests(self):
         with tempfile.TemporaryDirectory() as tmp:

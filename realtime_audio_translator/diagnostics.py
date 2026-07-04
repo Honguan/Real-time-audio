@@ -114,6 +114,15 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
             "檢查 TTS output、VB-CABLE 與 TTS provider 設定",
             "audio_settings",
         ))
+    if config.get("virtual_mic_enabled", False) and config.get("last_virtual_mic_failed"):
+        issues.append(DiagnosticIssue(
+            "virtual_mic_no_output",
+            "warning",
+            "Discord 沒有收到虛擬麥克風聲音",
+            "最近一次 Virtual mic test 播放失敗",
+            "確認 TTS output 選 CABLE Input，並把 Discord 麥克風設為 CABLE Output",
+            "audio_settings",
+        ))
     if config.get("last_asr_failed"):
         issues.append(DiagnosticIssue(
             "asr_runtime_failed",

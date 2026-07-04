@@ -734,25 +734,45 @@ class TranslatorApp(tk.Tk):
         sd.play(data, samplerate=samplerate, device=device, blocking=True)
 
     def _test_tts(self) -> None:
+        config = self._config_from_vars()
         try:
-            config = self._config_from_vars()
-            provider = config.get("tts_provider", "local")
-            device = self.vars["tts_output_device"].get()
-            tts = TextToSpeech(config)
-            if provider == "local":
-                tts.speak_local("Translation output test", device)
-            elif provider == "openai":
-                audio = tts.synthesize_openai_linear16("Translation output test")
-                play_linear16(audio, device)
-            else:
-                audio = tts.synthesize_google_linear16("Translation output test", config["target_language"])
-                play_linear16(audio, device)
+            self._play_tts_test(config)
+            config["last_tts_failed"] = False
+            self.config = config
+            save_config(APP_DIR, self.config)
             self.status.set("tts output tested")
         except Exception as exc:
+            config["last_tts_failed"] = True
+            self.config = config
+            save_config(APP_DIR, self.config)
             messagebox.showerror("TTS test failed", str(exc))
 
     def _test_virtual_mic(self) -> None:
-        self._test_tts()
+        config = self._config_from_vars()
+        try:
+            self._play_tts_test(config)
+            config["last_virtual_mic_failed"] = False
+            self.config = config
+            save_config(APP_DIR, self.config)
+            self.status.set("virtual mic output tested")
+        except Exception as exc:
+            config["last_virtual_mic_failed"] = True
+            self.config = config
+            save_config(APP_DIR, self.config)
+            messagebox.showerror("Virtual mic test failed", str(exc))
+
+    def _play_tts_test(self, config: dict) -> None:
+        provider = config.get("tts_provider", "local")
+        device = self.vars["tts_output_device"].get()
+        tts = TextToSpeech(config)
+        if provider == "local":
+            tts.speak_local("Translation output test", device)
+        elif provider == "openai":
+            audio = tts.synthesize_openai_linear16("Translation output test")
+            play_linear16(audio, device)
+        else:
+            audio = tts.synthesize_google_linear16("Translation output test", config["target_language"])
+            play_linear16(audio, device)
 
     def _test_speaker(self) -> None:
         try:
