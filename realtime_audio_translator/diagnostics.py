@@ -179,6 +179,8 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
             "optimize_settings",
         ))
     cuda_devices = config.get("last_cuda_devices")
+    tuning_cuda_devices = 1
+    tuning_vram_gb = 4
     if cuda_devices not in (None, ""):
         try:
             cuda_devices = int(float(cuda_devices))
@@ -188,6 +190,8 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
             vram_gb = int(float(config.get("last_vram_gb") or 0))
         except Exception:
             vram_gb = 0
+        tuning_cuda_devices = cuda_devices
+        tuning_vram_gb = vram_gb
         if config.get("device") != "cpu" and cuda_devices < 1:
             issues.append(DiagnosticIssue(
                 "gpu_unavailable",
@@ -212,7 +216,7 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
             latency = float(latency) if latency not in (None, "") else None
         except Exception:
             latency = None
-        tuning = recommend_tuning(config, cuda_devices=1, vram_gb=4, latency_seconds=latency)
+        tuning = recommend_tuning(config, cuda_devices=tuning_cuda_devices, vram_gb=tuning_vram_gb, latency_seconds=latency)
         if tuning:
             issues.append(DiagnosticIssue(
                 "auto_tune_recommended",

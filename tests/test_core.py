@@ -529,6 +529,10 @@ class CoreTests(unittest.TestCase):
 
         self.assertIn("gpu_unavailable", [item.code for item in no_gpu])
         self.assertIn("gpu_low_vram", [item.code for item in low_vram])
+        no_gpu_auto = next(item for item in no_gpu if item.code == "auto_tune_recommended")
+        self.assertIn("切換 CPU 與 medium 模型", no_gpu_auto.detail)
+        low_vram_auto = next(item for item in low_vram if item.code == "auto_tune_recommended")
+        self.assertIn("低 VRAM 使用 medium 模型", low_vram_auto.detail)
 
     def test_diagnostics_report_asr_runtime_failure(self):
         with tempfile.TemporaryDirectory() as tmp:
