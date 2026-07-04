@@ -504,18 +504,25 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(issue.action, "language_settings")
 
     def test_scenarios_apply_expected_existing_settings(self):
-        self.assertEqual(SCENARIO_CHOICES, ("game_voice", "discord_chat", "meeting", "subtitle_only", "two_way"))
+        self.assertEqual(SCENARIO_CHOICES, ("game_voice", "discord_chat", "meeting", "customer_support", "subtitle_only", "mic_translate", "two_way"))
         base = DEFAULT_CONFIG.copy()
 
         game = apply_scenario(base, "game_voice")
         meeting = apply_scenario(base, "meeting")
+        support = apply_scenario(base, "customer_support")
         subtitle = apply_scenario(base, "subtitle_only")
+        mic = apply_scenario(base, "mic_translate")
         two_way = apply_scenario(base, "two_way")
 
         self.assertEqual(game["performance_mode"], "low_latency")
         self.assertEqual(game["segment_seconds"], 1.5)
         self.assertTrue(meeting["record_logs"])
+        self.assertEqual(support["performance_mode"], "quality")
+        self.assertTrue(support["record_logs"])
         self.assertFalse(subtitle["tts_enabled"])
+        self.assertFalse(mic["speaker_enabled"])
+        self.assertTrue(mic["microphone_enabled"])
+        self.assertTrue(mic["tts_enabled"])
         self.assertTrue(two_way["speaker_enabled"])
         self.assertTrue(two_way["microphone_enabled"])
         self.assertEqual(base["performance_mode"], DEFAULT_CONFIG["performance_mode"])
@@ -1230,6 +1237,14 @@ class CoreTests(unittest.TestCase):
         for text in (readme, notes):
             self.assertIn("AI 決策中樞", text)
             self.assertIn("Optimize settings", text)
+
+    def test_readme_and_release_notes_mention_all_scenarios(self):
+        readme = Path("README.md").read_text(encoding="utf-8")
+        notes = Path("docs/RELEASE_NOTES.md").read_text(encoding="utf-8")
+
+        for text in (readme, notes):
+            self.assertIn("客服", text)
+            self.assertIn("自己說話", text)
 
     def test_readme_and_release_notes_mention_language_lock_hint(self):
         readme = Path("README.md").read_text(encoding="utf-8")

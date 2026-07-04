@@ -1,4 +1,4 @@
-SCENARIO_CHOICES = ("game_voice", "discord_chat", "meeting", "subtitle_only", "two_way")
+SCENARIO_CHOICES = ("game_voice", "discord_chat", "meeting", "customer_support", "subtitle_only", "mic_translate", "two_way")
 
 SCENARIO_PRESETS = {
     "game_voice": {
@@ -31,12 +31,32 @@ SCENARIO_PRESETS = {
         "show_translated_text": True,
         "record_logs": True,
     },
+    "customer_support": {
+        "performance_mode": "quality",
+        "segment_seconds": 3.0,
+        "tts_enabled": True,
+        "speaker_enabled": True,
+        "microphone_enabled": True,
+        "show_original_text": True,
+        "show_translated_text": True,
+        "record_logs": True,
+    },
     "subtitle_only": {
         "performance_mode": "balanced",
         "segment_seconds": 2.0,
         "tts_enabled": False,
         "speaker_enabled": True,
         "microphone_enabled": False,
+        "show_original_text": True,
+        "show_translated_text": True,
+        "record_logs": False,
+    },
+    "mic_translate": {
+        "performance_mode": "balanced",
+        "segment_seconds": 2.0,
+        "tts_enabled": True,
+        "speaker_enabled": False,
+        "microphone_enabled": True,
         "show_original_text": True,
         "show_translated_text": True,
         "record_logs": False,

@@ -66,7 +66,7 @@ Whisper 模型可放在 `models\whisper-small`；翻譯模型放在 `models\tran
 - `Export subtitles`：把最新 JSONL 對話紀錄匯出成 SRT，檔案放在 `%USERPROFILE%\.realtime-audio\exports\subtitles`。
 - `Open app folder`：開啟 `%USERPROFILE%\.realtime-audio`，設定鏡像在 `config\settings.json`，術語表在 `config\glossary.json`，音訊裝置快照在 `config\audio_devices.json`。
 - `Show language`：在字幕前顯示語言代碼。
-- `Apply scenario`：套用遊戲、Discord、會議、字幕-only 或雙向翻譯預設。
+- `Apply scenario`：套用遊戲、Discord、會議、客服、字幕-only、自己說話翻譯或雙向翻譯預設。
 - `Optimize settings`：使用 AI 決策中樞依場景、硬體、延遲與診斷結果切換模型、裝置與低延遲設定。
 - `Run diagnostics`：顯示目前缺少的 runtime、模型、音訊或 API 設定。
 - `Check updates`：檢查 GitHub Releases 是否有新版本。
