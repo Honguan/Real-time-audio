@@ -343,6 +343,7 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(DEFAULT_CONFIG["ui_mode"], "simple")
         self.assertEqual(DEFAULT_CONFIG["asr_engine"], "faster-whisper-xxl")
         self.assertEqual(DEFAULT_CONFIG["asr_model"], "small")
+        self.assertEqual(DEFAULT_CONFIG["model"], "small")
         self.assertEqual(DEFAULT_CONFIG["translation_engine"], "local")
         self.assertEqual(DEFAULT_CONFIG["tts_engine"], "system")
         self.assertEqual(DEFAULT_CONFIG["runtime_path"], str(Path.home() / ".realtime-audio" / "runtime" / "cuda12"))

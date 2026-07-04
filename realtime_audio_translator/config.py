@@ -21,7 +21,7 @@ DEFAULT_CONFIG = {
     "tts_provider": "local",
     "scenario": "discord_chat",
     "performance_mode": "balanced",
-    "model": "large-v3-turbo",
+    "model": "small",
     "compute_type": "auto",
     "device": "cuda",
     "speaker_device": "",
