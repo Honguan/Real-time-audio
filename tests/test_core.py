@@ -1989,6 +1989,37 @@ class CoreTests(unittest.TestCase):
 
         self.assertEqual(overlays[0][0], "en: hello\nzh: 你好")
 
+    def test_engine_speaker_capture_uses_auto_language(self):
+        languages = []
+        config = DEFAULT_CONFIG.copy()
+        config["record_logs"] = False
+        engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, lambda status: None)
+
+        class Transcriber:
+            def transcribe(self, wav, source_language):
+                languages.append(source_language)
+                return "hello"
+
+        class Translator:
+            def translate(self, text, source_language, target_language):
+                engine.running = False
+                return "hi"
+
+        class Worker:
+            def __init__(self, wav):
+                self.queue = queue.Queue()
+                self.queue.put(wav)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            wav = Path(tmp) / "clip.wav"
+            self._write_wav(wav, 12000)
+            engine.running = True
+            engine.transcriber = Transcriber()
+            engine.translator = Translator()
+            engine._process_segments("speaker", Worker(wav))
+
+        self.assertEqual(languages, ["auto"])
+
     def test_engine_uses_detected_language_when_source_is_auto(self):
         overlays = []
         calls = []

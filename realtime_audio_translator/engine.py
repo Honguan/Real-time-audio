@@ -127,7 +127,8 @@ class RealtimeEngine:
 
     def _process_segments(self, direction: str, worker: SegmentWorker) -> None:
         assert self.transcriber is not None
-        source = self.config["target_language"] if direction == "speaker" else self.config["source_language"]
+        source = "auto" if direction == "speaker" else self.config["source_language"]
+        fallback_source = self.config["target_language"] if direction == "speaker" else source
         target = self.config["source_language"] if direction == "speaker" else self.config["target_language"]
         while self.running:
             if self.paused:
@@ -150,7 +151,7 @@ class RealtimeEngine:
                 if not text:
                     continue
                 detected_source = getattr(self.transcriber, "last_language", None) if source == "auto" else None
-                source_for_output = detected_source or source
+                source_for_output = detected_source or fallback_source
                 language_confidence = getattr(self.transcriber, "last_language_probability", None)
                 if detected_source:
                     self.config["last_detected_language"] = detected_source
