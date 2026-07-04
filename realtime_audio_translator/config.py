@@ -51,6 +51,8 @@ DEFAULT_CONFIG = {
     "advanced_mode": False,
     "ai_auto_optimize": True,
     "ai_self_diagnosis": True,
+    "last_cuda_devices": "",
+    "last_vram_gb": "",
     "google_project_id": "",
     "google_service_account_json": "",
     "glossary_path": str(APP_DIR / "config" / "glossary.json"),

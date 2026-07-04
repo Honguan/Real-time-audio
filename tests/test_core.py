@@ -502,6 +502,31 @@ class CoreTests(unittest.TestCase):
         self.assertIn("microphone_no_sound", codes)
         self.assertIn("speaker_no_sound", codes)
 
+    def test_diagnostics_report_gpu_limits(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            runtime = root / "runtime"
+            model = root / "models" / "large-v3-turbo"
+            runtime.mkdir()
+            model.mkdir(parents=True)
+            (runtime / "faster-whisper-xxl.exe").write_text("exe", encoding="utf-8")
+            (runtime / "ffmpeg.exe").write_text("ff", encoding="utf-8")
+            (runtime / "_xxl_data").mkdir()
+            config = DEFAULT_CONFIG.copy()
+            config["runtime_dir"] = str(runtime)
+            config["device"] = "cuda"
+            config["model"] = "large-v3-turbo"
+            config["last_cuda_devices"] = 0
+            config["last_vram_gb"] = 0
+
+            no_gpu = collect_diagnostics(config, root)
+            config["last_cuda_devices"] = 1
+            config["last_vram_gb"] = 3
+            low_vram = collect_diagnostics(config, root)
+
+        self.assertIn("gpu_unavailable", [item.code for item in no_gpu])
+        self.assertIn("gpu_low_vram", [item.code for item in low_vram])
+
     def test_diagnostics_include_auto_tune_recommendations(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -681,6 +706,8 @@ class CoreTests(unittest.TestCase):
         self.assertIn("進階日誌", gui_source)
         self.assertIn("app.log", gui_source)
         self.assertIn("plan_session", gui_source)
+        self.assertIn('config["last_cuda_devices"] = devices', gui_source)
+        self.assertIn('config["last_vram_gb"] = vram_gb', gui_source)
         self.assertIn('("Check updates", self._check_updates)', gui_source)
         self.assertIn("latest_release_tag", gui_source)
 

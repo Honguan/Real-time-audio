@@ -160,6 +160,34 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
             "按 Optimize settings 套用低延遲分段與 VAD 設定",
             "optimize_settings",
         ))
+    cuda_devices = config.get("last_cuda_devices")
+    if cuda_devices not in (None, ""):
+        try:
+            cuda_devices = int(float(cuda_devices))
+        except Exception:
+            cuda_devices = 0
+        try:
+            vram_gb = int(float(config.get("last_vram_gb") or 0))
+        except Exception:
+            vram_gb = 0
+        if config.get("device") != "cpu" and cuda_devices < 1:
+            issues.append(DiagnosticIssue(
+                "gpu_unavailable",
+                "warning",
+                "GPU 不支援或無法使用",
+                "最近一次 CUDA 檢查沒有偵測到可用 GPU",
+                "按 Optimize settings 切換 CPU 與較小模型，或確認 CUDA12 runtime 已解壓",
+                "optimize_settings",
+            ))
+        if cuda_devices >= 1 and vram_gb < 4 and config.get("model") != "medium":
+            issues.append(DiagnosticIssue(
+                "gpu_low_vram",
+                "warning",
+                "GPU 記憶體不足",
+                f"最近一次 CUDA 檢查 VRAM 約 {vram_gb} GB",
+                "按 Optimize settings 改用 medium 模型",
+                "optimize_settings",
+            ))
     if config.get("ai_auto_optimize", True):
         latency = config.get("last_latency_seconds")
         try:

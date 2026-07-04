@@ -597,13 +597,18 @@ class TranslatorApp(tk.Tk):
         )
 
     def _recommend(self) -> None:
-        exe = whisper_exe(runtime_dir(self._config_from_vars()))
+        config = self._config_from_vars()
+        exe = whisper_exe(runtime_dir(config))
         if not exe.exists():
             self.status.set("runtime missing")
             self.vars["model"].set("medium")
             return
         cuda = subprocess.run([str(exe), "--checkcuda"], capture_output=True, text=True, check=False)
         devices, vram_gb = cuda_hardware_from_check_output(cuda.stdout + cuda.stderr)
+        config["last_cuda_devices"] = devices
+        config["last_vram_gb"] = vram_gb
+        self.vars["last_cuda_devices"].set(str(devices))
+        self.vars["last_vram_gb"].set(str(vram_gb))
         prefer_quality = self.vars["performance_mode"].get() == "quality"
         self.vars["model"].set(recommend_model(devices, vram_gb, prefer_quality))
         self._apply_performance_mode()
@@ -636,6 +641,8 @@ class TranslatorApp(tk.Tk):
         if exe.exists():
             cuda = subprocess.run([str(exe), "--checkcuda"], capture_output=True, text=True, check=False)
             devices, vram_gb = cuda_hardware_from_check_output(cuda.stdout + cuda.stderr)
+        config["last_cuda_devices"] = devices
+        config["last_vram_gb"] = vram_gb
         decision = plan_session(config, self.repo_root, devices, vram_gb)
         if not decision.recommendations:
             self.status.set("settings already optimized")
