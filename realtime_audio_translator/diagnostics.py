@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .ai_auto_tuner import recommend_tuning
-from .audio import device_name_from_label, find_device
+from .audio import device_name_from_label, find_device, virtual_mic_recaptures_tts
 from .config import APP_DIR
 from .models import model_available, models_dir
 from .runtime import runtime_dir, runtime_status
@@ -79,6 +79,15 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
             "虛擬麥克風輸出可能未設定",
             "TTS output 目前看起來不是 CABLE Input",
             "把 TTS output 設為 CABLE Input，並把 Discord 麥克風設為 CABLE Output",
+            "audio_settings",
+        ))
+    if config.get("microphone_enabled", True) and config.get("tts_enabled", True) and config.get("virtual_mic_enabled", False) and virtual_mic_recaptures_tts(config.get("microphone_device", ""), config.get("tts_output_device", "")):
+        issues.append(DiagnosticIssue(
+            "microphone_feedback_risk",
+            "warning",
+            "麥克風可能收到翻譯語音",
+            "Microphone device 看起來選到 CABLE Output，會把送給 Discord 的翻譯語音再收回來",
+            "Microphone device 請選實體麥克風；Discord 的麥克風才選 CABLE Output",
             "audio_settings",
         ))
     if config.get("speaker_enabled", True) and not find_device(config.get("speaker_device", ""), want_output=True):

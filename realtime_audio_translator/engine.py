@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Callable
 
 from .asr import AudioTranscriber
-from .audio import SegmentWorker, audio_segment_active, device_name_from_label, find_device
+from .audio import SegmentWorker, audio_segment_active, device_name_from_label, find_device, virtual_mic_recaptures_tts
 from .ai_confidence import build_confidence_snapshot, format_confidence_status
 from .config import APP_DIR
 from .logbook import ConversationLog
@@ -80,18 +80,27 @@ class RealtimeEngine:
         self.config["last_asr_failed"] = False
         started = []
         skipped_feedback = False
+        skipped_mic_feedback = False
         if self.config.get("speaker_enabled", True):
             if self.config.get("tts_enabled", True) and audio_devices_overlap(self.config.get("speaker_device", ""), self.config.get("tts_output_device", "")):
                 skipped_feedback = True
             else:
                 started.append(self._start_direction("speaker", self.config.get("speaker_device", ""), True))
         if self.config.get("microphone_enabled", True):
-            started.append(self._start_direction("me", self.config.get("microphone_device", ""), False))
+            if self.config.get("tts_enabled", True) and self.config.get("virtual_mic_enabled", False) and virtual_mic_recaptures_tts(self.config.get("microphone_device", ""), self.config.get("tts_output_device", "")):
+                skipped_mic_feedback = True
+            else:
+                started.append(self._start_direction("me", self.config.get("microphone_device", ""), False))
+        skips = []
+        if skipped_feedback:
+            skips.append("speaker capture skipped: matches TTS output")
+        if skipped_mic_feedback:
+            skips.append("microphone capture skipped: matches virtual mic output")
         if any(started):
-            self.status("running; speaker capture skipped: matches TTS output" if skipped_feedback else "running")
+            self.status("running" + (f"; {'; '.join(skips)}" if skips else ""))
         else:
             self.running = False
-            self.status("no audio devices")
+            self.status("no audio devices" + (f"; {'; '.join(skips)}" if skips else ""))
 
     def stop(self) -> None:
         self.running = False

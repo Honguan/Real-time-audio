@@ -35,6 +35,12 @@ def device_name_from_label(label: str) -> str:
     return label.rsplit(" [", 1)[0]
 
 
+def virtual_mic_recaptures_tts(microphone_device: str, tts_output_device: str) -> bool:
+    microphone = device_name_from_label(microphone_device).lower()
+    output = device_name_from_label(tts_output_device).lower()
+    return "cable output" in microphone and "cable input" in output
+
+
 def audio_segment_active(path: Path, threshold: float) -> bool:
     threshold = min(1.0, max(0.0, float(threshold)))
     if threshold == 0:

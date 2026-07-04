@@ -10,7 +10,7 @@ from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
 
-from realtime_audio_translator.audio import audio_segment_active, device_name_from_label, find_device
+from realtime_audio_translator.audio import audio_segment_active, device_name_from_label, find_device, virtual_mic_recaptures_tts
 from realtime_audio_translator.asr import AudioTranscriber, add_runtime_dll_directory, add_xxl_data
 from realtime_audio_translator.commands import parse_help_options
 from realtime_audio_translator.config import DEFAULT_CONFIG, clear_cache, clear_logs, ensure_app_dirs, ensure_glossary_file, load_config, save_audio_devices, save_config
@@ -476,6 +476,29 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(issue.action, "audio_settings")
         self.assertIn("CABLE Input", issue.fix)
         self.assertIn("CABLE Output", issue.fix)
+
+    def test_diagnostics_warn_when_microphone_captures_virtual_mic_output(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            runtime = root / "runtime"
+            model = root / "models" / "medium"
+            runtime.mkdir()
+            model.mkdir(parents=True)
+            (runtime / "faster-whisper-xxl.exe").write_text("exe", encoding="utf-8")
+            (runtime / "ffmpeg.exe").write_text("ff", encoding="utf-8")
+            (runtime / "_xxl_data").mkdir()
+            config = DEFAULT_CONFIG.copy()
+            config["runtime_dir"] = str(runtime)
+            config["model"] = "medium"
+            config["microphone_device"] = "CABLE Output (VB-Audio Virtual Cable) [Windows WASAPI]"
+            config["tts_output_device"] = "CABLE Input (VB-Audio Virtual Cable) [Windows WASAPI]"
+            config["virtual_mic_enabled"] = True
+
+            issues = collect_diagnostics(config, root)
+
+        issue = next(item for item in issues if item.code == "microphone_feedback_risk")
+        self.assertEqual(issue.action, "audio_settings")
+        self.assertIn("實體麥克風", issue.fix)
 
     def test_diagnostics_report_high_subtitle_latency(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1760,6 +1783,10 @@ class CoreTests(unittest.TestCase):
         self.assertTrue(audio_devices_overlap("CABLE Input", "CABLE Input (VB-Audio Virtual Cable) [Windows WASAPI]"))
         self.assertFalse(audio_devices_overlap("Speakers", "CABLE Input"))
 
+    def test_virtual_mic_recaptures_tts_matches_vb_cable_pair(self):
+        self.assertTrue(virtual_mic_recaptures_tts("CABLE Output (VB-Audio Virtual Cable)", "CABLE Input (VB-Audio Virtual Cable)"))
+        self.assertFalse(virtual_mic_recaptures_tts("Microphone", "CABLE Input"))
+
     def test_audio_segment_active_uses_rms_threshold(self):
         with tempfile.TemporaryDirectory() as tmp:
             quiet = Path(tmp) / "quiet.wav"
@@ -2632,6 +2659,30 @@ class CoreTests(unittest.TestCase):
 
         self.assertEqual(started, ["me"])
         self.assertEqual(statuses[-1], "running; speaker capture skipped: matches TTS output")
+
+    def test_engine_start_skips_microphone_capture_matching_virtual_mic_output(self):
+        import realtime_audio_translator.engine as engine_module
+
+        statuses = []
+        config = DEFAULT_CONFIG.copy()
+        config["record_logs"] = False
+        config["speaker_enabled"] = False
+        config["microphone_device"] = "CABLE Output (VB-Audio Virtual Cable) [Windows WASAPI]"
+        config["tts_output_device"] = "CABLE Input (VB-Audio Virtual Cable) [Windows WASAPI]"
+        config["virtual_mic_enabled"] = True
+        engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, statuses.append)
+        started = []
+
+        original_transcriber = engine_module.AudioTranscriber
+        engine_module.AudioTranscriber = lambda *args, **kwargs: object()
+        engine._start_direction = lambda direction, device_hint, loopback: started.append((direction, device_hint, loopback)) or True
+        try:
+            engine.start()
+        finally:
+            engine_module.AudioTranscriber = original_transcriber
+
+        self.assertEqual(started, [])
+        self.assertEqual(statuses[-1], "no audio devices; microphone capture skipped: matches virtual mic output")
 
     def test_engine_start_stops_when_no_audio_devices_start(self):
         import realtime_audio_translator.engine as engine_module
