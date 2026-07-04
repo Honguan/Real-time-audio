@@ -3,9 +3,10 @@ import threading
 import tkinter as tk
 import webbrowser
 from pathlib import Path
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox, simpledialog, ttk
 
 from .audio import audio_segment_active, capture_wav, find_device, format_device_label, list_audio_devices
+from .ai_memory import add_glossary_term
 from .ai_orchestrator import plan_session
 from .app_log import append_app_log
 from .commands import refresh_commands
@@ -347,6 +348,7 @@ class TranslatorApp(tk.Tk):
             ("Update command config", self._refresh_commands),
             ("Open app folder", self._open_app_dir),
             ("Open glossary", self._open_glossary),
+            ("Add glossary term", self._add_glossary_term),
             ("API test", self._test_api),
             ("Device tone", self._test_tone),
             ("TTS test", self._test_tts),
@@ -520,6 +522,18 @@ class TranslatorApp(tk.Tk):
         self._save()
         path = ensure_glossary_file(Path(self.config.get("glossary_path") or APP_DIR / "glossary.json"))
         subprocess.Popen(["notepad", str(path)])
+
+    def _add_glossary_term(self) -> None:
+        self._save()
+        source = simpledialog.askstring("Add glossary term", "Source text")
+        if not source:
+            return
+        target = simpledialog.askstring("Add glossary term", "Target text")
+        if not target:
+            return
+        path = ensure_glossary_file(Path(self.config.get("glossary_path") or APP_DIR / "glossary.json"))
+        add_glossary_term(path, source, target)
+        self.status.set("glossary term added")
 
     def _import_runtime(self) -> None:
         source = filedialog.askdirectory(title="Select extracted Faster-Whisper-XXL folder")

@@ -908,6 +908,13 @@ class CoreTests(unittest.TestCase):
 
             self.assertEqual(json.loads(glossary.read_text(encoding="utf-8")), {"boss": "王", "cooldown": "冷卻"})
 
+    def test_gui_can_add_glossary_term(self):
+        gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
+
+        self.assertIn('("Add glossary term", self._add_glossary_term)', gui_source)
+        self.assertIn("simpledialog.askstring", gui_source)
+        self.assertIn("add_glossary_term", gui_source)
+
     def test_local_provider_returns_text_without_cloud_request(self):
         config = DEFAULT_CONFIG.copy()
         config["provider"] = "local"
