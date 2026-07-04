@@ -48,7 +48,9 @@ def audio_segment_active(path: Path, threshold: float) -> bool:
 
 
 def find_device(name_part: str, want_output: bool) -> int | None:
-    needle = device_name_from_label(name_part).lower()
+    needle = device_name_from_label(name_part).lower().strip()
+    if not needle:
+        return None
     for device in list_audio_devices():
         if needle in device["name"].lower():
             if want_output and device["output_channels"] > 0:

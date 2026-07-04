@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
 
-from realtime_audio_translator.audio import audio_segment_active, device_name_from_label
+from realtime_audio_translator.audio import audio_segment_active, device_name_from_label, find_device
 from realtime_audio_translator.asr import AudioTranscriber, add_runtime_dll_directory, add_xxl_data
 from realtime_audio_translator.commands import parse_help_options
 from realtime_audio_translator.config import DEFAULT_CONFIG, clear_cache, clear_logs, ensure_app_dirs, ensure_glossary_file, load_config, save_audio_devices, save_config
@@ -18,9 +18,9 @@ from realtime_audio_translator.ai_auto_tuner import apply_tuning, recommend_tuni
 from realtime_audio_translator.ai_confidence import build_confidence_snapshot, format_confidence_status
 from realtime_audio_translator.ai_memory import add_glossary_term, cache_translation, cached_translation
 from realtime_audio_translator.app_log import append_app_log
-from realtime_audio_translator.diagnostics import collect_diagnostics
+from realtime_audio_translator.diagnostics import DiagnosticIssue, collect_diagnostics
 from realtime_audio_translator.engine import RealtimeEngine, audio_devices_overlap, drain_queue, overlay_text_from_config
-from realtime_audio_translator.gui import LANGUAGE_CHOICES, PERFORMANCE_CHOICES, PROVIDER_CHOICES, TTS_PROVIDER_CHOICES, TranslatorApp, diagnostic_action_label, format_overlay_line, main_status_summary, mode_notice, overlay_clipboard_text, overlay_font_size_value, overlay_hold_seconds_value, overlay_opacity_value, overlay_visibility_action, performance_segment_seconds, subtitle_updates_allowed, swap_language_values, troubleshooting_action, visible_button_texts, visible_setting_keys
+from realtime_audio_translator.gui import LANGUAGE_CHOICES, PERFORMANCE_CHOICES, PROVIDER_CHOICES, TTS_PROVIDER_CHOICES, TranslatorApp, diagnostic_action_label, first_run_wizard_needed, format_overlay_line, main_status_summary, mode_notice, overlay_clipboard_text, overlay_font_size_value, overlay_hold_seconds_value, overlay_opacity_value, overlay_visibility_action, performance_segment_seconds, subtitle_updates_allowed, swap_language_values, troubleshooting_action, visible_button_texts, visible_setting_keys
 from realtime_audio_translator.logbook import ConversationLog
 from realtime_audio_translator.models import cuda_hardware_from_check_output, list_models, model_available, model_download_command, model_install_message, recommend_model
 from realtime_audio_translator.providers import TextToSpeech, Translator, build_google_translate_request, build_openai_translation_request
@@ -279,6 +279,13 @@ class CoreTests(unittest.TestCase):
         self.assertIn("Download model", gui_source)
         self.assertIn("CABLE Output", gui_source)
         self.assertIn("Subtitle test", gui_source)
+
+    def test_first_run_wizard_opens_for_audio_setup_issues(self):
+        issues = [DiagnosticIssue("microphone_device_missing", "warning", "找不到麥克風", "", "", "audio_settings")]
+        info_only = [DiagnosticIssue("local_translate_url_missing", "info", "本機翻譯 URL 未設定", "", "", "local_translation")]
+
+        self.assertTrue(first_run_wizard_needed(issues))
+        self.assertFalse(first_run_wizard_needed(info_only))
 
     def test_push_to_talk_restores_previous_mute_state(self):
         app = TranslatorApp.__new__(TranslatorApp)
@@ -1599,6 +1606,12 @@ class CoreTests(unittest.TestCase):
 
     def test_device_label_strips_hostapi_suffix(self):
         self.assertEqual(device_name_from_label("CABLE Input (VB-Audio Virtual Cable) [Windows WASAPI]"), "CABLE Input (VB-Audio Virtual Cable)")
+
+    def test_find_device_ignores_empty_label(self):
+        devices = [{"index": 7, "name": "Speakers", "input_channels": 0, "output_channels": 2, "hostapi": "WASAPI"}]
+        with patch("realtime_audio_translator.audio.list_audio_devices", return_value=devices):
+            self.assertIsNone(find_device("", want_output=True))
+            self.assertEqual(find_device("Speakers", want_output=True), 7)
 
     def test_audio_devices_overlap_matches_short_and_full_names(self):
         self.assertTrue(audio_devices_overlap("CABLE Input", "CABLE Input (VB-Audio Virtual Cable) [Windows WASAPI]"))

@@ -83,6 +83,14 @@ BASIC_BUTTON_TEXTS = {
     "Push to talk",
     "Quit",
 }
+FIRST_RUN_ISSUE_CODES = {
+    "runtime_missing",
+    "model_missing",
+    "speaker_device_missing",
+    "microphone_device_missing",
+    "virtual_mic_route",
+    "virtual_mic_no_output",
+}
 
 
 def visible_setting_keys(advanced: bool) -> list[str]:
@@ -91,6 +99,10 @@ def visible_setting_keys(advanced: bool) -> list[str]:
 
 def visible_button_texts(buttons: list[str], advanced: bool) -> list[str]:
     return [text for text in buttons if advanced or text in BASIC_BUTTON_TEXTS]
+
+
+def first_run_wizard_needed(issues) -> bool:
+    return any(issue.code in FIRST_RUN_ISSUE_CODES for issue in issues)
 
 
 def performance_segment_seconds(mode: str) -> float:
@@ -649,7 +661,7 @@ class TranslatorApp(tk.Tk):
 
     def _show_first_run_wizard(self) -> None:
         issues = collect_diagnostics(self._config_from_vars(), self.repo_root)
-        if not any(issue.code in ("runtime_missing", "model_missing") for issue in issues):
+        if not first_run_wizard_needed(issues):
             return
         messagebox.showinfo("First run setup", self._diagnostic_message())
 
