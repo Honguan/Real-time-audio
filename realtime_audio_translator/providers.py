@@ -17,8 +17,11 @@ GOOGLE_TRANSLATE_URL = "https://translation.googleapis.com/v3/projects/{project}
 GOOGLE_TTS_URL = "https://texttospeech.googleapis.com/v1/text:synthesize"
 
 
-def build_openai_translation_request(text: str, target_language: str, source_language: str, model: str = "gpt-4.1-mini") -> dict:
-    prompt = f"Translate from {source_language} to {target_language}. Return only the translation:\n{text}"
+def build_openai_translation_request(text: str, target_language: str, source_language: str, model: str = "gpt-4.1-mini", context: list[tuple[str, str]] | None = None) -> dict:
+    context_text = ""
+    if context:
+        context_text = "Recent context:\n" + "\n".join(f"{source} -> {target}" for source, target in context[-4:]) + "\n\n"
+    prompt = f"{context_text}Translate from {source_language} to {target_language}. Return only the translation:\n{text}"
     return {
         "url": OPENAI_RESPONSES_URL,
         "headers": {"Authorization": "Bearer ${OPENAI_API_KEY}", "Content-Type": "application/json"},
@@ -54,6 +57,7 @@ def google_access_token(service_account_json: str) -> str:
 class Translator:
     config: dict
     cache: dict[tuple[str, str, str, str], str] = field(default_factory=dict)
+    context: list[tuple[str, str]] = field(default_factory=list)
     last_confidence: float | None = None
 
     def translate(self, text: str, source_language: str, target_language: str) -> str:
@@ -85,9 +89,14 @@ class Translator:
         if not translated.strip():
             self.last_confidence = 0.0
         self.cache[cache_key] = translated
+        self._remember_context(text, translated)
         if persistent_cache_enabled and db_path:
             cache_translation(db_path, provider, source_language, target_language, text, translated)
         return self._apply_glossary(translated)
+
+    def _remember_context(self, text: str, translated: str) -> None:
+        if text.strip() and translated.strip():
+            self.context = (self.context + [(text.strip(), translated.strip())])[-4:]
 
     def _apply_glossary(self, text: str) -> str:
         path = self.config.get("glossary_path", "").strip()
@@ -120,7 +129,7 @@ class Translator:
         return html.unescape(response.json().get("translatedText", ""))
 
     def _openai_translate(self, text: str, source_language: str, target_language: str) -> str:
-        request = build_openai_translation_request(text, target_language, source_language, self.config["openai_model"])
+        request = build_openai_translation_request(text, target_language, source_language, self.config["openai_model"], self.context)
         api_key = os.environ.get("OPENAI_API_KEY", "")
         if not api_key:
             raise RuntimeError("OPENAI_API_KEY is not set")

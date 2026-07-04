@@ -843,6 +843,10 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(openai["headers"]["Authorization"], "Bearer ${OPENAI_API_KEY}")
         self.assertIn("Translate", openai["json"]["input"])
 
+        contextual = build_openai_translation_request("it", "zh-TW", "en", context=[("hello", "你好")])
+        self.assertIn("Recent context", contextual["json"]["input"])
+        self.assertIn("hello -> 你好", contextual["json"]["input"])
+
         google = build_google_translate_request("hello", "zh-TW", "en", "project-1")
         self.assertIn("/projects/project-1:translateText", google["url"])
         self.assertEqual(google["json"]["targetLanguageCode"], "zh-TW")
@@ -880,6 +884,43 @@ class CoreTests(unittest.TestCase):
                 os.environ["OPENAI_API_KEY"] = original_key
 
         self.assertEqual(len(calls), 1)
+
+    def test_translator_sends_short_term_context_to_openai(self):
+        import os
+        import realtime_audio_translator.providers as providers_module
+
+        calls = []
+
+        class Response:
+            def __init__(self, text):
+                self.text = text
+
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return {"output_text": self.text}
+
+        original_key = os.environ.get("OPENAI_API_KEY")
+        original_post = providers_module.requests.post
+        responses = [Response("你好"), Response("它")]
+        providers_module.requests.post = lambda *args, **kwargs: calls.append((args, kwargs)) or responses.pop(0)
+        os.environ["OPENAI_API_KEY"] = "test-key"
+        try:
+            config = DEFAULT_CONFIG.copy()
+            config["provider"] = "openai"
+            config["translation_cache_enabled"] = False
+            translator = Translator(config)
+            translator.translate("hello", "en", "zh-TW")
+            translator.translate("it", "en", "zh-TW")
+        finally:
+            providers_module.requests.post = original_post
+            if original_key is None:
+                os.environ.pop("OPENAI_API_KEY", None)
+            else:
+                os.environ["OPENAI_API_KEY"] = original_key
+
+        self.assertIn("hello -> 你好", calls[1][1]["json"]["input"])
 
     def test_translation_memory_persists_cached_translation(self):
         with tempfile.TemporaryDirectory() as tmp:
