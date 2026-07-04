@@ -178,25 +178,12 @@ class RealtimeEngine:
                     overlay_text = overlay_text_from_config(text, translated, source_for_output, target, self.config)
                 if direction == "speaker":
                     self.overlay(overlay_text, "")
+                    if self.config.get("tts_enabled", True) and self.config.get("speaker_tts_enabled", False) and not self.muted and translated and not translation_failed:
+                        tts_latency = self._speak_translation(direction, translated, target, self.config.get("speaker_tts_output_device", ""))
                 else:
                     self.overlay("", overlay_text)
                     if self.config.get("tts_enabled", True) and self.config.get("virtual_mic_enabled", False) and not self.muted and translated and not translation_failed:
-                        tts_device = self.config.get("tts_output_device", "CABLE Input")
-                        tts_started = time.perf_counter()
-                        try:
-                            if self.config.get("tts_provider") == "local":
-                                self.tts.speak_local(translated, tts_device)
-                            elif self.config.get("tts_provider") == "openai":
-                                audio = self.tts.synthesize_openai_linear16(translated)
-                                play_linear16(audio, tts_device)
-                            else:
-                                audio = self.tts.synthesize_google_linear16(translated, target)
-                                play_linear16(audio, tts_device)
-                            self.config["last_tts_failed"] = False
-                        except Exception as exc:
-                            self.config["last_tts_failed"] = True
-                            self.status(f"{direction}: tts failed: {exc}")
-                        tts_latency = time.perf_counter() - tts_started
+                        tts_latency = self._speak_translation(direction, translated, target, self.config.get("tts_output_device", "CABLE Input"))
                 latency = time.perf_counter() - started
                 self.config["last_latency_seconds"] = latency
                 if self.log:
@@ -216,3 +203,20 @@ class RealtimeEngine:
                     self.status(f"{direction} latency {latency:.2f}s; {format_confidence_status(snapshot, bool(self.config.get('advanced_mode')))}")
             except Exception as exc:
                 self.status(f"{direction}: {exc}")
+
+    def _speak_translation(self, direction: str, translated: str, target: str, tts_device: str) -> float:
+        tts_started = time.perf_counter()
+        try:
+            if self.config.get("tts_provider") == "local":
+                self.tts.speak_local(translated, tts_device)
+            elif self.config.get("tts_provider") == "openai":
+                audio = self.tts.synthesize_openai_linear16(translated)
+                play_linear16(audio, tts_device)
+            else:
+                audio = self.tts.synthesize_google_linear16(translated, target)
+                play_linear16(audio, tts_device)
+            self.config["last_tts_failed"] = False
+        except Exception as exc:
+            self.config["last_tts_failed"] = True
+            self.status(f"{direction}: tts failed: {exc}")
+        return time.perf_counter() - tts_started

@@ -8,3 +8,4 @@
    %USERPROFILE%\.realtime-audio\models
 5. 若使用本機翻譯，先啟動 LibreTranslate，並把 Local translate URL 填成 http://127.0.0.1:5000/translate。
 6. 在 Discord / 遊戲語音中，把麥克風選成 CABLE Output；本工具的 TTS output 選 CABLE Input。
+7. 若要聽對方語音翻譯，開 Speak opponent；Speaker TTS output 留空會用系統預設喇叭。

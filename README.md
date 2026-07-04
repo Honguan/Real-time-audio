@@ -39,7 +39,7 @@ Whisper 模型可放在 `models\whisper-small`；翻譯模型放在 `models\tran
 
 1. 安裝 VB-Audio Virtual Cable。
 2. 開啟 `RealtimeAudioTranslator.exe`。
-3. 選擇喇叭、麥克風、`TTS output`、來源語言與目標語言。
+3. 選擇喇叭、麥克風、`TTS output`、來源語言與目標語言；若要聽對方語音的翻譯，開 `Speak opponent` 並選 `Speaker TTS output`。
 4. 選擇 `Scenario` 後按 `Apply scenario` 套用常用場景。
 5. 按 `Run diagnostics` 檢查 runtime、模型、音訊與 API 設定。
 6. 按 `Subtitle test` 確認字幕 bar 會出現。
@@ -61,6 +61,7 @@ Whisper 模型可放在 `models\whisper-small`；翻譯模型放在 `models\tran
 - `Speak translations`：開關翻譯語音輸出。
 - `Push to talk`：按住才送出我方翻譯語音。
 - `Virtual mic output`：開啟後才會把我方翻譯語音送到 `TTS output`。
+- `Speak opponent`：開啟後才會把對方語音翻譯播放到 `Speaker TTS output`；留空則使用系統預設喇叭。
 - `Record logs`：儲存對話紀錄。
 - `Open logs`：開啟紀錄資料夾，`app.log` 會記錄開始、停止、缺模型與字幕匯出事件。
 - `Export subtitles`：把最新 JSONL 對話紀錄匯出成 SRT，檔案放在 `%USERPROFILE%\.realtime-audio\exports\subtitles`。

@@ -49,7 +49,8 @@ RealtimeAudioTranslator-runtime-cuda12-<tag>.zip
 1. 會議軟體或 Discord 的麥克風選 `CABLE Output (VB-Audio Virtual Cable)`。
 2. 本工具的 `TTS output` 選 `CABLE Input`。
 3. 本工具的喇叭選你正在聽對方聲音的裝置。
-4. 本工具的麥克風選你的實體麥克風。
+4. 若要聽對方語音翻譯，開 `Speak opponent`，`Speaker TTS output` 可留空使用系統預設喇叭。
+5. 本工具的麥克風選你的實體麥克風。
 
 ## 常見問題
 

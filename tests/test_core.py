@@ -2313,6 +2313,46 @@ class CoreTests(unittest.TestCase):
 
         self.assertEqual(spoken, [("hi", "CABLE Input")])
 
+    def test_engine_can_speak_speaker_translation_to_listener_output(self):
+        config = DEFAULT_CONFIG.copy()
+        config["record_logs"] = False
+        config["tts_provider"] = "local"
+        config["speaker_tts_enabled"] = True
+        config["speaker_tts_output_device"] = ""
+        spoken = []
+        engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, lambda status: None)
+
+        class Transcriber:
+            last_language = "en"
+
+            def transcribe(self, wav, source_language):
+                return "hello"
+
+        class Translator:
+            def translate(self, text, source_language, target_language):
+                engine.running = False
+                return "你好"
+
+        class TTS:
+            def speak_local(self, text, device):
+                spoken.append((text, device))
+
+        class Worker:
+            def __init__(self, wav):
+                self.queue = queue.Queue()
+                self.queue.put(wav)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            wav = Path(tmp) / "clip.wav"
+            self._write_wav(wav, 12000)
+            engine.running = True
+            engine.transcriber = Transcriber()
+            engine.translator = Translator()
+            engine.tts = TTS()
+            engine._process_segments("speaker", Worker(wav))
+
+        self.assertEqual(spoken, [("你好", "")])
+
     def test_engine_requires_virtual_mic_enabled_for_tts_output(self):
         import realtime_audio_translator.engine as engine_module
 

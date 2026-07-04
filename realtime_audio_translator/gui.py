@@ -43,6 +43,7 @@ SETTING_ROWS = (
     ("Speaker device", "speaker_device"),
     ("Microphone device", "microphone_device"),
     ("TTS output", "tts_output_device"),
+    ("Speaker TTS output", "speaker_tts_output_device"),
     ("TTS rate", "tts_rate"),
     ("TTS volume", "tts_volume"),
     ("TTS voice", "tts_voice_name"),
@@ -70,6 +71,7 @@ BASIC_SETTING_KEYS = {
     "speaker_device",
     "microphone_device",
     "tts_output_device",
+    "speaker_tts_output_device",
     "runtime_dir",
 }
 ADVANCED_SETTING_KEYS = {key for _label, key in SETTING_ROWS} - BASIC_SETTING_KEYS
@@ -214,6 +216,7 @@ def main_status_summary(config: dict) -> str:
         f"目前場景：{config.get('scenario', '')}；"
         f"輸入音源：{speaker} / {microphone}；"
         f"輸出音源：{config.get('tts_output_device') or '未選擇'}；"
+        f"對方翻譯播放：{'開啟' if config.get('speaker_tts_enabled', False) else '關閉'}；"
         f"來源語言：{config.get('source_language', '')}；"
         f"目標語言：{config.get('target_language', '')}；"
         f"字幕：{'開啟' if config.get('overlay_visible', True) else '關閉'}；"
@@ -309,6 +312,7 @@ class TranslatorApp(tk.Tk):
         self.show_original_text = tk.BooleanVar(value=bool(self.config["show_original_text"]))
         self.show_translated_text = tk.BooleanVar(value=bool(self.config.get("show_translated_text", True)))
         self.tts_enabled = tk.BooleanVar(value=bool(self.config.get("tts_enabled", True)))
+        self.speaker_tts_enabled = tk.BooleanVar(value=bool(self.config.get("speaker_tts_enabled", False)))
         self.virtual_mic_enabled = tk.BooleanVar(value=bool(self.config.get("virtual_mic_enabled", False)))
         self.speaker_enabled = tk.BooleanVar(value=bool(self.config.get("speaker_enabled", True)))
         self.microphone_enabled = tk.BooleanVar(value=bool(self.config.get("microphone_enabled", True)))
@@ -385,6 +389,7 @@ class TranslatorApp(tk.Tk):
         ttk.Checkbutton(frame, text="Advanced settings", variable=self.advanced_mode, command=self._apply_mode).grid(row=next_row + 5, column=2, sticky="w")
         ttk.Checkbutton(frame, text="Record logs", variable=self.record_logs, command=self._save).grid(row=next_row + 6, column=0, sticky="w")
         ttk.Checkbutton(frame, text="Virtual mic output", variable=self.virtual_mic_enabled, command=self._save).grid(row=next_row + 6, column=1, sticky="w")
+        ttk.Checkbutton(frame, text="Speak opponent", variable=self.speaker_tts_enabled, command=self._save).grid(row=next_row + 6, column=2, sticky="w")
 
         buttons = ttk.Frame(frame)
         buttons.grid(row=next_row + 7, column=0, columnspan=3, sticky="ew", pady=12)
@@ -486,6 +491,7 @@ class TranslatorApp(tk.Tk):
         config["show_original_text"] = self.show_original_text.get()
         config["show_translated_text"] = self.show_translated_text.get()
         config["tts_enabled"] = self.tts_enabled.get()
+        config["speaker_tts_enabled"] = self.speaker_tts_enabled.get()
         config["virtual_mic_enabled"] = self.virtual_mic_enabled.get()
         config["speaker_enabled"] = self.speaker_enabled.get()
         config["microphone_enabled"] = self.microphone_enabled.get()
@@ -745,6 +751,7 @@ class TranslatorApp(tk.Tk):
         self.show_original_text.set(bool(updated.get("show_original_text", self.show_original_text.get())))
         self.show_translated_text.set(bool(updated.get("show_translated_text", self.show_translated_text.get())))
         self.tts_enabled.set(bool(updated.get("tts_enabled", self.tts_enabled.get())))
+        self.speaker_tts_enabled.set(bool(updated.get("speaker_tts_enabled", self.speaker_tts_enabled.get())))
         self.virtual_mic_enabled.set(bool(updated.get("virtual_mic_enabled", self.virtual_mic_enabled.get())))
         self.speaker_enabled.set(bool(updated.get("speaker_enabled", self.speaker_enabled.get())))
         self.microphone_enabled.set(bool(updated.get("microphone_enabled", self.microphone_enabled.get())))
