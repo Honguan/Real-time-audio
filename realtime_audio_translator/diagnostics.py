@@ -123,6 +123,15 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
             "確認 runtime 資料夾、faster-whisper-xxl.exe、CUDA12 DLL 與模型路徑",
             "open_runtime",
         ))
+    if config.get("last_ffmpeg_failed"):
+        issues.append(DiagnosticIssue(
+            "ffmpeg_failed",
+            "error",
+            "ffmpeg 無法呼叫",
+            "最近一次 runtime 檢查無法執行 ffmpeg",
+            "重新解壓 runtime core，確認 ffmpeg.exe 直接放在 runtime 資料夾",
+            "open_runtime",
+        ))
     if config.get("last_mic_quiet"):
         issues.append(DiagnosticIssue(
             "microphone_no_sound",

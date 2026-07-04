@@ -547,6 +547,26 @@ class CoreTests(unittest.TestCase):
         issue = next(item for item in issues if item.code == "asr_runtime_failed")
         self.assertEqual(issue.action, "open_runtime")
 
+    def test_diagnostics_report_ffmpeg_failure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            runtime = root / "runtime"
+            model = root / "models" / "medium"
+            runtime.mkdir()
+            model.mkdir(parents=True)
+            (runtime / "faster-whisper-xxl.exe").write_text("exe", encoding="utf-8")
+            (runtime / "ffmpeg.exe").write_text("ff", encoding="utf-8")
+            (runtime / "_xxl_data").mkdir()
+            config = DEFAULT_CONFIG.copy()
+            config["runtime_dir"] = str(runtime)
+            config["model"] = "medium"
+            config["last_ffmpeg_failed"] = True
+
+            issues = collect_diagnostics(config, root)
+
+        issue = next(item for item in issues if item.code == "ffmpeg_failed")
+        self.assertEqual(issue.action, "open_runtime")
+
     def test_diagnostics_include_auto_tune_recommendations(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -1563,6 +1583,8 @@ class CoreTests(unittest.TestCase):
         self.assertIn('text="Fallback runtime source"', gui_source)
         self.assertIn("RUNTIME_RELEASE_URL", gui_source)
         self.assertIn("UPSTREAM_RUNTIME_RELEASE_URL", gui_source)
+        self.assertIn('subprocess.run([str(runtime_dir(config) / "ffmpeg.exe"), "-version"]', gui_source)
+        self.assertIn('config["last_ffmpeg_failed"]', gui_source)
 
     def test_import_runtime_refreshes_commands_json(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")

@@ -544,6 +544,14 @@ class TranslatorApp(tk.Tk):
         config = self._config_from_vars()
         status = runtime_status(runtime_dir(config))
         if status["ready"]:
+            try:
+                result = subprocess.run([str(runtime_dir(config) / "ffmpeg.exe"), "-version"], capture_output=True, text=True, timeout=2, check=False)
+                config["last_ffmpeg_failed"] = result.returncode != 0
+            except Exception:
+                config["last_ffmpeg_failed"] = True
+            self.vars["last_ffmpeg_failed"].set(str(config["last_ffmpeg_failed"]))
+            self.config = config
+            save_config(APP_DIR, self.config)
             note = "Runtime ready"
             if status["warnings"]:
                 note += f"; recommended CUDA package: {status['cuda_package']}"
