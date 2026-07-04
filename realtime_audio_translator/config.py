@@ -139,6 +139,7 @@ def save_config(root: Path, config: dict) -> None:
     config = config.copy()
     config["ui_mode"] = "advanced" if config.get("advanced_mode") else "simple"
     config["asr_model"] = config.get("model", config.get("asr_model", "small"))
+    config["runtime_path"] = config.get("runtime_dir", config.get("runtime_path", str(APP_DIR / "runtime" / "cuda12")))
     config["save_conversation_history"] = bool(config.get("record_logs", False))
     config["subtitle_always_on_top"] = bool(config.get("overlay_topmost", True))
     with (root / "config.json").open("w", encoding="utf-8", newline="\n") as handle:

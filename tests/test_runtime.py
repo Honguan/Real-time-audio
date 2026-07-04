@@ -4,7 +4,7 @@ import subprocess
 import zipfile
 from pathlib import Path
 
-from realtime_audio_translator.runtime import DEFAULT_RUNTIME_DIR, install_runtime_from, runtime_install_message, runtime_status, whisper_exe
+from realtime_audio_translator.runtime import DEFAULT_RUNTIME_DIR, install_runtime_from, runtime_dir, runtime_install_message, runtime_status, whisper_exe
 
 
 class RuntimeTests(unittest.TestCase):
@@ -46,6 +46,9 @@ class RuntimeTests(unittest.TestCase):
     def test_default_runtime_dir_uses_cuda12_folder(self):
         self.assertEqual(DEFAULT_RUNTIME_DIR.name, "cuda12")
         self.assertEqual(DEFAULT_RUNTIME_DIR.parent.name, "runtime")
+
+    def test_runtime_dir_accepts_public_runtime_path_alias(self):
+        self.assertEqual(runtime_dir({"runtime_path": "custom-runtime"}), Path("custom-runtime"))
 
     def test_runtime_install_message_includes_release_and_cuda12_package(self):
         message = runtime_install_message(Path("runtime"))

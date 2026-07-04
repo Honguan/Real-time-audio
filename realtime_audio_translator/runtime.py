@@ -14,7 +14,7 @@ CUDA_PACKAGE_NAME = "cuBLAS.and.cuDNN_CUDA12_win_v3.7z"
 
 
 def runtime_dir(config: dict | None = None) -> Path:
-    configured = (config or {}).get("runtime_dir")
+    configured = (config or {}).get("runtime_dir") or (config or {}).get("runtime_path")
     return Path(configured).expanduser() if configured else DEFAULT_RUNTIME_DIR
 
 

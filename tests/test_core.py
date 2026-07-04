@@ -127,12 +127,14 @@ class CoreTests(unittest.TestCase):
             config["record_logs"] = True
             config["overlay_topmost"] = False
             config["model"] = "medium"
+            config["runtime_dir"] = str(root / "runtime" / "cuda12")
 
             save_config(root, config)
 
             saved = json.loads((root / "config" / "settings.json").read_text(encoding="utf-8"))
             self.assertEqual(saved["ui_mode"], "advanced")
             self.assertEqual(saved["asr_model"], "medium")
+            self.assertEqual(saved["runtime_path"], str(root / "runtime" / "cuda12"))
             self.assertTrue(saved["save_conversation_history"])
             self.assertFalse(saved["subtitle_always_on_top"])
 
