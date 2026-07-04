@@ -1647,6 +1647,13 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(TTS_PROVIDER_CHOICES, ("local", "google", "openai"))
 
     def test_mode_notice_discloses_cloud_api_cost_risk(self):
+        import realtime_audio_translator.gui as gui_module
+
+        self.assertTrue(gui_module.cloud_activation_requires_confirmation("local", "local", "google", "local"))
+        self.assertTrue(gui_module.cloud_activation_requires_confirmation("local", "google", "local", "openai"))
+        self.assertFalse(gui_module.cloud_activation_requires_confirmation("local", "local", "local", "local"))
+        self.assertFalse(gui_module.cloud_activation_requires_confirmation("google", "local", "local", "local"))
+
         cloud_notice = mode_notice("google", "openai")
         self.assertIn("目前模式：雲端 API 模式", cloud_notice)
         self.assertIn("可能傳送到第三方服務", cloud_notice)
@@ -1659,6 +1666,18 @@ class CoreTests(unittest.TestCase):
         self.assertIn("對話紀錄：關閉", local_notice)
         self.assertIn("本機翻譯 URL 未設定", local_notice)
         self.assertIn("對話紀錄：開啟", mode_notice("local", "local", True))
+
+        gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
+        self.assertIn("messagebox.askyesno", gui_source)
+        self.assertIn("cloud_activation_requires_confirmation", gui_source)
+
+    def test_readme_and_release_notes_mention_cloud_api_confirmation(self):
+        readme = Path("README.md").read_text(encoding="utf-8")
+        notes = Path("docs/RELEASE_NOTES.md").read_text(encoding="utf-8")
+
+        for text in (readme, notes):
+            self.assertIn("Google 或 OpenAI", text)
+            self.assertIn("可能產生費用", text)
 
     def test_engine_reports_segment_latency(self):
         statuses = []

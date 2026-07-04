@@ -82,6 +82,8 @@ Whisper 模型可放在 `models\whisper-small`；翻譯模型放在 `models\tran
 
 預設本機翻譯不會上傳雲端。若要使用真正翻譯，請先啟動 LibreTranslate，並把 `Local translate URL` 填成例如：
 
+切換到 Google 或 OpenAI 時，工具會先提示語音或文字可能傳送到第三方服務並可能產生費用。
+
 ```text
 http://127.0.0.1:5000/translate
 ```

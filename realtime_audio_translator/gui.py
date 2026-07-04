@@ -172,6 +172,12 @@ def mode_notice(provider: str, tts_provider: str, record_logs: bool = False, loc
     return f"目前模式：本機免費模式；語音是否上傳：否；是否可能產生 API 費用：否；{logs}{setup}"
 
 
+def cloud_activation_requires_confirmation(old_provider: str, old_tts_provider: str, new_provider: str, new_tts_provider: str) -> bool:
+    old_cloud = {name for name in (old_provider, old_tts_provider) if name in CLOUD_PROVIDERS}
+    new_cloud = {name for name in (new_provider, new_tts_provider) if name in CLOUD_PROVIDERS}
+    return bool(new_cloud - old_cloud)
+
+
 class Overlay(tk.Toplevel):
     def __init__(self, master: tk.Tk, topmost: bool, opacity: float, font_size: int):
         super().__init__(master)
@@ -453,7 +459,13 @@ class TranslatorApp(tk.Tk):
         return config
 
     def _save(self) -> None:
-        self.config = self._config_from_vars()
+        config = self._config_from_vars()
+        if cloud_activation_requires_confirmation(self.config.get("provider", "local"), self.config.get("tts_provider", "local"), config["provider"], config["tts_provider"]):
+            if not messagebox.askyesno("Enable cloud API?", mode_notice(config["provider"], config["tts_provider"], bool(config["record_logs"]), config.get("local_translate_url", ""))):
+                self._load_config_into_widgets(self.config)
+                self.status.set("cloud API not enabled")
+                return
+        self.config = config
         self.mode_text.set(mode_notice(self.config["provider"], self.config["tts_provider"], bool(self.config["record_logs"]), self.config.get("local_translate_url", "")))
         save_config(APP_DIR, self.config)
         if self.engine:
