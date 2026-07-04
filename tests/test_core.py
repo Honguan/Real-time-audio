@@ -111,6 +111,14 @@ class CoreTests(unittest.TestCase):
 
             self.assertTrue(load_config(root)["advanced_mode"])
 
+    def test_load_config_accepts_public_asr_model_alias(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ensure_app_dirs(root)
+            (root / "config" / "settings.json").write_text(json.dumps({"asr_model": "medium"}), encoding="utf-8")
+
+            self.assertEqual(load_config(root)["model"], "medium")
+
     def test_save_config_mirrors_public_mode_and_log_aliases(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -118,11 +126,13 @@ class CoreTests(unittest.TestCase):
             config["advanced_mode"] = True
             config["record_logs"] = True
             config["overlay_topmost"] = False
+            config["model"] = "medium"
 
             save_config(root, config)
 
             saved = json.loads((root / "config" / "settings.json").read_text(encoding="utf-8"))
             self.assertEqual(saved["ui_mode"], "advanced")
+            self.assertEqual(saved["asr_model"], "medium")
             self.assertTrue(saved["save_conversation_history"])
             self.assertFalse(saved["subtitle_always_on_top"])
 

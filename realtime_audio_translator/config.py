@@ -123,6 +123,8 @@ def load_config(root: Path = APP_DIR) -> dict:
         loaded = json.load(handle)
     config = DEFAULT_CONFIG.copy()
     config.update(loaded)
+    if "model" not in loaded and "asr_model" in loaded:
+        config["model"] = loaded["asr_model"]
     if "advanced_mode" not in loaded and loaded.get("ui_mode") in ("advanced", "simple"):
         config["advanced_mode"] = loaded["ui_mode"] == "advanced"
     if "record_logs" not in loaded and "save_conversation_history" in loaded:
@@ -136,6 +138,7 @@ def save_config(root: Path, config: dict) -> None:
     ensure_app_dirs(root)
     config = config.copy()
     config["ui_mode"] = "advanced" if config.get("advanced_mode") else "simple"
+    config["asr_model"] = config.get("model", config.get("asr_model", "small"))
     config["save_conversation_history"] = bool(config.get("record_logs", False))
     config["subtitle_always_on_top"] = bool(config.get("overlay_topmost", True))
     with (root / "config.json").open("w", encoding="utf-8", newline="\n") as handle:
