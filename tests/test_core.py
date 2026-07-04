@@ -278,6 +278,8 @@ class CoreTests(unittest.TestCase):
         self.assertIn("Import runtime", gui_source)
         self.assertIn("Download model", gui_source)
         self.assertIn("CABLE Output", gui_source)
+        self.assertIn("Apply scenario", gui_source)
+        self.assertIn("Optimize settings", gui_source)
         self.assertIn("Subtitle test", gui_source)
 
     def test_first_run_wizard_opens_for_audio_setup_issues(self):
@@ -835,6 +837,8 @@ class CoreTests(unittest.TestCase):
         buttons = [
             "Setup guide",
             "Refresh",
+            "Apply scenario",
+            "Optimize settings",
             "Run diagnostics",
             "API test",
             "Virtual mic test",
@@ -849,6 +853,8 @@ class CoreTests(unittest.TestCase):
         advanced = visible_button_texts(buttons, True)
 
         self.assertIn("Setup guide", simple)
+        self.assertIn("Apply scenario", simple)
+        self.assertIn("Optimize settings", simple)
         self.assertIn("Run diagnostics", simple)
         self.assertIn("Virtual mic test", simple)
         self.assertIn("Speaker test", simple)

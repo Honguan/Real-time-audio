@@ -75,6 +75,8 @@ BASIC_SETTING_KEYS = {
 ADVANCED_SETTING_KEYS = {key for _label, key in SETTING_ROWS} - BASIC_SETTING_KEYS
 BASIC_BUTTON_TEXTS = {
     "Setup guide",
+    "Apply scenario",
+    "Optimize settings",
     "Run diagnostics",
     "Start",
     "Stop",
@@ -690,7 +692,8 @@ class TranslatorApp(tk.Tk):
             "2. Download model or put model zip under the models folder.\n"
             "3. Select speaker, microphone, and TTS output.\n"
             "4. For Discord, select CABLE Output as microphone and CABLE Input as TTS output.\n"
-            "5. Run Subtitle test, Speaker test, Mic test, and Virtual mic test before Start.",
+            "5. Choose Scenario, then Apply scenario and Optimize settings.\n"
+            "6. Run Subtitle test, Speaker test, Mic test, and Virtual mic test before Start.",
         )
 
     def _recommend(self) -> None:
