@@ -516,11 +516,13 @@ class TranslatorApp(tk.Tk):
 
     def _save(self) -> None:
         config = self._config_from_vars()
+        cloud_enabled = bool({config["provider"], config["tts_provider"]} & set(CLOUD_PROVIDERS))
         if cloud_activation_requires_confirmation(self.config.get("provider", "local"), self.config.get("tts_provider", "local"), config["provider"], config["tts_provider"]):
             if not messagebox.askyesno("Enable cloud API?", mode_notice(config["provider"], config["tts_provider"], bool(config["record_logs"]), config.get("local_translate_url", ""))):
                 self._load_config_into_widgets(self.config)
                 self.status.set("cloud API not enabled")
                 return
+        config["cloud_api_enabled"] = cloud_enabled
         self.config = config
         self.mode_text.set(self._mode_text())
         save_config(APP_DIR, self.config)

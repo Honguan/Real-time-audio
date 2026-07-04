@@ -129,6 +129,11 @@ def load_config(root: Path = APP_DIR) -> dict:
         config["provider"] = loaded["translation_engine"]
     if "tts_provider" not in loaded and loaded.get("tts_engine") in ("system", "local", "google", "openai"):
         config["tts_provider"] = "local" if loaded["tts_engine"] == "system" else loaded["tts_engine"]
+    if not config.get("cloud_api_enabled", False):
+        if config.get("provider") in ("google", "openai"):
+            config["provider"] = "local"
+        if config.get("tts_provider") in ("google", "openai"):
+            config["tts_provider"] = "local"
     if "advanced_mode" not in loaded and loaded.get("ui_mode") in ("advanced", "simple"):
         config["advanced_mode"] = loaded["ui_mode"] == "advanced"
     if "record_logs" not in loaded and "save_conversation_history" in loaded:

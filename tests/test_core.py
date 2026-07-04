@@ -123,11 +123,22 @@ class CoreTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             ensure_app_dirs(root)
-            (root / "config" / "settings.json").write_text(json.dumps({"translation_engine": "openai", "tts_engine": "system"}), encoding="utf-8")
+            (root / "config" / "settings.json").write_text(json.dumps({"translation_engine": "openai", "tts_engine": "system", "cloud_api_enabled": True}), encoding="utf-8")
 
             config = load_config(root)
 
             self.assertEqual(config["provider"], "openai")
+            self.assertEqual(config["tts_provider"], "local")
+
+    def test_load_config_blocks_cloud_without_public_confirmation_flag(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ensure_app_dirs(root)
+            (root / "config" / "settings.json").write_text(json.dumps({"provider": "openai", "tts_provider": "google", "cloud_api_enabled": False}), encoding="utf-8")
+
+            config = load_config(root)
+
+            self.assertEqual(config["provider"], "local")
             self.assertEqual(config["tts_provider"], "local")
 
     def test_save_config_mirrors_public_mode_and_log_aliases(self):
@@ -1859,6 +1870,7 @@ class CoreTests(unittest.TestCase):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
         self.assertIn("messagebox.askyesno", gui_source)
         self.assertIn("cloud_activation_requires_confirmation", gui_source)
+        self.assertIn('config["cloud_api_enabled"] = cloud_enabled', gui_source)
         self.assertIn("record_logs_requires_confirmation", gui_source)
         self.assertIn("Enable conversation logs?", gui_source)
 
