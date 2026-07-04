@@ -931,8 +931,29 @@ class CoreTests(unittest.TestCase):
         self.assertIn("plan_session", gui_source)
         self.assertIn('config["last_cuda_devices"] = devices', gui_source)
         self.assertIn('config["last_vram_gb"] = vram_gb', gui_source)
+        self.assertIn("def _auto_optimize_before_start", gui_source)
+        self.assertIn("self._auto_optimize_before_start()", gui_source)
         self.assertIn('("Check updates", self._check_updates)', gui_source)
         self.assertIn("latest_release_tag", gui_source)
+
+    def test_auto_optimize_before_start_applies_recommended_config_only_when_enabled(self):
+        app = TranslatorApp.__new__(TranslatorApp)
+        app.config = {"ai_auto_optimize": True}
+        updated = {"ai_auto_optimize": True, "model": "medium"}
+        calls = []
+        app._planned_session = lambda: type("Decision", (), {"recommendations": [object()], "config": updated})()
+        app._load_config_into_widgets = lambda config: calls.append(("load", config))
+        app._save = lambda: calls.append(("save", None))
+
+        app._auto_optimize_before_start()
+
+        self.assertEqual(calls, [("load", updated), ("save", None)])
+        calls.clear()
+        app.config = {"ai_auto_optimize": False}
+
+        app._auto_optimize_before_start()
+
+        self.assertEqual(calls, [])
 
     def test_diagnostic_action_label_shows_user_button_names(self):
         self.assertEqual(diagnostic_action_label("open_runtime"), "Open runtime folder / Download runtime files")

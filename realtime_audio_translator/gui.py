@@ -824,6 +824,15 @@ class TranslatorApp(tk.Tk):
         self.record_logs.set(bool(updated.get("record_logs", self.record_logs.get())))
 
     def _optimize_settings(self) -> None:
+        decision = self._planned_session()
+        if not decision.recommendations:
+            self.status.set("settings already optimized")
+            return
+        self._load_config_into_widgets(decision.config)
+        self._save()
+        self.status.set(decision.summary)
+
+    def _planned_session(self):
         config = self._config_from_vars()
         exe = whisper_exe(runtime_dir(config))
         devices = 0
@@ -833,13 +842,15 @@ class TranslatorApp(tk.Tk):
             devices, vram_gb = cuda_hardware_from_check_output(cuda.stdout + cuda.stderr)
         config["last_cuda_devices"] = devices
         config["last_vram_gb"] = vram_gb
-        decision = plan_session(config, self.repo_root, devices, vram_gb)
-        if not decision.recommendations:
-            self.status.set("settings already optimized")
+        return plan_session(config, self.repo_root, devices, vram_gb)
+
+    def _auto_optimize_before_start(self) -> None:
+        if not self.config.get("ai_auto_optimize", True):
             return
-        self._load_config_into_widgets(decision.config)
-        self._save()
-        self.status.set(decision.summary)
+        decision = self._planned_session()
+        if decision.recommendations:
+            self._load_config_into_widgets(decision.config)
+            self._save()
 
     def _download_model(self) -> None:
         self._save()
@@ -981,6 +992,7 @@ class TranslatorApp(tk.Tk):
 
     def _start(self) -> None:
         self._save()
+        self._auto_optimize_before_start()
         app_models = models_dir(self.config)
         if not model_available(self.config["model"], self.repo_root / "_models", app_models):
             append_app_log(APP_DIR, "model_missing", model=self.config["model"])
