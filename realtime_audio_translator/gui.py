@@ -80,6 +80,7 @@ BASIC_BUTTON_TEXTS = {
     "Download model",
     "Run diagnostics",
     "API test",
+    "Open app folder",
     "Start",
     "Stop",
     "Mic test",

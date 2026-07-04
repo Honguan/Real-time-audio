@@ -842,6 +842,7 @@ class CoreTests(unittest.TestCase):
             "Download model",
             "Run diagnostics",
             "API test",
+            "Open app folder",
             "Virtual mic test",
             "Speaker test",
             "Subtitle test",
@@ -862,6 +863,7 @@ class CoreTests(unittest.TestCase):
         self.assertIn("Download model", simple)
         self.assertIn("Run diagnostics", simple)
         self.assertIn("API test", simple)
+        self.assertIn("Open app folder", simple)
         self.assertIn("Virtual mic test", simple)
         self.assertIn("Speaker test", simple)
         self.assertIn("Subtitle test", simple)
