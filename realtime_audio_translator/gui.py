@@ -63,8 +63,6 @@ SETTING_ROWS = (
 BASIC_SETTING_KEYS = {
     "source_language",
     "target_language",
-    "provider",
-    "tts_provider",
     "scenario",
     "performance_mode",
     "local_translate_url",
