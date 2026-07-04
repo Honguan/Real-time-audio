@@ -5,11 +5,12 @@
 1. 到 GitHub Releases 下載 `RealtimeAudioTranslator-<tag>-win-x64.zip`。
 2. 解壓後執行 `RealtimeAudioTranslator.exe`。
 3. 第一次開啟會提示 runtime / model 診斷；可用 `Scenario` 選遊戲、Discord、會議、客服、字幕-only、自己說話翻譯或雙向翻譯場景，按 `Apply scenario` 套用預設，也可按 `Optimize settings` 讓 AI 決策中樞依場景、硬體、延遲與診斷結果調整設定，再按 `Run diagnostics` 檢查設定。
-4. 狀態列會顯示信心提示、延遲、provider、本機/雲端模式與是否可能產生費用。
-5. 若語言判斷信心偏低，診斷會提示把 `Source language` 從 `auto` 改成固定語言。
-6. 可按 `Check updates` 檢查 GitHub Releases 是否有新版本。
-7. 可按 `Export subtitles` 把最新 JSONL 對話紀錄匯出成 SRT，檔案放在 `%USERPROFILE%\.realtime-audio\exports\subtitles`。
-8. 若提示缺 runtime，下載並解壓這兩個檔案：
+4. 低階電腦可把 `Performance mode` 改成離線省資源 `offline_light`。
+5. 狀態列會顯示信心提示、延遲、provider、本機/雲端模式與是否可能產生費用。
+6. 若語言判斷信心偏低，診斷會提示把 `Source language` 從 `auto` 改成固定語言。
+7. 可按 `Check updates` 檢查 GitHub Releases 是否有新版本。
+8. 可按 `Export subtitles` 把最新 JSONL 對話紀錄匯出成 SRT，檔案放在 `%USERPROFILE%\.realtime-audio\exports\subtitles`。
+9. 若提示缺 runtime，下載並解壓這兩個檔案：
 
 ```text
 RealtimeAudioTranslator-runtime-cuda12-core-<tag>.7z

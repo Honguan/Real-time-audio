@@ -757,8 +757,9 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(diagnostic_action_label("unknown"), "unknown")
 
     def test_performance_mode_controls_segment_seconds(self):
-        self.assertEqual(PERFORMANCE_CHOICES, ("low_latency", "balanced", "quality"))
+        self.assertEqual(PERFORMANCE_CHOICES, ("low_latency", "balanced", "quality", "offline_light"))
         self.assertLess(performance_segment_seconds("low_latency"), performance_segment_seconds("quality"))
+        self.assertEqual(performance_segment_seconds("offline_light"), 2.5)
         self.assertEqual(performance_segment_seconds("bad"), performance_segment_seconds("balanced"))
 
     def test_simple_mode_hides_advanced_settings(self):
@@ -1373,6 +1374,14 @@ class CoreTests(unittest.TestCase):
         for text in (readme, notes):
             self.assertIn("客服", text)
             self.assertIn("自己說話", text)
+
+    def test_readme_and_release_notes_mention_offline_light_mode(self):
+        readme = Path("README.md").read_text(encoding="utf-8")
+        notes = Path("docs/RELEASE_NOTES.md").read_text(encoding="utf-8")
+
+        for text in (readme, notes):
+            self.assertIn("offline_light", text)
+            self.assertIn("離線省資源", text)
 
     def test_readme_and_release_notes_mention_language_lock_hint(self):
         readme = Path("README.md").read_text(encoding="utf-8")

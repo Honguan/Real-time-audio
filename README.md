@@ -68,6 +68,7 @@ Whisper 模型可放在 `models\whisper-small`；翻譯模型放在 `models\tran
 - `Add glossary term`：加入固定術語翻譯，例如 `cooldown` → `冷卻`。
 - `Show language`：在字幕前顯示語言代碼。
 - `Apply scenario`：套用遊戲、Discord、會議、客服、字幕-only、自己說話翻譯或雙向翻譯預設。
+- `Performance mode`：可選 `low_latency`、`balanced`、`quality` 或離線省資源 `offline_light`。
 - `Optimize settings`：使用 AI 決策中樞依場景、硬體、延遲與診斷結果切換模型、裝置與低延遲設定。
 - `Run diagnostics`：顯示目前缺少的 runtime、模型、音訊或 API 設定。
 - `Check updates`：檢查 GitHub Releases 是否有新版本。

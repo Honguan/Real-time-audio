@@ -26,7 +26,7 @@ from .tts import list_windows_sapi_voices, play_linear16
 LANGUAGE_CHOICES = ("auto", "zh", "en", "ja", "ko")
 PROVIDER_CHOICES = ("local", "google", "openai")
 TTS_PROVIDER_CHOICES = ("local", "google", "openai")
-PERFORMANCE_CHOICES = ("low_latency", "balanced", "quality")
+PERFORMANCE_CHOICES = ("low_latency", "balanced", "quality", "offline_light")
 CLOUD_PROVIDERS = ("google", "openai")
 SETTING_ROWS = (
     ("Source language", "source_language"),
@@ -82,7 +82,7 @@ def visible_setting_keys(advanced: bool) -> list[str]:
 
 
 def performance_segment_seconds(mode: str) -> float:
-    return {"low_latency": 1.5, "balanced": 2.0, "quality": 3.0}.get(mode, 2.0)
+    return {"low_latency": 1.5, "balanced": 2.0, "quality": 3.0, "offline_light": 2.5}.get(mode, 2.0)
 
 
 def format_overlay_line(text: str, language: str, show_language: bool) -> str:
