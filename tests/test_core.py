@@ -901,6 +901,19 @@ class CoreTests(unittest.TestCase):
         self.assertIn("low_vram_medium", [item.code for item in recommendations])
         self.assertEqual(tuned["model"], "medium")
 
+    def test_auto_tuner_uses_local_tts_when_cloud_tts_is_slow(self):
+        config = DEFAULT_CONFIG.copy()
+        config["tts_provider"] = "openai"
+        config["tts_engine"] = "openai"
+        config["last_tts_latency_seconds"] = 2.4
+
+        recommendations = recommend_tuning(config, cuda_devices=1, vram_gb=8)
+        tuned = apply_tuning(config, recommendations)
+
+        self.assertIn("use_local_tts", [item.code for item in recommendations])
+        self.assertEqual(tuned["tts_provider"], "local")
+        self.assertEqual(tuned["tts_engine"], "system")
+
     def test_confidence_status_reports_local_mode_latency_and_provider(self):
         config = DEFAULT_CONFIG.copy()
         snapshot = build_confidence_snapshot(config, "en", "zh", asr_latency_seconds=0.82, translation_latency_seconds=0.11)
