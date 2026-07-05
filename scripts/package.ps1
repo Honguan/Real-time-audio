@@ -116,6 +116,13 @@ if (-not [string]::IsNullOrWhiteSpace($ModelsSource)) {
   $ModelsStage = Join-Path $Out "_stage_models"
   New-Item -ItemType Directory -Path $ModelsStage | Out-Null
   Copy-Item -LiteralPath $ModelsSource -Destination (Join-Path $ModelsStage $ModelName) -Recurse -Force
+  @(
+    "Extract this model folder to:",
+    "%USERPROFILE%\.realtime-audio\models",
+    "",
+    "After extraction, the model should be available as:",
+    "%USERPROFILE%\.realtime-audio\models\$ModelName"
+  ) | Set-Content -LiteralPath (Join-Path $ModelsStage "MODEL_README.txt") -Encoding UTF8
   $ModelsZip = Join-Path $Out "RealtimeAudioTranslator-models-$ModelName-$Version.zip"
   Compress-FolderContents $ModelsStage $ModelsZip
   $Created += $ModelsZip

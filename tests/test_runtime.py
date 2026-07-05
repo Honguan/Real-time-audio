@@ -333,6 +333,8 @@ class RuntimeTests(unittest.TestCase):
             self.assertIn("RealtimeAudioTranslator-models-whisper-small-v0.0.0-test.zip", (out / "SHA256SUMS.txt").read_text(encoding="utf-8"))
             with zipfile.ZipFile(model_zip) as archive:
                 self.assertIn("whisper-small/model.bin", archive.namelist())
+                self.assertIn("MODEL_README.txt", archive.namelist())
+                self.assertIn("%USERPROFILE%\\.realtime-audio\\models\\whisper-small", archive.read("MODEL_README.txt").decode("utf-8-sig"))
 
 
 if __name__ == "__main__":
