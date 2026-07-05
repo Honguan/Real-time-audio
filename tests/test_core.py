@@ -1245,6 +1245,10 @@ class CoreTests(unittest.TestCase):
         formal = build_openai_translation_request("hello", "zh-TW", "en", style="formal")
         self.assertIn("Style: formal.", formal["json"]["input"])
 
+        glossary = build_openai_translation_request("push", "zh-TW", "en", glossary={"push": "push lane"})
+        self.assertIn("Use these glossary translations first", glossary["json"]["input"])
+        self.assertIn("push -> push lane", glossary["json"]["input"])
+
         google = build_google_translate_request("hello", "zh-TW", "en", "project-1")
         self.assertIn("/projects/project-1:translateText", google["url"])
         self.assertEqual(google["json"]["targetLanguageCode"], "zh-TW")
@@ -1331,6 +1335,42 @@ class CoreTests(unittest.TestCase):
             ("source 4", "target 4"),
             ("source 5", "target 5"),
         ])
+
+    def test_translator_sends_glossary_to_openai(self):
+        import os
+        import realtime_audio_translator.providers as providers_module
+
+        calls = []
+
+        class Response:
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return {"output_text": "push lane"}
+
+        original_key = os.environ.get("OPENAI_API_KEY")
+        original_post = providers_module.requests.post
+        providers_module.requests.post = lambda *args, **kwargs: calls.append((args, kwargs)) or Response()
+        os.environ["OPENAI_API_KEY"] = "test-key"
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                glossary = Path(tmp) / "glossary.json"
+                glossary.write_text(json.dumps({"push": "push lane"}), encoding="utf-8")
+                config = DEFAULT_CONFIG.copy()
+                config["provider"] = "openai"
+                config["translation_cache_enabled"] = False
+                config["glossary_path"] = str(glossary)
+
+                Translator(config).translate("push", "en", "zh-TW")
+        finally:
+            providers_module.requests.post = original_post
+            if original_key is None:
+                os.environ.pop("OPENAI_API_KEY", None)
+            else:
+                os.environ["OPENAI_API_KEY"] = original_key
+
+        self.assertIn("push -> push lane", calls[0][1]["json"]["input"])
 
     def test_translation_memory_persists_cached_translation(self):
         with tempfile.TemporaryDirectory() as tmp:

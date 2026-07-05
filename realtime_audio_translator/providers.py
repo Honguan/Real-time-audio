@@ -17,12 +17,15 @@ GOOGLE_TRANSLATE_URL = "https://translation.googleapis.com/v3/projects/{project}
 GOOGLE_TTS_URL = "https://texttospeech.googleapis.com/v1/text:synthesize"
 
 
-def build_openai_translation_request(text: str, target_language: str, source_language: str, model: str = "gpt-4.1-mini", context: list[tuple[str, str]] | None = None, style: str = "plain") -> dict:
+def build_openai_translation_request(text: str, target_language: str, source_language: str, model: str = "gpt-4.1-mini", context: list[tuple[str, str]] | None = None, style: str = "plain", glossary: dict | None = None) -> dict:
     context_text = ""
     if context:
         context_text = "Recent context:\n" + "\n".join(f"{source} -> {target}" for source, target in context[-4:]) + "\n\n"
     style_text = f"Style: {style}.\n" if style and style != "plain" else ""
-    prompt = f"{context_text}{style_text}Translate from {source_language} to {target_language}. Return only the translation:\n{text}"
+    glossary_text = ""
+    if glossary:
+        glossary_text = "Use these glossary translations first:\n" + "\n".join(f"{source} -> {target}" for source, target in glossary.items()) + "\n\n"
+    prompt = f"{context_text}{style_text}{glossary_text}Translate from {source_language} to {target_language}. Return only the translation:\n{text}"
     return {
         "url": OPENAI_RESPONSES_URL,
         "headers": {"Authorization": "Bearer ${OPENAI_API_KEY}", "Content-Type": "application/json"},
@@ -100,15 +103,8 @@ class Translator:
             self.context = (self.context + [(text.strip(), translated.strip())])[-4:]
 
     def _apply_glossary(self, text: str) -> str:
-        path = self.config.get("glossary_path", "").strip()
-        if not path or not Path(path).exists():
-            return text
-        try:
-            with Path(path).open("r", encoding="utf-8") as handle:
-                glossary = json.load(handle)
-        except Exception:
-            return text
-        if not isinstance(glossary, dict):
+        glossary = self._glossary()
+        if not glossary:
             return text
         for source, target in sorted(glossary.items(), key=lambda item: len(str(item[0])), reverse=True):
             source = str(source)
@@ -116,6 +112,17 @@ class Translator:
                 continue
             text = text.replace(source, str(target))
         return text
+
+    def _glossary(self) -> dict:
+        path = self.config.get("glossary_path", "").strip()
+        if not path or not Path(path).exists():
+            return {}
+        try:
+            with Path(path).open("r", encoding="utf-8") as handle:
+                glossary = json.load(handle)
+        except Exception:
+            return {}
+        return glossary if isinstance(glossary, dict) else {}
 
     def _local_translate(self, text: str, source_language: str, target_language: str) -> str:
         url = self.config.get("local_translate_url", "").strip()
@@ -146,7 +153,7 @@ class Translator:
         return source.get_translation(target).translate(text)
 
     def _openai_translate(self, text: str, source_language: str, target_language: str) -> str:
-        request = build_openai_translation_request(text, target_language, source_language, self.config["openai_model"], self.context, self.config.get("translation_style", "plain"))
+        request = build_openai_translation_request(text, target_language, source_language, self.config["openai_model"], self.context, self.config.get("translation_style", "plain"), self._glossary())
         api_key = os.environ.get("OPENAI_API_KEY", "")
         if not api_key:
             raise RuntimeError("OPENAI_API_KEY is not set")
