@@ -36,6 +36,7 @@ SCENARIO_PRESETS = {
     },
     "customer_support": {
         "performance_mode": "quality",
+        "translation_style": "formal",
         "segment_seconds": 3.0,
         "tts_enabled": True,
         "speaker_enabled": True,

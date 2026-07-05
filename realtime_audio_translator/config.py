@@ -14,6 +14,7 @@ DEFAULT_CONFIG = {
     "asr_engine": "faster-whisper-xxl",
     "asr_model": "small",
     "translation_engine": "local",
+    "translation_style": "plain",
     "tts_engine": "system",
     "source_language": "zh",
     "target_language": "en",

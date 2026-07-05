@@ -17,11 +17,12 @@ GOOGLE_TRANSLATE_URL = "https://translation.googleapis.com/v3/projects/{project}
 GOOGLE_TTS_URL = "https://texttospeech.googleapis.com/v1/text:synthesize"
 
 
-def build_openai_translation_request(text: str, target_language: str, source_language: str, model: str = "gpt-4.1-mini", context: list[tuple[str, str]] | None = None) -> dict:
+def build_openai_translation_request(text: str, target_language: str, source_language: str, model: str = "gpt-4.1-mini", context: list[tuple[str, str]] | None = None, style: str = "plain") -> dict:
     context_text = ""
     if context:
         context_text = "Recent context:\n" + "\n".join(f"{source} -> {target}" for source, target in context[-4:]) + "\n\n"
-    prompt = f"{context_text}Translate from {source_language} to {target_language}. Return only the translation:\n{text}"
+    style_text = f"Style: {style}.\n" if style and style != "plain" else ""
+    prompt = f"{context_text}{style_text}Translate from {source_language} to {target_language}. Return only the translation:\n{text}"
     return {
         "url": OPENAI_RESPONSES_URL,
         "headers": {"Authorization": "Bearer ${OPENAI_API_KEY}", "Content-Type": "application/json"},
@@ -145,7 +146,7 @@ class Translator:
         return source.get_translation(target).translate(text)
 
     def _openai_translate(self, text: str, source_language: str, target_language: str) -> str:
-        request = build_openai_translation_request(text, target_language, source_language, self.config["openai_model"], self.context)
+        request = build_openai_translation_request(text, target_language, source_language, self.config["openai_model"], self.context, self.config.get("translation_style", "plain"))
         api_key = os.environ.get("OPENAI_API_KEY", "")
         if not api_key:
             raise RuntimeError("OPENAI_API_KEY is not set")

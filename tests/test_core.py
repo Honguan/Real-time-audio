@@ -408,6 +408,7 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(DEFAULT_CONFIG["asr_model"], "small")
         self.assertEqual(DEFAULT_CONFIG["model"], "small")
         self.assertEqual(DEFAULT_CONFIG["translation_engine"], "local")
+        self.assertEqual(DEFAULT_CONFIG["translation_style"], "plain")
         self.assertEqual(DEFAULT_CONFIG["tts_engine"], "system")
         self.assertEqual(DEFAULT_CONFIG["runtime_path"], str(Path.home() / ".realtime-audio" / "runtime" / "cuda12"))
         self.assertEqual(DEFAULT_CONFIG["models_path"], str(Path.home() / ".realtime-audio" / "models"))
@@ -867,6 +868,7 @@ class CoreTests(unittest.TestCase):
         self.assertFalse(meeting["virtual_mic_enabled"])
         self.assertTrue(discord["virtual_mic_enabled"])
         self.assertEqual(support["performance_mode"], "quality")
+        self.assertEqual(support["translation_style"], "formal")
         self.assertTrue(support["record_logs"])
         self.assertTrue(support["virtual_mic_enabled"])
         self.assertFalse(subtitle["tts_enabled"])
@@ -1232,6 +1234,9 @@ class CoreTests(unittest.TestCase):
         contextual = build_openai_translation_request("it", "zh-TW", "en", context=[("hello", "你好")])
         self.assertIn("Recent context", contextual["json"]["input"])
         self.assertIn("hello -> 你好", contextual["json"]["input"])
+
+        formal = build_openai_translation_request("hello", "zh-TW", "en", style="formal")
+        self.assertIn("Style: formal.", formal["json"]["input"])
 
         google = build_google_translate_request("hello", "zh-TW", "en", "project-1")
         self.assertIn("/projects/project-1:translateText", google["url"])
