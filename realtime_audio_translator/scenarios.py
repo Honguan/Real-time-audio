@@ -85,5 +85,6 @@ SCENARIO_PRESETS = {
 def apply_scenario(config: dict, scenario_key: str) -> dict:
     updated = config.copy()
     updated["scenario"] = scenario_key if scenario_key in SCENARIO_PRESETS else "discord_chat"
+    updated["translation_style"] = "plain"
     updated.update(SCENARIO_PRESETS.get(updated["scenario"], SCENARIO_PRESETS["discord_chat"]))
     return updated

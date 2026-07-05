@@ -871,6 +871,7 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(support["translation_style"], "formal")
         self.assertTrue(support["record_logs"])
         self.assertTrue(support["virtual_mic_enabled"])
+        self.assertEqual(apply_scenario(support, "discord_chat")["translation_style"], "plain")
         self.assertFalse(subtitle["tts_enabled"])
         self.assertFalse(subtitle["virtual_mic_enabled"])
         self.assertFalse(mic["speaker_enabled"])
