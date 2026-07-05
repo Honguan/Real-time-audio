@@ -60,6 +60,17 @@ def recommend_tuning(config: dict, cuda_devices: int, vram_gb: int, latency_seco
             {"tts_provider": "local", "tts_engine": "system"},
         ))
     try:
+        tts_rate = int(config.get("tts_rate", 0))
+    except Exception:
+        tts_rate = 0
+    if tts_latency > 2.0 and config.get("tts_provider") == "local" and tts_rate < 2:
+        recommendations.append(TuningRecommendation(
+            "speed_up_local_tts",
+            "Speed up local TTS",
+            f"Recent TTS latency is about {tts_latency:.1f}s",
+            {"tts_rate": 2},
+        ))
+    try:
         translation_confidence = float(config.get("last_translation_confidence") or 1.0)
     except Exception:
         translation_confidence = 1.0

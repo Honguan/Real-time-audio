@@ -947,6 +947,18 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(tuned["tts_provider"], "local")
         self.assertEqual(tuned["tts_engine"], "system")
 
+    def test_auto_tuner_speeds_up_local_tts_when_playback_is_slow(self):
+        config = DEFAULT_CONFIG.copy()
+        config["tts_provider"] = "local"
+        config["tts_rate"] = 0
+        config["last_tts_latency_seconds"] = 2.4
+
+        recommendations = recommend_tuning(config, cuda_devices=1, vram_gb=8)
+        tuned = apply_tuning(config, recommendations)
+
+        self.assertIn("speed_up_local_tts", [item.code for item in recommendations])
+        self.assertEqual(tuned["tts_rate"], 2)
+
     def test_auto_tuner_shows_original_when_translation_confidence_is_low(self):
         config = DEFAULT_CONFIG.copy()
         config["show_original_text"] = False
