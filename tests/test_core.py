@@ -1962,6 +1962,7 @@ class CoreTests(unittest.TestCase):
         self.assertIn("cuBLAS.and.cuDNN_CUDA12_win_v3.7z", notes)
         self.assertIn("Local translate URL", notes)
         self.assertNotIn("兩個 runtime", notes)
+        self.assertNotIn("這兩個檔案", notes)
 
     def test_quick_start_doc_exists_for_app_zip(self):
         quick_start = Path("docs/README_QUICK_START_zh-TW.txt").read_text(encoding="utf-8")
@@ -1991,6 +1992,7 @@ class CoreTests(unittest.TestCase):
         for path in (Path("README.md"), Path("docs/RELEASE_NOTES.md")):
             text = path.read_text(encoding="utf-8")
             self.assertNotIn("兩個 runtime", text)
+            self.assertNotIn("兩個檔案", text)
             for item in required:
                 self.assertIn(item, text)
 
