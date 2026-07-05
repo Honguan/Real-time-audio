@@ -139,6 +139,13 @@ def performance_segment_seconds(mode: str) -> float:
     return {"low_latency": 1.5, "balanced": 2.0, "quality": 3.0, "offline_light": 2.5}.get(mode, 2.0)
 
 
+def latency_seconds_value(value) -> float | None:
+    try:
+        return float(value)
+    except Exception:
+        return None
+
+
 def format_overlay_line(text: str, language: str, show_language: bool) -> str:
     return f"{language}: {text}" if show_language and text else text
 
@@ -867,7 +874,7 @@ class TranslatorApp(tk.Tk):
         devices, vram_gb = self._cuda_hardware(config)
         config["last_cuda_devices"] = devices
         config["last_vram_gb"] = vram_gb
-        recommendations = recommend_tuning(config, devices, vram_gb)
+        recommendations = recommend_tuning(config, devices, vram_gb, latency_seconds_value(config.get("last_latency_seconds")))
         if recommendations:
             self._load_config_into_widgets(apply_tuning(config, recommendations))
             self._save()

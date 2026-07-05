@@ -21,7 +21,7 @@ from realtime_audio_translator.ai_memory import add_glossary_term, cache_transla
 from realtime_audio_translator.app_log import append_app_log
 from realtime_audio_translator.diagnostics import DiagnosticIssue, collect_diagnostics
 from realtime_audio_translator.engine import RealtimeEngine, audio_devices_overlap, drain_queue, overlay_text_from_config
-from realtime_audio_translator.gui import LANGUAGE_CHOICES, PERFORMANCE_CHOICES, PROVIDER_CHOICES, TTS_PROVIDER_CHOICES, TranslatorApp, diagnostic_action_label, first_diagnostic_action, first_run_setup_action, first_run_wizard_needed, format_overlay_line, language_lock_value, main_status_summary, mode_notice, overlay_clipboard_text, overlay_font_size_value, overlay_hold_seconds_value, overlay_opacity_value, overlay_visibility_action, performance_segment_seconds, record_logs_requires_confirmation, subtitle_updates_allowed, swap_language_values, troubleshooting_action, visible_button_texts, visible_setting_keys
+from realtime_audio_translator.gui import LANGUAGE_CHOICES, PERFORMANCE_CHOICES, PROVIDER_CHOICES, TTS_PROVIDER_CHOICES, TranslatorApp, diagnostic_action_label, first_diagnostic_action, first_run_setup_action, first_run_wizard_needed, format_overlay_line, language_lock_value, latency_seconds_value, main_status_summary, mode_notice, overlay_clipboard_text, overlay_font_size_value, overlay_hold_seconds_value, overlay_opacity_value, overlay_visibility_action, performance_segment_seconds, record_logs_requires_confirmation, subtitle_updates_allowed, swap_language_values, troubleshooting_action, visible_button_texts, visible_setting_keys
 from realtime_audio_translator.logbook import ConversationLog
 from realtime_audio_translator.models import cuda_hardware_from_check_output, list_models, model_available, model_download_command, model_install_message, models_dir, recommend_model
 from realtime_audio_translator.providers import TextToSpeech, Translator, build_google_translate_request, build_openai_translation_request
@@ -950,18 +950,26 @@ class CoreTests(unittest.TestCase):
     def test_auto_optimize_before_start_applies_recommended_config_only_when_enabled(self):
         app = TranslatorApp.__new__(TranslatorApp)
         app.config = {"ai_auto_optimize": True}
-        config = {"ai_auto_optimize": True, "device": "cuda", "model": "large-v3-turbo", "virtual_mic_enabled": False}
+        config = {
+            "ai_auto_optimize": True,
+            "device": "cuda",
+            "model": "large-v3-turbo",
+            "virtual_mic_enabled": False,
+            "last_latency_seconds": "4.2",
+            "performance_mode": "quality",
+            "segment_seconds": 3.0,
+        }
         calls = []
         app._config_from_vars = lambda: config
-        app._cuda_hardware = lambda current: (0, 0)
+        app._cuda_hardware = lambda current: (1, 6)
         app._load_config_into_widgets = lambda config: calls.append(("load", config))
         app._save = lambda: calls.append(("save", None))
 
         app._auto_optimize_before_start()
 
         self.assertEqual(calls[0][0], "load")
-        self.assertEqual(calls[0][1]["device"], "cpu")
-        self.assertEqual(calls[0][1]["model"], "medium")
+        self.assertEqual(calls[0][1]["performance_mode"], "low_latency")
+        self.assertEqual(calls[0][1]["segment_seconds"], 1.5)
         self.assertFalse(calls[0][1]["virtual_mic_enabled"])
         self.assertEqual(calls[1], ("save", None))
         calls.clear()
@@ -970,6 +978,10 @@ class CoreTests(unittest.TestCase):
         app._auto_optimize_before_start()
 
         self.assertEqual(calls, [])
+
+    def test_latency_seconds_value_accepts_bad_values(self):
+        self.assertEqual(latency_seconds_value("4.2"), 4.2)
+        self.assertIsNone(latency_seconds_value(""))
 
     def test_diagnostic_action_label_shows_user_button_names(self):
         self.assertEqual(diagnostic_action_label("open_runtime"), "Open runtime folder / Download runtime files")
