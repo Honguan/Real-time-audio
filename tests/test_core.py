@@ -950,15 +950,20 @@ class CoreTests(unittest.TestCase):
     def test_auto_optimize_before_start_applies_recommended_config_only_when_enabled(self):
         app = TranslatorApp.__new__(TranslatorApp)
         app.config = {"ai_auto_optimize": True}
-        updated = {"ai_auto_optimize": True, "model": "medium"}
+        config = {"ai_auto_optimize": True, "device": "cuda", "model": "large-v3-turbo", "virtual_mic_enabled": False}
         calls = []
-        app._planned_session = lambda: type("Decision", (), {"recommendations": [object()], "config": updated})()
+        app._config_from_vars = lambda: config
+        app._cuda_hardware = lambda current: (0, 0)
         app._load_config_into_widgets = lambda config: calls.append(("load", config))
         app._save = lambda: calls.append(("save", None))
 
         app._auto_optimize_before_start()
 
-        self.assertEqual(calls, [("load", updated), ("save", None)])
+        self.assertEqual(calls[0][0], "load")
+        self.assertEqual(calls[0][1]["device"], "cpu")
+        self.assertEqual(calls[0][1]["model"], "medium")
+        self.assertFalse(calls[0][1]["virtual_mic_enabled"])
+        self.assertEqual(calls[1], ("save", None))
         calls.clear()
         app.config = {"ai_auto_optimize": False}
 

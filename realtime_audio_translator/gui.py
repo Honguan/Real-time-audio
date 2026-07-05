@@ -6,6 +6,7 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, simpledialog, ttk
 
 from .audio import audio_segment_active, capture_wav, find_device, format_device_label, list_audio_devices
+from .ai_auto_tuner import apply_tuning, recommend_tuning
 from .ai_memory import add_glossary_term
 from .ai_orchestrator import plan_session
 from .app_log import append_app_log
@@ -847,22 +848,28 @@ class TranslatorApp(tk.Tk):
 
     def _planned_session(self):
         config = self._config_from_vars()
-        exe = whisper_exe(runtime_dir(config))
-        devices = 0
-        vram_gb = 0
-        if exe.exists():
-            cuda = subprocess.run([str(exe), "--checkcuda"], capture_output=True, text=True, check=False)
-            devices, vram_gb = cuda_hardware_from_check_output(cuda.stdout + cuda.stderr)
+        devices, vram_gb = self._cuda_hardware(config)
         config["last_cuda_devices"] = devices
         config["last_vram_gb"] = vram_gb
         return plan_session(config, self.repo_root, devices, vram_gb)
 
+    def _cuda_hardware(self, config: dict) -> tuple[int, int]:
+        exe = whisper_exe(runtime_dir(config))
+        if not exe.exists():
+            return 0, 0
+        cuda = subprocess.run([str(exe), "--checkcuda"], capture_output=True, text=True, check=False)
+        return cuda_hardware_from_check_output(cuda.stdout + cuda.stderr)
+
     def _auto_optimize_before_start(self) -> None:
         if not self.config.get("ai_auto_optimize", True):
             return
-        decision = self._planned_session()
-        if decision.recommendations:
-            self._load_config_into_widgets(decision.config)
+        config = self._config_from_vars()
+        devices, vram_gb = self._cuda_hardware(config)
+        config["last_cuda_devices"] = devices
+        config["last_vram_gb"] = vram_gb
+        recommendations = recommend_tuning(config, devices, vram_gb)
+        if recommendations:
+            self._load_config_into_widgets(apply_tuning(config, recommendations))
             self._save()
 
     def _download_model(self) -> None:
