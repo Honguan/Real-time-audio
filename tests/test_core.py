@@ -1953,6 +1953,10 @@ class CoreTests(unittest.TestCase):
         self.assertIn("RealtimeAudioTranslator-runtime-cuda12-<tag>.zip", quick_start)
         self.assertIn("%USERPROFILE%\\.realtime-audio\\runtime\\cuda12", quick_start)
         self.assertIn("%USERPROFILE%\\.realtime-audio\\models", quick_start)
+        self.assertIn("Scenario", quick_start)
+        self.assertIn("Run diagnostics", quick_start)
+        self.assertIn("CABLE Output", quick_start)
+        self.assertIn("CABLE Input", quick_start)
         self.assertIn("Local translate URL", quick_start)
 
     def test_readme_and_release_notes_cover_required_faq(self):

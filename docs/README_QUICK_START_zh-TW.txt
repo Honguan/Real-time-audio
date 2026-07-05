@@ -1,11 +1,15 @@
-最快使用
+RealtimeAudioTranslator 快速開始
 
-1. 解壓 RealtimeAudioTranslator-<tag>-win-x64.zip。
-2. 執行 RealtimeAudioTranslator.exe。
-3. 如果提示缺 runtime，把 RealtimeAudioTranslator-runtime-cuda12-<tag>.zip 解壓到：
-   %USERPROFILE%\.realtime-audio\runtime\cuda12
-4. 如果提示缺模型，可在 App 內下載模型，或把模型 zip 解壓到：
-   %USERPROFILE%\.realtime-audio\models
-5. 若使用本機翻譯，先啟動 LibreTranslate，並把 Local translate URL 填成 http://127.0.0.1:5000/translate。
-6. 在 Discord / 遊戲語音中，把麥克風選成 CABLE Output；本工具的 TTS output 選 CABLE Input。
-7. 若要聽對方語音翻譯，開 Speak opponent；Speaker TTS output 留空會用系統預設喇叭。
+1. 從 GitHub Releases 下載 `RealtimeAudioTranslator-<tag>-win-x64.zip`。
+2. 解壓縮後直接執行 `RealtimeAudioTranslator.exe`，不需要另外安裝 Python。
+3. 第一次開啟若提示缺 runtime，下載 `RealtimeAudioTranslator-runtime-cuda12-<tag>.zip`，解壓到：
+   `%USERPROFILE%\.realtime-audio\runtime\cuda12`
+4. 若模型無法由 App 下載，下載模型 zip，解壓到：
+   `%USERPROFILE%\.realtime-audio\models`
+5. 在主視窗選 `Scenario`，按 `Apply scenario` 套用場景預設。
+6. 按 `Run diagnostics` 檢查 runtime、模型、音訊裝置、VB-CABLE 與 API 設定。
+7. Discord 或遊戲語音的麥克風選 `CABLE Output`；App 的 `TTS output` 選 `CABLE Input`。
+8. 本機翻譯可使用 Argos Translate；若使用 LibreTranslate，請在 `Local translate URL` 填入端點，例如：
+   `http://127.0.0.1:5000/translate`
+9. 按 `Subtitle test` 確認字幕 bar，按 `Speaker test` / `Mic test` / `TTS test` 測試聲音。
+10. 確認無誤後按 `Start` 開始即時字幕與翻譯。
