@@ -59,6 +59,17 @@ def recommend_tuning(config: dict, cuda_devices: int, vram_gb: int, latency_seco
             f"最近 TTS 延遲約 {tts_latency:.1f} 秒，雲端語音可能拖慢輸出",
             {"tts_provider": "local", "tts_engine": "system"},
         ))
+    try:
+        translation_confidence = float(config.get("last_translation_confidence") or 1.0)
+    except Exception:
+        translation_confidence = 1.0
+    if translation_confidence < 0.5 and not config.get("show_original_text", True):
+        recommendations.append(TuningRecommendation(
+            "show_original_on_low_confidence",
+            "Show source text when translation confidence is low",
+            f"Recent translation confidence is about {round(translation_confidence * 100)}%",
+            {"show_original_text": True},
+        ))
     if config.get("scenario") == "game_voice" and config.get("performance_mode") != "low_latency":
         recommendations.append(TuningRecommendation(
             "game_low_latency",

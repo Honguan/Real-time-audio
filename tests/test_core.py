@@ -947,6 +947,17 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(tuned["tts_provider"], "local")
         self.assertEqual(tuned["tts_engine"], "system")
 
+    def test_auto_tuner_shows_original_when_translation_confidence_is_low(self):
+        config = DEFAULT_CONFIG.copy()
+        config["show_original_text"] = False
+        config["last_translation_confidence"] = 0.3
+
+        recommendations = recommend_tuning(config, cuda_devices=1, vram_gb=8)
+        tuned = apply_tuning(config, recommendations)
+
+        self.assertIn("show_original_on_low_confidence", [item.code for item in recommendations])
+        self.assertTrue(tuned["show_original_text"])
+
     def test_confidence_status_reports_local_mode_latency_and_provider(self):
         config = DEFAULT_CONFIG.copy()
         snapshot = build_confidence_snapshot(config, "en", "zh", asr_latency_seconds=0.82, translation_latency_seconds=0.11)
