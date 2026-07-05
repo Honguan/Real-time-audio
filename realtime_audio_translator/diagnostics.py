@@ -126,6 +126,19 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
             "檢查 TTS output、VB-CABLE 與 TTS provider 設定",
             "audio_settings",
         ))
+    try:
+        tts_latency = float(config.get("last_tts_latency_seconds") or 0)
+    except Exception:
+        tts_latency = 0
+    if tts_latency > 2.0:
+        issues.append(DiagnosticIssue(
+            "tts_latency_high",
+            "warning",
+            "TTS 延遲過高",
+            f"最近一次翻譯語音播放約 {tts_latency:.1f} 秒",
+            "改用 local TTS、降低語音輸出頻率，或檢查 TTS output 裝置",
+            "audio_settings",
+        ))
     if config.get("virtual_mic_enabled", False) and config.get("last_virtual_mic_failed"):
         issues.append(DiagnosticIssue(
             "virtual_mic_no_output",

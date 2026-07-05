@@ -620,6 +620,27 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(issue.severity, "warning")
         self.assertEqual(issue.action, "audio_settings")
 
+    def test_diagnostics_report_high_tts_latency(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            runtime = root / "runtime"
+            model = root / "models" / "medium"
+            runtime.mkdir()
+            model.mkdir(parents=True)
+            (runtime / "faster-whisper-xxl.exe").write_text("exe", encoding="utf-8")
+            (runtime / "ffmpeg.exe").write_text("ff", encoding="utf-8")
+            (runtime / "_xxl_data").mkdir()
+            config = DEFAULT_CONFIG.copy()
+            config["runtime_dir"] = str(runtime)
+            config["model"] = "medium"
+            config["last_tts_latency_seconds"] = 2.4
+
+            issues = collect_diagnostics(config, root)
+
+        issue = next(item for item in issues if item.code == "tts_latency_high")
+        self.assertEqual(issue.action, "audio_settings")
+        self.assertIn("local TTS", issue.fix)
+
     def test_diagnostics_report_virtual_mic_failure(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -2589,6 +2610,38 @@ class CoreTests(unittest.TestCase):
             engine._process_segments("me", Worker(wav))
 
         self.assertTrue(engine.config["last_tts_failed"])
+
+    def test_engine_records_tts_latency_for_diagnostics(self):
+        config = DEFAULT_CONFIG.copy()
+        config["record_logs"] = False
+        config["tts_provider"] = "local"
+        config["virtual_mic_enabled"] = True
+        engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, lambda status: None)
+
+        class Transcriber:
+            def transcribe(self, wav, source_language):
+                return "hello"
+
+        class Translator:
+            def translate(self, text, source_language, target_language):
+                engine.running = False
+                return "hi"
+
+        class Worker:
+            def __init__(self, wav):
+                self.queue = queue.Queue()
+                self.queue.put(wav)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            wav = Path(tmp) / "clip.wav"
+            self._write_wav(wav, 12000)
+            engine.running = True
+            engine.transcriber = Transcriber()
+            engine.translator = Translator()
+            engine._speak_translation = lambda direction, translated, target, device: 2.4
+            engine._process_segments("me", Worker(wav))
+
+        self.assertEqual(engine.config["last_tts_latency_seconds"], 2.4)
 
     def test_engine_can_disable_tts_output(self):
         import realtime_audio_translator.engine as engine_module

@@ -196,6 +196,8 @@ class RealtimeEngine:
                     self.overlay("", overlay_text)
                     if self.config.get("tts_enabled", True) and self.config.get("virtual_mic_enabled", False) and not self.muted and translated and not translation_failed:
                         tts_latency = self._speak_translation(direction, translated, target, self.config.get("tts_output_device", "CABLE Input"))
+                if tts_latency is not None:
+                    self.config["last_tts_latency_seconds"] = tts_latency
                 latency = time.perf_counter() - started
                 self.config["last_latency_seconds"] = latency
                 if self.log:
