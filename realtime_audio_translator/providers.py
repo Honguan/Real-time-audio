@@ -70,7 +70,7 @@ class Translator:
             self.last_confidence = 1.0
             return self._apply_glossary(self.cache[cache_key])
         db_path = Path(self.config.get("translation_cache_path", ""))
-        persistent_cache_enabled = self.config.get("translation_cache_enabled", True) and not (provider == "local" and not self.config.get("local_translate_url", "").strip())
+        persistent_cache_enabled = self.config.get("translation_cache_enabled", True)
         if persistent_cache_enabled and db_path:
             cached = cached_translation(db_path, provider, source_language, target_language, text)
             if cached is not None:
@@ -90,7 +90,7 @@ class Translator:
             self.last_confidence = 0.0
         self.cache[cache_key] = translated
         self._remember_context(text, translated)
-        if persistent_cache_enabled and db_path:
+        if persistent_cache_enabled and db_path and not (provider == "local" and not self.config.get("local_translate_url", "").strip() and translated == text):
             cache_translation(db_path, provider, source_language, target_language, text, translated)
         return self._apply_glossary(translated)
 

@@ -1331,11 +1331,13 @@ class CoreTests(unittest.TestCase):
         self.assertIn("add_glossary_term", gui_source)
 
     def test_local_provider_returns_text_without_cloud_request(self):
-        config = DEFAULT_CONFIG.copy()
-        config["provider"] = "local"
-        translator = Translator(config)
+        with tempfile.TemporaryDirectory() as tmp:
+            config = DEFAULT_CONFIG.copy()
+            config["provider"] = "local"
+            config["translation_cache_path"] = str(Path(tmp) / "translation_cache.db")
+            translator = Translator(config)
 
-        self.assertEqual(translator.translate("hello", "en", "zh-TW"), "hello")
+            self.assertEqual(translator.translate("hello", "auto", "zh-TW"), "hello")
 
     def test_local_provider_can_use_installed_argos_without_url(self):
         class Translation:
@@ -1358,12 +1360,14 @@ class CoreTests(unittest.TestCase):
         sys.modules["argostranslate"] = package
         sys.modules["argostranslate.translate"] = module
         try:
-            config = DEFAULT_CONFIG.copy()
-            config["provider"] = "local"
-            translator = Translator(config)
+            with tempfile.TemporaryDirectory() as tmp:
+                config = DEFAULT_CONFIG.copy()
+                config["provider"] = "local"
+                config["translation_cache_path"] = str(Path(tmp) / "translation_cache.db")
+                translator = Translator(config)
 
-            self.assertEqual(translator.translate("hello", "en", "zh-TW"), "本機:hello")
-            self.assertEqual(translator.last_confidence, 0.8)
+                self.assertEqual(translator.translate("hello", "en", "zh-TW"), "本機:hello")
+                self.assertEqual(translator.last_confidence, 0.8)
         finally:
             if original_package is None:
                 sys.modules.pop("argostranslate", None)
@@ -1374,12 +1378,63 @@ class CoreTests(unittest.TestCase):
             else:
                 sys.modules["argostranslate.translate"] = original_module
 
-    def test_translator_sets_confidence_for_local_fallback(self):
-        config = DEFAULT_CONFIG.copy()
-        config["provider"] = "local"
-        translator = Translator(config)
+    def test_local_argos_translation_persists_cache_without_url(self):
+        class Translation:
+            def translate(self, text):
+                return f"本機:{text}"
 
-        translator.translate("hello", "en", "zh-TW")
+        class Language:
+            def __init__(self, code):
+                self.code = code
+
+            def get_translation(self, target):
+                return Translation()
+
+        package = type(sys)("argostranslate")
+        module = type(sys)("argostranslate.translate")
+        package.translate = module
+        module.get_installed_languages = lambda: [Language("en"), Language("zh")]
+        original_package = sys.modules.get("argostranslate")
+        original_module = sys.modules.get("argostranslate.translate")
+        sys.modules["argostranslate"] = package
+        sys.modules["argostranslate.translate"] = module
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                db = Path(tmp) / "translation_cache.db"
+                config = DEFAULT_CONFIG.copy()
+                config["provider"] = "local"
+                config["translation_cache_path"] = str(db)
+
+                self.assertEqual(Translator(config).translate("hello", "en", "zh-TW"), "本機:hello")
+                self.assertEqual(cached_translation(db, "local", "en", "zh-TW", "hello"), "本機:hello")
+        finally:
+            if original_package is None:
+                sys.modules.pop("argostranslate", None)
+            else:
+                sys.modules["argostranslate"] = original_package
+            if original_module is None:
+                sys.modules.pop("argostranslate.translate", None)
+            else:
+                sys.modules["argostranslate.translate"] = original_module
+
+    def test_local_fallback_does_not_persist_original_text(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "translation_cache.db"
+            config = DEFAULT_CONFIG.copy()
+            config["provider"] = "local"
+            config["translation_cache_path"] = str(db)
+
+            self.assertEqual(Translator(config).translate("hello", "auto", "zh-TW"), "hello")
+            self.assertIsNone(cached_translation(db, "local", "auto", "zh-TW", "hello"))
+
+    def test_translator_sets_confidence_for_local_fallback(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = DEFAULT_CONFIG.copy()
+            config["provider"] = "local"
+            config["translation_cache_path"] = str(Path(tmp) / "translation_cache.db")
+            translator = Translator(config)
+
+            translator.translate("hello", "auto", "zh-TW")
 
         self.assertEqual(translator.last_confidence, 0.3)
 
