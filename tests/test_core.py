@@ -2075,6 +2075,15 @@ class CoreTests(unittest.TestCase):
         self.assertIn("app.log", readme)
         self.assertIn("開啟紀錄資料夾", readme)
 
+    def test_readme_and_release_notes_mention_clear_local_data(self):
+        readme = Path("README.md").read_text(encoding="utf-8")
+        notes = Path("docs/RELEASE_NOTES.md").read_text(encoding="utf-8")
+
+        for text in (readme, notes):
+            self.assertIn("Clear cache", text)
+            self.assertIn("Clear logs", text)
+            self.assertIn("翻譯快取", text)
+
     def test_readme_mentions_open_app_folder(self):
         readme = Path("README.md").read_text(encoding="utf-8")
 

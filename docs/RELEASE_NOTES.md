@@ -45,6 +45,8 @@ RealtimeAudioTranslator-runtime-cuda12-<tag>.zip
 
 翻譯快取會保存在 `%USERPROFILE%\.realtime-audio\cache\translation_cache.db`，術語可用 `Add glossary term` 加入，也可用 `Fix last translation` 修正最近一句，或用 `Open glossary` 編輯。
 
+需要清除本機資料時，可在進階模式按 `Clear cache` / `Clear logs`，清除翻譯快取、暫存音訊與對話紀錄。
+
 ## VB-CABLE 設定
 
 1. 會議軟體或 Discord 的麥克風選 `CABLE Output (VB-Audio Virtual Cable)`。
