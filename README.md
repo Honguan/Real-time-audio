@@ -88,7 +88,7 @@ Whisper 模型可放在 `models\whisper-small`；翻譯模型放在 `models\tran
 http://127.0.0.1:5000/translate
 ```
 
-也可改用 OpenAI 或 Google provider。OpenAI 使用 `OPENAI_API_KEY` 環境變數，Google 使用 service account JSON 路徑。
+沒有 `Local translate URL` 時會嘗試使用已安裝的 Argos Translate 離線模型；也可改用 OpenAI 或 Google provider。OpenAI 使用 `OPENAI_API_KEY` 環境變數，Google 使用 service account JSON 路徑。
 
 `TTS provider` 可選本機、OpenAI 或 Google。進階設定可調 `OpenAI model`、`OpenAI TTS voice`、OpenAI TTS model 與 Google TTS voice。
 

@@ -40,7 +40,7 @@ RealtimeAudioTranslator-runtime-cuda12-<tag>.zip
 
 主程式不需要安裝 Python。
 
-若 Release 沒有 runtime 檔案，可到 https://github.com/Purfview/whisper-standalone-win/releases 下載 Faster-Whisper-XXL Windows runtime 和 `cuBLAS.and.cuDNN_CUDA12_win_v3.7z`。本機翻譯可在 `Local translate URL` 填入 LibreTranslate 端點。
+若 Release 沒有 runtime 檔案，可到 https://github.com/Purfview/whisper-standalone-win/releases 下載 Faster-Whisper-XXL Windows runtime 和 `cuBLAS.and.cuDNN_CUDA12_win_v3.7z`。本機翻譯會優先使用已安裝的 Argos Translate 離線模型，也可在 `Local translate URL` 填入 LibreTranslate 端點。
 
 翻譯快取會保存在 `%USERPROFILE%\.realtime-audio\cache\translation_cache.db`，術語可用 `Add glossary term` 加入，也可用 `Fix last translation` 修正最近一句，或用 `Open glossary` 編輯。
 

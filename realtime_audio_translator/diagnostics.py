@@ -104,8 +104,8 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
             "local_translate_url_missing",
             "info",
             "本機翻譯 URL 未設定",
-            "目前 local provider 只會套用 glossary 並保留原文",
-            "啟動 LibreTranslate 後填入 http://127.0.0.1:5000/translate，或改用雲端 provider",
+            "若未安裝 Argos Translate，local provider 只會套用 glossary 並保留原文",
+            "安裝 Argos Translate 離線模型，或啟動 LibreTranslate 後填入 http://127.0.0.1:5000/translate",
             "local_translation",
         ))
     if config.get("last_translation_empty"):

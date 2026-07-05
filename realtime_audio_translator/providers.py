@@ -79,7 +79,7 @@ class Translator:
                 return self._apply_glossary(cached)
         if provider == "local":
             translated = self._local_translate(text, source_language, target_language)
-            self.last_confidence = 0.8 if self.config.get("local_translate_url", "").strip() else 0.3
+            self.last_confidence = 0.8 if self.config.get("local_translate_url", "").strip() or translated != text else 0.3
         elif provider == "openai":
             translated = self._openai_translate(text, source_language, target_language)
             self.last_confidence = 0.8
@@ -119,7 +119,7 @@ class Translator:
     def _local_translate(self, text: str, source_language: str, target_language: str) -> str:
         url = self.config.get("local_translate_url", "").strip()
         if not url:
-            return text
+            return self._argos_translate(text, source_language, target_language) or text
         response = requests.post(
             url,
             json={"q": text, "source": source_language, "target": target_language, "format": "text"},
@@ -127,6 +127,22 @@ class Translator:
         )
         response.raise_for_status()
         return html.unescape(response.json().get("translatedText", ""))
+
+    def _argos_translate(self, text: str, source_language: str, target_language: str) -> str:
+        if source_language == "auto":
+            return ""
+        try:
+            import argostranslate.translate as argos_translate
+        except Exception:
+            return ""
+        source_code = source_language.split("-")[0]
+        target_code = target_language.split("-")[0]
+        languages = argos_translate.get_installed_languages()
+        source = next((language for language in languages if language.code == source_code), None)
+        target = next((language for language in languages if language.code == target_code), None)
+        if not source or not target:
+            return ""
+        return source.get_translation(target).translate(text)
 
     def _openai_translate(self, text: str, source_language: str, target_language: str) -> str:
         request = build_openai_translation_request(text, target_language, source_language, self.config["openai_model"], self.context)

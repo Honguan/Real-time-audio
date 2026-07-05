@@ -1337,6 +1337,43 @@ class CoreTests(unittest.TestCase):
 
         self.assertEqual(translator.translate("hello", "en", "zh-TW"), "hello")
 
+    def test_local_provider_can_use_installed_argos_without_url(self):
+        class Translation:
+            def translate(self, text):
+                return f"本機:{text}"
+
+        class Language:
+            def __init__(self, code):
+                self.code = code
+
+            def get_translation(self, target):
+                return Translation()
+
+        package = type(sys)("argostranslate")
+        module = type(sys)("argostranslate.translate")
+        package.translate = module
+        module.get_installed_languages = lambda: [Language("en"), Language("zh")]
+        original_package = sys.modules.get("argostranslate")
+        original_module = sys.modules.get("argostranslate.translate")
+        sys.modules["argostranslate"] = package
+        sys.modules["argostranslate.translate"] = module
+        try:
+            config = DEFAULT_CONFIG.copy()
+            config["provider"] = "local"
+            translator = Translator(config)
+
+            self.assertEqual(translator.translate("hello", "en", "zh-TW"), "本機:hello")
+            self.assertEqual(translator.last_confidence, 0.8)
+        finally:
+            if original_package is None:
+                sys.modules.pop("argostranslate", None)
+            else:
+                sys.modules["argostranslate"] = original_package
+            if original_module is None:
+                sys.modules.pop("argostranslate.translate", None)
+            else:
+                sys.modules["argostranslate.translate"] = original_module
+
     def test_translator_sets_confidence_for_local_fallback(self):
         config = DEFAULT_CONFIG.copy()
         config["provider"] = "local"
@@ -1809,6 +1846,14 @@ class CoreTests(unittest.TestCase):
         for text in (readme, notes):
             self.assertIn("offline_light", text)
             self.assertIn("離線省資源", text)
+
+    def test_readme_and_release_notes_mention_argos_offline_translate(self):
+        readme = Path("README.md").read_text(encoding="utf-8")
+        notes = Path("docs/RELEASE_NOTES.md").read_text(encoding="utf-8")
+
+        for text in (readme, notes):
+            self.assertIn("Argos Translate", text)
+            self.assertIn("離線模型", text)
 
     def test_readme_and_release_notes_mention_language_lock_hint(self):
         readme = Path("README.md").read_text(encoding="utf-8")
