@@ -53,6 +53,7 @@ DEFAULT_CONFIG = {
     "advanced_mode": False,
     "ai_auto_optimize": True,
     "ai_self_diagnosis": True,
+    "setup_guide_shown": False,
     "last_ffmpeg_failed": False,
     "last_cuda_devices": "",
     "last_vram_gb": "",

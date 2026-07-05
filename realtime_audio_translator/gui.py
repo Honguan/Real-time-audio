@@ -120,6 +120,12 @@ def first_run_wizard_needed(issues) -> bool:
     return any(issue.code in FIRST_RUN_ISSUE_CODES for issue in issues)
 
 
+def first_run_setup_action(issues, setup_guide_shown: bool) -> str:
+    if first_run_wizard_needed(issues):
+        return "diagnostics"
+    return "" if setup_guide_shown else "guide"
+
+
 def first_diagnostic_action(issues) -> str:
     actions = ("open_runtime", "download_model", "audio_settings", "optimize_settings", "language_settings", "local_translation", "api_settings")
     for action in actions:
@@ -514,6 +520,7 @@ class TranslatorApp(tk.Tk):
         config["microphone_enabled"] = self.microphone_enabled.get()
         config["record_logs"] = self.record_logs.get()
         config["advanced_mode"] = self.advanced_mode.get()
+        config["setup_guide_shown"] = str(config.get("setup_guide_shown", False)).lower() == "true"
         if config.get("performance_mode") not in PERFORMANCE_CHOICES:
             config["performance_mode"] = "balanced"
         config["overlay_opacity"] = overlay_opacity_value(config["overlay_opacity"])
@@ -715,9 +722,15 @@ class TranslatorApp(tk.Tk):
 
     def _show_first_run_wizard(self) -> None:
         issues = collect_diagnostics(self._config_from_vars(), self.repo_root)
-        if not first_run_wizard_needed(issues):
-            return
-        self._show_diagnostics("First run setup", issues)
+        action = first_run_setup_action(issues, bool(self.config.get("setup_guide_shown", False)))
+        if action == "diagnostics":
+            self._show_diagnostics("First run setup", issues)
+        elif action == "guide":
+            self._show_setup_guide()
+            if "setup_guide_shown" in self.vars:
+                self.vars["setup_guide_shown"].set("True")
+            self.config["setup_guide_shown"] = True
+            save_config(APP_DIR, self.config)
 
     def _run_diagnostics(self) -> None:
         self._show_diagnostics("Diagnostics", collect_diagnostics(self._config_from_vars(), self.repo_root))
