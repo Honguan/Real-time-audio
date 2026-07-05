@@ -186,6 +186,9 @@ class RuntimeTests(unittest.TestCase):
                 self.assertIn("cudnn64_9.dll", archive.namelist())
                 self.assertIn("_xxl_data/data.txt", archive.namelist())
                 self.assertIn("runtime_manifest.json", archive.namelist())
+                runtime_readme = archive.read("RUNTIME_README.txt").decode("utf-8-sig")
+                self.assertIn("解壓縮到", runtime_readme)
+                self.assertIn("%USERPROFILE%\\.realtime-audio\\runtime\\cuda12", runtime_readme)
 
     def test_package_script_rejects_incomplete_runtime_source(self):
         root = Path(__file__).parents[1]
@@ -334,7 +337,9 @@ class RuntimeTests(unittest.TestCase):
             with zipfile.ZipFile(model_zip) as archive:
                 self.assertIn("whisper-small/model.bin", archive.namelist())
                 self.assertIn("MODEL_README.txt", archive.namelist())
-                self.assertIn("%USERPROFILE%\\.realtime-audio\\models\\whisper-small", archive.read("MODEL_README.txt").decode("utf-8-sig"))
+                model_readme = archive.read("MODEL_README.txt").decode("utf-8-sig")
+                self.assertIn("解壓縮到", model_readme)
+                self.assertIn("%USERPROFILE%\\.realtime-audio\\models\\whisper-small", model_readme)
 
 
 if __name__ == "__main__":

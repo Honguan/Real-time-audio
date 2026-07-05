@@ -51,6 +51,14 @@ function Compress-FolderContents($SourceDir, $DestinationZip) {
   Compress-Archive -LiteralPath $Items.FullName -DestinationPath $DestinationZip -CompressionLevel Optimal
 }
 
+function New-UnicodeString([int[]]$Codes) {
+  -join ($Codes | ForEach-Object { [char]$_ })
+}
+
+$ExtractToLabel = New-UnicodeString @(0x89E3, 0x58D3, 0x7E2E, 0x5230, 0xFF1A)
+$RuntimeFilesLabel = New-UnicodeString @(0x89E3, 0x58D3, 0x5F8C, 0x9019, 0x500B, 0x8CC7, 0x6599, 0x593E, 0x5167, 0x61C9, 0x76F4, 0x63A5, 0x5305, 0x542B, 0xFF1A)
+$ModelFolderLabel = New-UnicodeString @(0x89E3, 0x58D3, 0x5F8C, 0x6A21, 0x578B, 0x8CC7, 0x6599, 0x593E, 0x61C9, 0x4F4D, 0x65BC, 0xFF1A)
+
 $AppStage = Join-Path $Out "_stage_app"
 New-Item -ItemType Directory -Path $AppStage | Out-Null
 Copy-Item -Path (Join-Path $DistDir "*") -Destination $AppStage -Recurse -Force
@@ -86,10 +94,11 @@ if (-not [string]::IsNullOrWhiteSpace($RuntimeSource)) {
   New-Item -ItemType Directory -Path $RuntimeStage | Out-Null
   Copy-Item -Path (Join-Path $RuntimeSource "*") -Destination $RuntimeStage -Recurse -Force
   @(
-    "Extract to:",
+    $ExtractToLabel,
     "%USERPROFILE%\.realtime-audio\runtime\cuda12",
     "",
-    "The folder should directly contain faster-whisper-xxl.exe, ffmpeg.exe, _xxl_data, and CUDA12 DLL files."
+    $RuntimeFilesLabel,
+    "faster-whisper-xxl.exe, ffmpeg.exe, _xxl_data, CUDA12 DLL"
   ) | Set-Content -LiteralPath (Join-Path $RuntimeStage "RUNTIME_README.txt") -Encoding UTF8
   @(
     "{",
@@ -117,10 +126,10 @@ if (-not [string]::IsNullOrWhiteSpace($ModelsSource)) {
   New-Item -ItemType Directory -Path $ModelsStage | Out-Null
   Copy-Item -LiteralPath $ModelsSource -Destination (Join-Path $ModelsStage $ModelName) -Recurse -Force
   @(
-    "Extract this model folder to:",
+    $ExtractToLabel,
     "%USERPROFILE%\.realtime-audio\models",
     "",
-    "After extraction, the model should be available as:",
+    $ModelFolderLabel,
     "%USERPROFILE%\.realtime-audio\models\$ModelName"
   ) | Set-Content -LiteralPath (Join-Path $ModelsStage "MODEL_README.txt") -Encoding UTF8
   $ModelsZip = Join-Path $Out "RealtimeAudioTranslator-models-$ModelName-$Version.zip"
