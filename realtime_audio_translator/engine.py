@@ -174,6 +174,8 @@ class RealtimeEngine:
                 if language_confidence is not None:
                     self.config["last_language_confidence"] = language_confidence
                 asr_confidence = getattr(self.transcriber, "last_confidence", None)
+                if asr_confidence is not None:
+                    self.config["last_asr_confidence"] = asr_confidence
                 translation_confidence = None
                 translation_latency = None
                 tts_latency = None

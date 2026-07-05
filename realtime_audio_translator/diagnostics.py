@@ -118,6 +118,19 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
             "local_translation",
         ))
     try:
+        asr_confidence = float(config.get("last_asr_confidence") or 1.0)
+    except Exception:
+        asr_confidence = 1.0
+    if asr_confidence < 0.5:
+        issues.append(DiagnosticIssue(
+            "asr_confidence_low",
+            "warning",
+            "ASR confidence is low",
+            f"Recent ASR confidence is about {round(asr_confidence * 100)}%",
+            "Run Mic test or Speaker test, reduce background noise, or try a larger model",
+            "audio_settings",
+        ))
+    try:
         translation_confidence = float(config.get("last_translation_confidence") or 1.0)
     except Exception:
         translation_confidence = 1.0

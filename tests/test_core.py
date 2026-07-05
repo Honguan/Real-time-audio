@@ -183,6 +183,7 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(DEFAULT_CONFIG["tts_voice_name"], "")
         self.assertTrue(DEFAULT_CONFIG["show_original_text"])
         self.assertTrue(DEFAULT_CONFIG["show_translated_text"])
+        self.assertEqual(DEFAULT_CONFIG["last_asr_confidence"], "")
 
     def test_advanced_settings_expose_openai_tts_options(self):
         settings = visible_setting_keys(True)
@@ -620,6 +621,27 @@ class CoreTests(unittest.TestCase):
         issue = next(item for item in issues if item.code == "translation_confidence_low")
         self.assertEqual(issue.action, "local_translation")
         self.assertIn("Fix last translation", issue.fix)
+
+    def test_diagnostics_report_low_asr_confidence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            runtime = root / "runtime"
+            model = root / "models" / "medium"
+            runtime.mkdir()
+            model.mkdir(parents=True)
+            (runtime / "faster-whisper-xxl.exe").write_text("exe", encoding="utf-8")
+            (runtime / "ffmpeg.exe").write_text("ff", encoding="utf-8")
+            (runtime / "_xxl_data").mkdir()
+            config = DEFAULT_CONFIG.copy()
+            config["runtime_dir"] = str(runtime)
+            config["model"] = "medium"
+            config["last_asr_confidence"] = 0.4
+
+            issues = collect_diagnostics(config, root)
+
+        issue = next(item for item in issues if item.code == "asr_confidence_low")
+        self.assertEqual(issue.action, "audio_settings")
+        self.assertIn("larger model", issue.fix)
 
     def test_diagnostics_report_tts_failure(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -2559,6 +2581,37 @@ class CoreTests(unittest.TestCase):
             engine._process_segments("me", Worker(wav))
 
         self.assertEqual(engine.config["last_translation_confidence"], 0.3)
+
+    def test_engine_records_asr_confidence_for_diagnostics(self):
+        config = DEFAULT_CONFIG.copy()
+        config["record_logs"] = False
+        engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, lambda status: None)
+
+        class Transcriber:
+            last_confidence = 0.4
+
+            def transcribe(self, wav, source_language):
+                return "hello"
+
+        class Translator:
+            def translate(self, text, source_language, target_language):
+                engine.running = False
+                return "你好"
+
+        class Worker:
+            def __init__(self, wav):
+                self.queue = queue.Queue()
+                self.queue.put(wav)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            wav = Path(tmp) / "clip.wav"
+            self._write_wav(wav, 12000)
+            engine.running = True
+            engine.transcriber = Transcriber()
+            engine.translator = Translator()
+            engine._process_segments("me", Worker(wav))
+
+        self.assertEqual(engine.config["last_asr_confidence"], 0.4)
 
     def test_engine_records_language_confidence_for_diagnostics(self):
         config = DEFAULT_CONFIG.copy()
