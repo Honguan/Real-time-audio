@@ -60,6 +60,7 @@ DEFAULT_CONFIG = {
     "last_detected_language": "",
     "last_language_confidence": "",
     "last_tts_latency_seconds": "",
+    "last_speech_units_per_second": "",
     "last_source_text": "",
     "last_translated_text": "",
     "google_project_id": "",

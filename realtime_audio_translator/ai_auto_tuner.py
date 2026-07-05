@@ -34,6 +34,21 @@ def recommend_tuning(config: dict, cuda_devices: int, vram_gb: int, latency_seco
             {"performance_mode": "low_latency", "segment_seconds": 1.5, "speech_threshold": 0.02},
         ))
     try:
+        speech_units = float(config.get("last_speech_units_per_second") or 0)
+    except Exception:
+        speech_units = 0
+    try:
+        segment_seconds = float(config.get("segment_seconds") or 2.0)
+    except Exception:
+        segment_seconds = 2.0
+    if speech_units > 3.0 and segment_seconds > 1.5:
+        recommendations.append(TuningRecommendation(
+            "fast_speech_segments",
+            "語速快時縮短分段",
+            f"最近語速約 {speech_units:.1f} units/s，短分段可更快出字幕",
+            {"performance_mode": "low_latency", "segment_seconds": 1.5},
+        ))
+    try:
         tts_latency = float(config.get("last_tts_latency_seconds") or 0)
     except Exception:
         tts_latency = 0

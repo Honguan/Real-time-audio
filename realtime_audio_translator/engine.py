@@ -159,6 +159,13 @@ class RealtimeEngine:
                 asr_latency = time.perf_counter() - asr_started
                 if not text:
                     continue
+                try:
+                    segment_seconds = max(float(self.config.get("segment_seconds", 2.0)), 0.1)
+                except Exception:
+                    segment_seconds = 2.0
+                clean_text = text.strip()
+                speech_units = len(clean_text.split()) if " " in clean_text else len(clean_text)
+                self.config["last_speech_units_per_second"] = speech_units / segment_seconds
                 detected_source = getattr(self.transcriber, "last_language", None) if source == "auto" else None
                 source_for_output = detected_source or fallback_source
                 language_confidence = getattr(self.transcriber, "last_language_probability", None)

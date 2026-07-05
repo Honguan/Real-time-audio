@@ -891,6 +891,18 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(tuned["segment_seconds"], 1.5)
         self.assertEqual(tuned["speech_threshold"], 0.02)
 
+    def test_auto_tuner_shortens_segments_for_fast_speech(self):
+        config = DEFAULT_CONFIG.copy()
+        config["segment_seconds"] = 3.0
+        config["last_speech_units_per_second"] = 3.5
+
+        recommendations = recommend_tuning(config, cuda_devices=1, vram_gb=8)
+        tuned = apply_tuning(config, recommendations)
+
+        self.assertIn("fast_speech_segments", [item.code for item in recommendations])
+        self.assertEqual(tuned["performance_mode"], "low_latency")
+        self.assertEqual(tuned["segment_seconds"], 1.5)
+
     def test_auto_tuner_recommends_medium_for_low_vram(self):
         config = DEFAULT_CONFIG.copy()
         config["model"] = "large-v2"
@@ -2402,6 +2414,36 @@ class CoreTests(unittest.TestCase):
 
         self.assertEqual(engine.config["last_detected_language"], "en")
         self.assertEqual(engine.config["last_language_confidence"], 0.42)
+
+    def test_engine_records_speech_speed_for_auto_tuning(self):
+        config = DEFAULT_CONFIG.copy()
+        config["record_logs"] = False
+        config["segment_seconds"] = 2.0
+        engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, lambda status: None)
+
+        class Transcriber:
+            def transcribe(self, wav, source_language):
+                return "push mid now"
+
+        class Translator:
+            def translate(self, text, source_language, target_language):
+                engine.running = False
+                return "推中"
+
+        class Worker:
+            def __init__(self, wav):
+                self.queue = queue.Queue()
+                self.queue.put(wav)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            wav = Path(tmp) / "clip.wav"
+            self._write_wav(wav, 12000)
+            engine.running = True
+            engine.transcriber = Transcriber()
+            engine.translator = Translator()
+            engine._process_segments("me", Worker(wav))
+
+        self.assertEqual(engine.config["last_speech_units_per_second"], 1.5)
 
     def test_engine_uses_openai_tts_provider_for_mic_output(self):
         import realtime_audio_translator.engine as engine_module
