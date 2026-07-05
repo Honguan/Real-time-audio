@@ -117,6 +117,19 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
             "檢查翻譯 provider、Local translate URL 或改用其他翻譯服務",
             "local_translation",
         ))
+    try:
+        translation_confidence = float(config.get("last_translation_confidence") or 1.0)
+    except Exception:
+        translation_confidence = 1.0
+    if translation_confidence < 0.5:
+        issues.append(DiagnosticIssue(
+            "translation_confidence_low",
+            "info",
+            "翻譯信心偏低",
+            f"最近一次翻譯信心約 {round(translation_confidence * 100)}%",
+            "可按 Fix last translation 加入術語，或設定 Local translate URL",
+            "local_translation",
+        ))
     if config.get("last_tts_failed"):
         issues.append(DiagnosticIssue(
             "tts_no_sound",

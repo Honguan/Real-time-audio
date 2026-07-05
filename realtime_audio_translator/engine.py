@@ -183,6 +183,8 @@ class RealtimeEngine:
                     translated = self.translator.translate(text, source_for_output, target)
                     translation_latency = time.perf_counter() - translation_started
                     translation_confidence = getattr(self.translator, "last_confidence", None)
+                    if translation_confidence is not None:
+                        self.config["last_translation_confidence"] = translation_confidence
                 except Exception as exc:
                     translated = text
                     translation_failed = True

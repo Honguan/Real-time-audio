@@ -599,6 +599,27 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(issue.severity, "warning")
         self.assertEqual(issue.action, "local_translation")
 
+    def test_diagnostics_report_low_translation_confidence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            runtime = root / "runtime"
+            model = root / "models" / "medium"
+            runtime.mkdir()
+            model.mkdir(parents=True)
+            (runtime / "faster-whisper-xxl.exe").write_text("exe", encoding="utf-8")
+            (runtime / "ffmpeg.exe").write_text("ff", encoding="utf-8")
+            (runtime / "_xxl_data").mkdir()
+            config = DEFAULT_CONFIG.copy()
+            config["runtime_dir"] = str(runtime)
+            config["model"] = "medium"
+            config["last_translation_confidence"] = 0.3
+
+            issues = collect_diagnostics(config, root)
+
+        issue = next(item for item in issues if item.code == "translation_confidence_low")
+        self.assertEqual(issue.action, "local_translation")
+        self.assertIn("Fix last translation", issue.fix)
+
     def test_diagnostics_report_tts_failure(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -2380,6 +2401,37 @@ class CoreTests(unittest.TestCase):
         self.assertIn("本機免費模式", statuses[-1])
         self.assertIn("provider local", statuses[-1])
         self.assertIn("latency", statuses[-1])
+
+    def test_engine_records_translation_confidence_for_diagnostics(self):
+        config = DEFAULT_CONFIG.copy()
+        config["record_logs"] = False
+        engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, lambda status: None)
+
+        class Transcriber:
+            def transcribe(self, wav, source_language):
+                return "hello"
+
+        class Translator:
+            last_confidence = 0.3
+
+            def translate(self, text, source_language, target_language):
+                engine.running = False
+                return "你好"
+
+        class Worker:
+            def __init__(self, wav):
+                self.queue = queue.Queue()
+                self.queue.put(wav)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            wav = Path(tmp) / "clip.wav"
+            self._write_wav(wav, 12000)
+            engine.running = True
+            engine.transcriber = Transcriber()
+            engine.translator = Translator()
+            engine._process_segments("me", Worker(wav))
+
+        self.assertEqual(engine.config["last_translation_confidence"], 0.3)
 
     def test_engine_records_language_confidence_for_diagnostics(self):
         config = DEFAULT_CONFIG.copy()

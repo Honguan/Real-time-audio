@@ -59,6 +59,7 @@ DEFAULT_CONFIG = {
     "last_vram_gb": "",
     "last_detected_language": "",
     "last_language_confidence": "",
+    "last_translation_confidence": "",
     "last_tts_latency_seconds": "",
     "last_speech_units_per_second": "",
     "last_source_text": "",
