@@ -51,7 +51,7 @@ class RealtimeEngine:
         self.status = status
         self.running = False
         self.paused = False
-        self.muted = False
+        self.muted = bool(config.get("start_muted", False))
         self.threads: list[threading.Thread] = []
         self.workers: list[SegmentWorker] = []
         self.log = ConversationLog(Path(config.get("log_dir") or APP_DIR / "logs")) if config.get("record_logs") else None

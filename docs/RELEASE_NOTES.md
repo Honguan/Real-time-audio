@@ -10,8 +10,9 @@
 6. 若語言判斷信心偏低，診斷會提示把 `Source language` 從 `auto` 改成固定語言。
 7. 可按 `Check updates` 檢查 GitHub Releases 是否有新版本。
 8. 可按 `Export subtitles` 把最新 JSONL 對話紀錄匯出成 SRT 與 TXT，檔案放在 `%USERPROFILE%\.realtime-audio\exports\subtitles`。
-9. 切換到 Google 或 OpenAI 時，工具會先提示語音或文字可能傳送到第三方服務並可能產生費用。
-10. 若提示缺 runtime，下載並解壓這兩個檔案：
+9. 預設是自動發話；勾選 `Start muted` 後可用 `Push to talk` 按住才送出我方翻譯語音。
+10. 切換到 Google 或 OpenAI 時，工具會先提示語音或文字可能傳送到第三方服務並可能產生費用。
+11. 若提示缺 runtime，下載並解壓這兩個檔案：
 
 ```text
 RealtimeAudioTranslator-runtime-cuda12-<tag>.zip

@@ -342,6 +342,7 @@ class TranslatorApp(tk.Tk):
         self.show_translated_text = tk.BooleanVar(value=bool(self.config.get("show_translated_text", True)))
         self.tts_enabled = tk.BooleanVar(value=bool(self.config.get("tts_enabled", True)))
         self.speaker_tts_enabled = tk.BooleanVar(value=bool(self.config.get("speaker_tts_enabled", False)))
+        self.start_muted = tk.BooleanVar(value=bool(self.config.get("start_muted", False)))
         self.virtual_mic_enabled = tk.BooleanVar(value=bool(self.config.get("virtual_mic_enabled", False)))
         self.speaker_enabled = tk.BooleanVar(value=bool(self.config.get("speaker_enabled", True)))
         self.microphone_enabled = tk.BooleanVar(value=bool(self.config.get("microphone_enabled", True)))
@@ -419,9 +420,10 @@ class TranslatorApp(tk.Tk):
         ttk.Checkbutton(frame, text="Record logs", variable=self.record_logs, command=self._save).grid(row=next_row + 6, column=0, sticky="w")
         ttk.Checkbutton(frame, text="Virtual mic output", variable=self.virtual_mic_enabled, command=self._save).grid(row=next_row + 6, column=1, sticky="w")
         ttk.Checkbutton(frame, text="Speak opponent", variable=self.speaker_tts_enabled, command=self._save).grid(row=next_row + 6, column=2, sticky="w")
+        ttk.Checkbutton(frame, text="Start muted", variable=self.start_muted, command=self._save).grid(row=next_row + 7, column=0, sticky="w")
 
         buttons = ttk.Frame(frame)
-        buttons.grid(row=next_row + 7, column=0, columnspan=3, sticky="ew", pady=12)
+        buttons.grid(row=next_row + 8, column=0, columnspan=3, sticky="ew", pady=12)
         self.button_widgets: list[tuple[str, ttk.Button]] = []
         def copy_overlay() -> None:
             text = overlay_clipboard_text(self.overlay.speaker.get(), self.overlay.mine.get())
@@ -481,7 +483,7 @@ class TranslatorApp(tk.Tk):
         ptt_button.bind("<ButtonRelease-1>", lambda _event: self._push_to_talk(False))
         self.button_widgets.append(("Push to talk", ptt_button))
 
-        ttk.Label(frame, textvariable=self.status).grid(row=next_row + 8, column=0, columnspan=3, sticky="ew")
+        ttk.Label(frame, textvariable=self.status).grid(row=next_row + 9, column=0, columnspan=3, sticky="ew")
         frame.grid_columnconfigure(1, weight=1)
         self._apply_mode(save=False)
 
@@ -523,6 +525,7 @@ class TranslatorApp(tk.Tk):
         config["show_translated_text"] = self.show_translated_text.get()
         config["tts_enabled"] = self.tts_enabled.get()
         config["speaker_tts_enabled"] = self.speaker_tts_enabled.get()
+        config["start_muted"] = self.start_muted.get()
         config["virtual_mic_enabled"] = self.virtual_mic_enabled.get()
         config["speaker_enabled"] = self.speaker_enabled.get()
         config["microphone_enabled"] = self.microphone_enabled.get()
@@ -839,6 +842,7 @@ class TranslatorApp(tk.Tk):
         self.show_translated_text.set(bool(updated.get("show_translated_text", self.show_translated_text.get())))
         self.tts_enabled.set(bool(updated.get("tts_enabled", self.tts_enabled.get())))
         self.speaker_tts_enabled.set(bool(updated.get("speaker_tts_enabled", self.speaker_tts_enabled.get())))
+        self.start_muted.set(bool(updated.get("start_muted", self.start_muted.get())))
         self.virtual_mic_enabled.set(bool(updated.get("virtual_mic_enabled", self.virtual_mic_enabled.get())))
         self.speaker_enabled.set(bool(updated.get("speaker_enabled", self.speaker_enabled.get())))
         self.microphone_enabled.set(bool(updated.get("microphone_enabled", self.microphone_enabled.get())))

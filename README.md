@@ -59,7 +59,7 @@ Whisper 模型可放在 `models\whisper-small`；翻譯模型放在 `models\tran
 - `Overlay topmost`：讓字幕 bar 保持最上層。
 - `Show original` / `Show translation`：切換原文與譯文。
 - `Speak translations`：開關翻譯語音輸出。
-- `Push to talk`：按住才送出我方翻譯語音。
+- `Start muted`：啟動後先靜音，搭配 `Push to talk` 變成按住才送出我方翻譯語音；不勾選時就是自動發話模式。
 - `Virtual mic output`：開啟後才會把我方翻譯語音送到 `TTS output`。
 - `Speak opponent`：開啟後才會把對方語音翻譯播放到 `Speaker TTS output`；留空則使用系統預設喇叭。
 - `Record logs`：儲存對話紀錄。
@@ -76,7 +76,7 @@ Whisper 模型可放在 `models\whisper-small`；翻譯模型放在 `models\tran
 - 狀態列會顯示信心提示、延遲、provider、本機/雲端模式與是否可能產生費用。
 - 若語言判斷信心偏低，診斷會提示把 `Source language` 從 `auto` 改成固定語言。
 
-`Push to talk` 會 hold it to unmute TTS output，按住才輸出我方翻譯語音。
+`Push to talk` 會 hold it to unmute TTS output；勾選 `Start muted` 時按住才輸出我方翻譯語音，未勾選時翻譯語音會自動輸出。
 
 ## 翻譯與 TTS
 

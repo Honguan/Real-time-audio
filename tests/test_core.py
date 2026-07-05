@@ -231,6 +231,9 @@ class CoreTests(unittest.TestCase):
     def test_push_to_talk_button_holds_unmute(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
 
+        self.assertIn('self.start_muted = tk.BooleanVar(value=bool(self.config.get("start_muted", False)))', gui_source)
+        self.assertIn('ttk.Checkbutton(frame, text="Start muted", variable=self.start_muted, command=self._save)', gui_source)
+        self.assertIn('config["start_muted"] = self.start_muted.get()', gui_source)
         self.assertIn('ptt_button = ttk.Button(buttons, text="Push to talk")', gui_source)
         self.assertIn('ptt_button.bind("<ButtonPress-1>", lambda _event: self._push_to_talk(True))', gui_source)
         self.assertIn('ptt_button.bind("<ButtonRelease-1>", lambda _event: self._push_to_talk(False))', gui_source)
@@ -412,6 +415,7 @@ class CoreTests(unittest.TestCase):
         self.assertFalse(DEFAULT_CONFIG["cloud_api_enabled"])
         self.assertTrue(DEFAULT_CONFIG["subtitle_always_on_top"])
         self.assertFalse(DEFAULT_CONFIG["virtual_mic_enabled"])
+        self.assertFalse(DEFAULT_CONFIG["start_muted"])
         self.assertEqual(DEFAULT_CONFIG["provider"], "local")
         self.assertEqual(DEFAULT_CONFIG["tts_provider"], "local")
         self.assertFalse(DEFAULT_CONFIG["advanced_mode"])
@@ -1907,9 +1911,13 @@ class CoreTests(unittest.TestCase):
 
     def test_readme_mentions_push_to_talk(self):
         readme = Path("README.md").read_text(encoding="utf-8")
+        notes = Path("docs/RELEASE_NOTES.md").read_text(encoding="utf-8")
 
+        self.assertIn("Start muted", readme)
         self.assertIn("Push to talk", readme)
         self.assertIn("hold it to unmute TTS output", readme)
+        self.assertIn("Start muted", notes)
+        self.assertIn("Push to talk", notes)
 
     def test_readme_and_release_notes_mention_virtual_mic_output_switch(self):
         readme = Path("README.md").read_text(encoding="utf-8")
@@ -2861,6 +2869,14 @@ class CoreTests(unittest.TestCase):
             engine_module.play_linear16 = original_play
 
         self.assertEqual(played, [])
+
+    def test_engine_can_start_muted_for_push_to_talk_mode(self):
+        config = DEFAULT_CONFIG.copy()
+        config["start_muted"] = True
+
+        engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, lambda status: None)
+
+        self.assertTrue(engine.muted)
 
     def test_engine_records_tts_failure_for_diagnostics(self):
         config = DEFAULT_CONFIG.copy()

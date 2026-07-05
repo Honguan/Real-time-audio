@@ -45,6 +45,7 @@ DEFAULT_CONFIG = {
     "show_translated_text": True,
     "tts_enabled": True,
     "speaker_tts_enabled": False,
+    "start_muted": False,
     "record_logs": False,
     "save_conversation_history": False,
     "cloud_api_enabled": False,
