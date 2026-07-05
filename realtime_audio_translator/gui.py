@@ -1078,7 +1078,8 @@ class TranslatorApp(tk.Tk):
                 self._push_to_talk_previous_muted = None
 
     def _clear_cache(self) -> None:
-        clear_cache(APP_DIR)
+        self._save()
+        clear_cache(APP_DIR, Path(self.config.get("translation_cache_path") or APP_DIR / "cache" / "translation_cache.db"))
         self.status.set("cache cleared")
 
     def _open_logs(self) -> None:
