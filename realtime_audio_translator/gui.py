@@ -33,6 +33,7 @@ SETTING_ROWS = (
     ("Source language", "source_language"),
     ("Target language", "target_language"),
     ("Provider", "provider"),
+    ("Translation style", "translation_style"),
     ("TTS provider", "tts_provider"),
     ("Scenario", "scenario"),
     ("Performance mode", "performance_mode"),

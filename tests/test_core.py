@@ -1125,8 +1125,10 @@ class CoreTests(unittest.TestCase):
         self.assertIn("local_translate_url", simple)
         self.assertNotIn("provider", simple)
         self.assertNotIn("tts_provider", simple)
+        self.assertNotIn("translation_style", simple)
         self.assertIn("provider", advanced)
         self.assertIn("tts_provider", advanced)
+        self.assertIn("translation_style", advanced)
         self.assertNotIn("google_service_account_json", simple)
         self.assertIn("google_service_account_json", advanced)
 
