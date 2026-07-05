@@ -243,6 +243,8 @@ def mode_notice(provider: str, tts_provider: str, record_logs: bool = False, loc
 def main_status_summary(config: dict) -> str:
     speaker = str(config.get("speaker_device") or "未選擇")
     microphone = str(config.get("microphone_device") or "未選擇")
+    latency = latency_seconds_value(config.get("last_latency_seconds"))
+    latency_text = f"{latency:.2f}s" if latency is not None else "尚未測試"
     return (
         f"目前場景：{config.get('scenario', '')}；"
         f"輸入音源：{speaker} / {microphone}；"
@@ -252,7 +254,8 @@ def main_status_summary(config: dict) -> str:
         f"目標語言：{config.get('target_language', '')}；"
         f"字幕：{'開啟' if config.get('overlay_visible', True) else '關閉'}；"
         f"TTS：{'開啟' if config.get('tts_enabled', True) else '關閉'}；"
-        f"虛擬麥克風：{'開啟' if config.get('virtual_mic_enabled', False) else '關閉'}"
+        f"虛擬麥克風：{'開啟' if config.get('virtual_mic_enabled', False) else '關閉'}；"
+        f"延遲：{latency_text}"
     )
 
 
