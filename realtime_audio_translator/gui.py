@@ -84,10 +84,6 @@ BASIC_BUTTON_TEXTS = {
     "Optimize settings",
     "Download model",
     "Run diagnostics",
-    "Lock language",
-    "Fix last translation",
-    "API test",
-    "Open app folder",
     "Start",
     "Stop",
     "Mic test",
@@ -95,10 +91,6 @@ BASIC_BUTTON_TEXTS = {
     "Subtitle test",
     "Virtual mic test",
     "Push to talk",
-    "Fix local translation",
-    "Clear cache",
-    "Open logs",
-    "Clear logs",
     "Quit",
 }
 FIRST_RUN_ISSUE_CODES = {
