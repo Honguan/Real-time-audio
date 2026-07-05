@@ -697,6 +697,7 @@ class TranslatorApp(tk.Tk):
         except Exception as exc:
             self.status.set(f"runtime imported; commands update failed: {exc}")
             return
+        self._refresh_lists()
         self.status.set("runtime imported; commands.json updated")
 
     def _refresh_runtime_status(self) -> None:
@@ -915,6 +916,7 @@ class TranslatorApp(tk.Tk):
             messagebox.showerror("Runtime missing", runtime_install_message(exe.parent))
             return
         refresh_commands(exe, APP_DIR / "commands.json")
+        self._refresh_lists()
         self.status.set("commands.json updated")
 
     def _test_api(self) -> None:
