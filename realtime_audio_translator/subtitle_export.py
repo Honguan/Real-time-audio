@@ -34,3 +34,18 @@ def export_jsonl_to_srt(jsonl_path: Path, output_dir: Path, cue_seconds: float =
         index += 1
     output_path.write_text("\n".join(lines), encoding="utf-8", newline="\n")
     return output_path
+
+
+def export_jsonl_to_txt(jsonl_path: Path, output_dir: Path) -> Path:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_path = output_dir / f"{jsonl_path.stem}.txt"
+    lines: list[str] = []
+    for raw in jsonl_path.read_text(encoding="utf-8").splitlines():
+        if not raw.strip():
+            continue
+        row = json.loads(raw)
+        text = row.get("translated_text") or row.get("text") or ""
+        direction = row.get("direction") or "audio"
+        lines.append(f"{direction}: {text}")
+    output_path.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8", newline="\n")
+    return output_path

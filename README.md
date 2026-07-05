@@ -64,7 +64,7 @@ Whisper 模型可放在 `models\whisper-small`；翻譯模型放在 `models\tran
 - `Speak opponent`：開啟後才會把對方語音翻譯播放到 `Speaker TTS output`；留空則使用系統預設喇叭。
 - `Record logs`：儲存對話紀錄。
 - `Open logs`：開啟紀錄資料夾，`app.log` 會記錄開始、停止、缺模型與字幕匯出事件。
-- `Export subtitles`：把最新 JSONL 對話紀錄匯出成 SRT，檔案放在 `%USERPROFILE%\.realtime-audio\exports\subtitles`。
+- `Export subtitles`：把最新 JSONL 對話紀錄匯出成 SRT 與 TXT，檔案放在 `%USERPROFILE%\.realtime-audio\exports\subtitles`。
 - `Open app folder`：開啟 `%USERPROFILE%\.realtime-audio`，設定鏡像在 `config\settings.json`，術語表在 `config\glossary.json`，音訊裝置快照在 `config\audio_devices.json`。
 - `Add glossary term`：加入固定術語翻譯，例如 `cooldown` → `冷卻`。
 - `Show language`：在字幕前顯示語言代碼。

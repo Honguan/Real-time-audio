@@ -20,7 +20,7 @@ from .providers import TextToSpeech, Translator, google_access_token
 from .release_updater import RELEASES_URL, current_version, latest_release_tag, release_update_message
 from .runtime import DEFAULT_RUNTIME_DIR, RUNTIME_RELEASE_URL, UPSTREAM_RUNTIME_RELEASE_URL, install_runtime_from, runtime_dir, runtime_install_message, runtime_status, whisper_exe
 from .scenarios import SCENARIO_CHOICES, apply_scenario
-from .subtitle_export import export_jsonl_to_srt
+from .subtitle_export import export_jsonl_to_srt, export_jsonl_to_txt
 from .tts import list_windows_sapi_voices, play_linear16
 
 
@@ -1090,8 +1090,10 @@ class TranslatorApp(tk.Tk):
             self.status.set("no logs to export")
             append_app_log(APP_DIR, "subtitle_export_empty")
             return
-        srt = export_jsonl_to_srt(logs[0], APP_DIR / "exports" / "subtitles")
-        append_app_log(APP_DIR, "subtitle_export", source=logs[0], output=srt)
+        output_dir = APP_DIR / "exports" / "subtitles"
+        srt = export_jsonl_to_srt(logs[0], output_dir)
+        txt = export_jsonl_to_txt(logs[0], output_dir)
+        append_app_log(APP_DIR, "subtitle_export", source=logs[0], output=srt, text_output=txt)
         self.status.set(f"subtitles exported: {srt}")
 
     def _clear_logs(self) -> None:
