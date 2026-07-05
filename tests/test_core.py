@@ -195,7 +195,9 @@ class CoreTests(unittest.TestCase):
     def test_record_logs_toggle_saves_immediately(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
 
-        self.assertIn('ttk.Checkbutton(frame, text="Record logs", variable=self.record_logs, command=self._save)', gui_source)
+        self.assertIn('record_logs_widget = ttk.Checkbutton(frame, text="Record logs", variable=self.record_logs, command=self._save)', gui_source)
+        self.assertIn("self.advanced_mode_widgets = [record_logs_widget]", gui_source)
+        self.assertIn("for widget in self.advanced_mode_widgets:", gui_source)
         self.assertIn('ttk.Checkbutton(frame, text="Show translation", variable=self.show_translated_text, command=self._save)', gui_source)
 
     def test_open_logs_button_opens_configured_log_dir(self):

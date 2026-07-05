@@ -414,7 +414,9 @@ class TranslatorApp(tk.Tk):
         ttk.Checkbutton(frame, text="Speaker capture", variable=self.speaker_enabled, command=self._save).grid(row=next_row + 5, column=0, sticky="w")
         ttk.Checkbutton(frame, text="Mic capture", variable=self.microphone_enabled, command=self._save).grid(row=next_row + 5, column=1, sticky="w")
         ttk.Checkbutton(frame, text="Advanced settings", variable=self.advanced_mode, command=self._apply_mode).grid(row=next_row + 5, column=2, sticky="w")
-        ttk.Checkbutton(frame, text="Record logs", variable=self.record_logs, command=self._save).grid(row=next_row + 6, column=0, sticky="w")
+        record_logs_widget = ttk.Checkbutton(frame, text="Record logs", variable=self.record_logs, command=self._save)
+        record_logs_widget.grid(row=next_row + 6, column=0, sticky="w")
+        self.advanced_mode_widgets = [record_logs_widget]
         ttk.Checkbutton(frame, text="Virtual mic output", variable=self.virtual_mic_enabled, command=self._save).grid(row=next_row + 6, column=1, sticky="w")
         ttk.Checkbutton(frame, text="Speak opponent", variable=self.speaker_tts_enabled, command=self._save).grid(row=next_row + 6, column=2, sticky="w")
         ttk.Checkbutton(frame, text="Start muted", variable=self.start_muted, command=self._save).grid(row=next_row + 7, column=0, sticky="w")
@@ -584,6 +586,11 @@ class TranslatorApp(tk.Tk):
                     widget.grid()
                 else:
                     widget.grid_remove()
+        for widget in self.advanced_mode_widgets:
+            if self.advanced_mode.get():
+                widget.grid()
+            else:
+                widget.grid_remove()
         for _text, button in self.button_widgets:
             button.pack_forget()
         visible_buttons = visible_button_texts([text for text, _button in self.button_widgets], self.advanced_mode.get())
