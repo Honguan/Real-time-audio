@@ -1000,6 +1000,18 @@ class CoreTests(unittest.TestCase):
         self.assertIn("show_original_on_low_confidence", [item.code for item in recommendations])
         self.assertTrue(tuned["show_original_text"])
 
+    def test_auto_tuner_locks_high_confidence_detected_language(self):
+        config = DEFAULT_CONFIG.copy()
+        config["source_language"] = "auto"
+        config["last_detected_language"] = "en"
+        config["last_language_confidence"] = 0.92
+
+        recommendations = recommend_tuning(config, cuda_devices=1, vram_gb=8)
+        tuned = apply_tuning(config, recommendations)
+
+        self.assertIn("lock_detected_language", [item.code for item in recommendations])
+        self.assertEqual(tuned["source_language"], "en")
+
     def test_confidence_status_reports_local_mode_latency_and_provider(self):
         config = DEFAULT_CONFIG.copy()
         snapshot = build_confidence_snapshot(config, "en", "zh", asr_latency_seconds=0.82, translation_latency_seconds=0.11)

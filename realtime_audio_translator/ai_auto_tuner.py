@@ -81,6 +81,18 @@ def recommend_tuning(config: dict, cuda_devices: int, vram_gb: int, latency_seco
             f"Recent translation confidence is about {round(translation_confidence * 100)}%",
             {"show_original_text": True},
         ))
+    try:
+        language_confidence = float(config.get("last_language_confidence") or 0)
+    except Exception:
+        language_confidence = 0
+    detected_language = str(config.get("last_detected_language") or "")
+    if config.get("source_language") == "auto" and detected_language in {"zh", "en", "ja", "ko"} and language_confidence >= 0.85:
+        recommendations.append(TuningRecommendation(
+            "lock_detected_language",
+            "Lock stable detected language",
+            f"Recent language detection confidence is about {round(language_confidence * 100)}%",
+            {"source_language": detected_language},
+        ))
     if config.get("scenario") == "game_voice" and config.get("performance_mode") != "low_latency":
         recommendations.append(TuningRecommendation(
             "game_low_latency",
