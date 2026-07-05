@@ -10,7 +10,7 @@ from .ai_auto_tuner import apply_tuning, recommend_tuning
 from .ai_memory import add_glossary_term
 from .ai_orchestrator import plan_session
 from .app_log import append_app_log
-from .commands import refresh_commands
+from .commands import command_choices, refresh_commands
 from .config import APP_DIR, clear_cache, clear_logs, ensure_glossary_file, load_config, save_audio_devices, save_config
 from .diagnostics import collect_diagnostics
 from .engine import RealtimeEngine
@@ -29,6 +29,7 @@ PROVIDER_CHOICES = ("local", "google", "openai")
 TTS_PROVIDER_CHOICES = ("local", "google", "openai")
 PERFORMANCE_CHOICES = ("low_latency", "balanced", "quality", "offline_light")
 CLOUD_PROVIDERS = ("google", "openai")
+AUDIO_DEVICE_KEYS = ("speaker_device", "microphone_device", "tts_output_device", "speaker_tts_output_device")
 SETTING_ROWS = (
     ("Source language", "source_language"),
     ("Target language", "target_language"),
@@ -364,7 +365,7 @@ class TranslatorApp(tk.Tk):
                 values = SCENARIO_CHOICES if key == "scenario" else PERFORMANCE_CHOICES if key == "performance_mode" else TTS_PROVIDER_CHOICES if key == "tts_provider" else PROVIDER_CHOICES
                 widget = ttk.Combobox(frame, textvariable=self.vars[key], values=values, state="readonly")
                 widget.bind("<<ComboboxSelected>>", lambda _event, name=key: self._apply_performance_mode() if name == "performance_mode" else self._save())
-            elif key.endswith("device") or key in ("model", "tts_voice_name"):
+            elif key in AUDIO_DEVICE_KEYS or key in ("model", "device", "compute_type", "tts_voice_name"):
                 widget = ttk.Combobox(frame, textvariable=self.vars[key], values=[])
                 widget.bind("<<ComboboxSelected>>", lambda _event: self._save())
                 self.comboboxes[key] = widget
@@ -492,10 +493,17 @@ class TranslatorApp(tk.Tk):
         raw_devices = list_audio_devices()
         save_audio_devices(APP_DIR, raw_devices)
         devices = [format_device_label(d) for d in raw_devices]
-        models = list_models(self.repo_root / "_models", models_dir(self._config_from_vars()))
+        commands = APP_DIR / "commands.json"
+        models = sorted(set(list_models(self.repo_root / "_models", models_dir(self._config_from_vars()))) | set(command_choices(commands, "model")))
+        asr_devices = command_choices(commands, "device") or ["cuda", "cpu"]
+        compute_types = command_choices(commands, "compute_type") or ["auto", "int8", "float16", "float32"]
         for key, widget in self.comboboxes.items():
             if key == "model":
                 widget.configure(values=models)
+            elif key == "device":
+                widget.configure(values=asr_devices)
+            elif key == "compute_type":
+                widget.configure(values=compute_types)
             elif key != "tts_voice_name":
                 widget.configure(values=devices)
         self._refresh_runtime_status()

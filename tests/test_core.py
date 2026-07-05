@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 from realtime_audio_translator.audio import audio_segment_active, device_name_from_label, find_device, virtual_mic_recaptures_tts
 from realtime_audio_translator.asr import AudioTranscriber, add_runtime_dll_directory, add_xxl_data
-from realtime_audio_translator.commands import parse_help_options
+from realtime_audio_translator.commands import command_choices, parse_help_options
 from realtime_audio_translator.config import DEFAULT_CONFIG, clear_cache, clear_logs, ensure_app_dirs, ensure_glossary_file, load_config, save_audio_devices, save_config
 from realtime_audio_translator.ai_orchestrator import plan_session
 from realtime_audio_translator.ai_auto_tuner import apply_tuning, recommend_tuning
@@ -226,7 +226,9 @@ class CoreTests(unittest.TestCase):
     def test_device_model_voice_choices_save_immediately(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
 
-        self.assertIn('elif key.endswith("device") or key in ("model", "tts_voice_name"):\n                widget = ttk.Combobox(frame, textvariable=self.vars[key], values=[])\n                widget.bind("<<ComboboxSelected>>", lambda _event: self._save())', gui_source)
+        self.assertIn('elif key in AUDIO_DEVICE_KEYS or key in ("model", "device", "compute_type", "tts_voice_name"):', gui_source)
+        self.assertIn('asr_devices = command_choices(commands, "device") or ["cuda", "cpu"]', gui_source)
+        self.assertIn('compute_types = command_choices(commands, "compute_type") or ["auto", "int8", "float16", "float32"]', gui_source)
 
     def test_push_to_talk_button_holds_unmute(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
@@ -1244,6 +1246,14 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(options["task"]["choices"], ["transcribe", "translate"])
         self.assertIn("json", options["output_format"]["choices"])
         self.assertTrue(options["checkcuda"]["flag"])
+
+    def test_command_choices_reads_commands_json_options(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "commands.json"
+            path.write_text(json.dumps({"device": {"choices": ["cuda", "cpu"]}}), encoding="utf-8")
+
+            self.assertEqual(command_choices(path, "device"), ["cuda", "cpu"])
+            self.assertEqual(command_choices(path, "missing"), [])
 
     def test_provider_request_builders_do_not_embed_secrets(self):
         openai = build_openai_translation_request("hello", "zh-TW", "en")

@@ -38,3 +38,12 @@ def refresh_commands(exe_path: Path, out_path: Path) -> dict:
     with out_path.open("w", encoding="utf-8", newline="\n") as handle:
         json.dump(options, handle, ensure_ascii=False, indent=2)
     return options
+
+
+def command_choices(path: Path, option: str) -> list[str]:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+    choices = data.get(option, {}).get("choices", [])
+    return [str(choice) for choice in choices if str(choice).strip()]
