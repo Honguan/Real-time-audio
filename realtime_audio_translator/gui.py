@@ -714,7 +714,7 @@ class TranslatorApp(tk.Tk):
             note = "Runtime ready"
             if status["warnings"]:
                 note += f"; recommended CUDA package: {status['cuda_package']}"
-            if not model_available(config["model"], self.repo_root / "_models", APP_DIR / "models"):
+            if not model_available(config["model"], self.repo_root / "_models", models_dir(config)):
                 note += f"; model missing: {config['model']}"
             self.runtime_text.set(note)
         else:

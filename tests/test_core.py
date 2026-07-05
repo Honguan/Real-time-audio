@@ -1892,6 +1892,11 @@ class CoreTests(unittest.TestCase):
         self.assertIn('if not model_available(self.config["model"], self.repo_root / "_models", app_models):', gui_source)
         self.assertIn('messagebox.showerror("Model missing", model_install_message(self.config["model"], app_models))', gui_source)
 
+    def test_runtime_status_uses_configured_model_folder(self):
+        gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
+
+        self.assertIn('model_available(config["model"], self.repo_root / "_models", models_dir(config))', gui_source)
+
     def test_package_script_builds_release_zip_with_readme(self):
         script = Path("scripts/package.ps1").read_text(encoding="utf-8")
         self.assertIn("RealtimeAudioTranslator-$Version-win-x64.zip", script)
