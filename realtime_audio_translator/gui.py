@@ -833,13 +833,18 @@ class TranslatorApp(tk.Tk):
 
     def _recommend(self) -> None:
         config = self._config_from_vars()
-        exe = whisper_exe(runtime_dir(config))
-        if not exe.exists():
-            self.status.set("找不到 runtime")
+        runtime = runtime_dir(config)
+        status = runtime_status(runtime)
+        if not status["ready"]:
+            self.status.set("找不到 runtime：" + ", ".join(status["missing"]))
             self.vars["model"].set("medium")
             return
-        cuda = subprocess.run([str(exe), "--checkcuda"], capture_output=True, text=True, check=False)
-        devices, vram_gb = cuda_hardware_from_check_output(cuda.stdout + cuda.stderr)
+        exe = whisper_exe(runtime)
+        try:
+            cuda = subprocess.run([str(exe), "--checkcuda"], capture_output=True, text=True, timeout=5, check=False)
+            devices, vram_gb = cuda_hardware_from_check_output(cuda.stdout + cuda.stderr)
+        except Exception:
+            devices, vram_gb = 0, 0
         config["last_cuda_devices"] = devices
         config["last_vram_gb"] = vram_gb
         self.vars["last_cuda_devices"].set(str(devices))
@@ -891,11 +896,16 @@ class TranslatorApp(tk.Tk):
         return plan_session(config, self.repo_root, devices, vram_gb)
 
     def _cuda_hardware(self, config: dict) -> tuple[int, int]:
-        exe = whisper_exe(runtime_dir(config))
-        if not exe.exists():
+        runtime = runtime_dir(config)
+        status = runtime_status(runtime)
+        if not status["ready"]:
             return 0, 0
-        cuda = subprocess.run([str(exe), "--checkcuda"], capture_output=True, text=True, check=False)
-        return cuda_hardware_from_check_output(cuda.stdout + cuda.stderr)
+        exe = whisper_exe(runtime)
+        try:
+            cuda = subprocess.run([str(exe), "--checkcuda"], capture_output=True, text=True, timeout=5, check=False)
+            return cuda_hardware_from_check_output(cuda.stdout + cuda.stderr)
+        except Exception:
+            return 0, 0
 
     def _auto_optimize_before_start(self) -> None:
         if not self.config.get("ai_auto_optimize", True):

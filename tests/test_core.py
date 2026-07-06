@@ -2517,6 +2517,9 @@ class CoreTests(unittest.TestCase):
         self.assertIn("status = runtime_status(runtime)", gui_source)
         self.assertIn('if not status["ready"]:', gui_source)
         self.assertIn('messagebox.showerror("找不到 runtime", runtime_install_message(runtime))', gui_source)
+        self.assertIn('self.status.set("找不到 runtime：" + ", ".join(status["missing"]))', gui_source)
+        self.assertIn('subprocess.run([str(exe), "--checkcuda"], capture_output=True, text=True, timeout=5, check=False)', gui_source)
+        self.assertIn("except Exception:\n            return 0, 0", gui_source)
 
     def test_import_runtime_refreshes_commands_json(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
