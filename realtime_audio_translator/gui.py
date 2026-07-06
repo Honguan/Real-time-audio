@@ -567,7 +567,7 @@ class TranslatorApp(tk.Tk):
         if cloud_activation_requires_confirmation(self.config.get("provider", "local"), self.config.get("tts_provider", "local"), config["provider"], config["tts_provider"]):
             if not messagebox.askyesno("Enable cloud API?", mode_notice(config["provider"], config["tts_provider"], bool(config["record_logs"]), config.get("local_translate_url", ""))):
                 self._load_config_into_widgets(self.config)
-                self.status.set("cloud API not enabled")
+                self.status.set("雲端 API 未啟用")
                 return
         config["cloud_api_enabled"] = cloud_enabled
         self.config = config
@@ -667,20 +667,20 @@ class TranslatorApp(tk.Tk):
             return
         path = ensure_glossary_file(Path(self.config.get("glossary_path") or APP_DIR / "glossary.json"))
         add_glossary_term(path, source, target)
-        self.status.set("glossary term added")
+        self.status.set("詞彙已加入")
 
     def _fix_last_translation(self) -> None:
         self._save()
         source = str(self.config.get("last_source_text") or "").strip()
         if not source:
-            self.status.set("no recent translation to fix")
+            self.status.set("沒有可修正的近期翻譯")
             return
         target = simpledialog.askstring("Fix last translation", f"Correct translation for:\n{source}", initialvalue=str(self.config.get("last_translated_text") or ""))
         if not target:
             return
         path = ensure_glossary_file(Path(self.config.get("glossary_path") or APP_DIR / "glossary.json"))
         add_glossary_term(path, source, target)
-        self.status.set("translation fix added to glossary")
+        self.status.set("翻譯修正已加入詞彙表")
 
     def _import_runtime(self) -> None:
         source = filedialog.askdirectory(title="Select extracted Faster-Whisper-XXL folder")
@@ -689,7 +689,7 @@ class TranslatorApp(tk.Tk):
         try:
             target = install_runtime_from(Path(source), DEFAULT_RUNTIME_DIR)
         except Exception as exc:
-            messagebox.showerror("Runtime import failed", str(exc))
+            messagebox.showerror("runtime 匯入失敗", str(exc))
             return
         self.vars["runtime_dir"].set(str(target))
         self._save()
@@ -697,10 +697,10 @@ class TranslatorApp(tk.Tk):
         try:
             refresh_commands(whisper_exe(target), APP_DIR / "commands.json")
         except Exception as exc:
-            self.status.set(f"runtime imported; commands update failed: {exc}")
+            self.status.set(f"runtime 已匯入；commands.json 更新失敗：{exc}")
             return
         self._refresh_lists()
-        self.status.set("runtime imported; commands.json updated")
+        self.status.set("runtime 已匯入；commands.json 已更新")
 
     def _refresh_runtime_status(self) -> None:
         config = self._config_from_vars()
@@ -787,21 +787,21 @@ class TranslatorApp(tk.Tk):
     def _lock_language(self) -> None:
         locked = language_lock_value(self.vars["source_language"].get(), self.config.get("last_detected_language", ""))
         if locked == self.vars["source_language"].get():
-            self.status.set("no detected language to lock")
+            self.status.set("沒有偵測到可鎖定的語言")
             return
         self.vars["source_language"].set(locked)
         self._save()
         self.status.set(f"來源語言已鎖定：{locked}")
 
     def _check_updates(self) -> None:
-        self.status.set("checking updates")
+        self.status.set("正在檢查更新")
 
         def run() -> None:
             try:
                 latest = latest_release_tag()
                 message = release_update_message(current_version(self.repo_root), latest)
             except Exception as exc:
-                message = f"update check failed: {exc}; {RELEASES_URL}"
+                message = f"更新檢查失敗：{exc}；{RELEASES_URL}"
             self.after(0, self.status.set, message)
 
         threading.Thread(target=run, daemon=True).start()
@@ -863,7 +863,7 @@ class TranslatorApp(tk.Tk):
     def _optimize_settings(self) -> None:
         decision = self._planned_session()
         if not decision.recommendations:
-            self.status.set("settings already optimized")
+            self.status.set("設定已是建議值")
             return
         self._load_config_into_widgets(decision.config)
         self._save()
@@ -903,11 +903,11 @@ class TranslatorApp(tk.Tk):
             return
         model = self.config["model"]
         app_models = models_dir(self.config)
-        self.status.set(f"downloading model {model}")
+        self.status.set(f"正在下載模型 {model}")
 
         def run() -> None:
             code = download_model(exe, model, app_models)
-            self.after(0, self.status.set, "model downloaded" if code == 0 else f"model download failed: {code}")
+            self.after(0, self.status.set, "模型下載完成" if code == 0 else f"模型下載失敗：{code}")
             self.after(0, self._refresh_lists)
 
         threading.Thread(target=run, daemon=True).start()
@@ -919,19 +919,19 @@ class TranslatorApp(tk.Tk):
             return
         refresh_commands(exe, APP_DIR / "commands.json")
         self._refresh_lists()
-        self.status.set("commands.json updated")
+        self.status.set("commands.json 已更新")
 
     def _test_api(self) -> None:
         self._save()
         try:
             if self.config["provider"] == "google":
                 google_access_token(self.config["google_service_account_json"])
-                self.status.set("google auth ok")
+                self.status.set("Google 驗證成功")
             else:
                 translated = Translator(self.config).translate("hello", "en", "zh")
                 self.status.set(translated[:80])
         except Exception as exc:
-            messagebox.showerror("API test failed", str(exc))
+            messagebox.showerror("API 測試失敗", str(exc))
 
     def _test_tone(self) -> None:
         import math
@@ -1026,13 +1026,13 @@ class TranslatorApp(tk.Tk):
         if action == "overlay":
             self.overlay_visible.set(True)
             self._apply_overlay()
-            self.status.set("subtitles shown")
+            self.status.set("字幕已顯示")
             return
         if target.startswith("ms-settings:"):
             subprocess.Popen(["cmd", "/c", "start", "", target], shell=False)
         else:
             webbrowser.open(target)
-        self.status.set("repair help opened")
+        self.status.set("已開啟修復說明")
 
     def _start(self) -> None:
         self._save()
@@ -1092,7 +1092,7 @@ class TranslatorApp(tk.Tk):
     def _clear_cache(self) -> None:
         self._save()
         clear_cache(APP_DIR, Path(self.config.get("translation_cache_path") or APP_DIR / "cache" / "translation_cache.db"))
-        self.status.set("cache cleared")
+        self.status.set("快取已清除")
 
     def _open_logs(self) -> None:
         self._save()
@@ -1105,19 +1105,19 @@ class TranslatorApp(tk.Tk):
         log_dir = Path(self.config.get("log_dir") or APP_DIR / "logs")
         logs = sorted(log_dir.glob("*.jsonl"), key=lambda path: path.stat().st_mtime, reverse=True)
         if not logs:
-            self.status.set("no logs to export")
+            self.status.set("沒有可匯出的紀錄")
             append_app_log(APP_DIR, "subtitle_export_empty")
             return
         output_dir = APP_DIR / "exports" / "subtitles"
         srt = export_jsonl_to_srt(logs[0], output_dir)
         txt = export_jsonl_to_txt(logs[0], output_dir)
         append_app_log(APP_DIR, "subtitle_export", source=logs[0], output=srt, text_output=txt)
-        self.status.set(f"subtitles exported: {srt}")
+        self.status.set(f"字幕已匯出：{srt}")
 
     def _clear_logs(self) -> None:
         self._save()
         clear_logs(APP_DIR, Path(self.config.get("log_dir") or APP_DIR / "logs"))
-        self.status.set("logs cleared")
+        self.status.set("紀錄已清除")
 
     def _overlay_update(self, speaker: str, mine: str) -> None:
         if self.engine and not subtitle_updates_allowed(self.engine.paused):

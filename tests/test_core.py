@@ -2329,7 +2329,7 @@ class CoreTests(unittest.TestCase):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
 
         self.assertIn('refresh_commands(whisper_exe(target), APP_DIR / "commands.json")', gui_source)
-        self.assertIn('self._refresh_lists()\n        self.status.set("runtime imported; commands.json updated")', gui_source)
+        self.assertIn('self._refresh_lists()\n        self.status.set("runtime 已匯入；commands.json 已更新")', gui_source)
         self.assertIn('refresh_commands(exe, APP_DIR / "commands.json")\n        self._refresh_lists()', gui_source)
 
     def test_provider_choices_are_fixed(self):
