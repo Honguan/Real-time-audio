@@ -58,6 +58,7 @@ function New-UnicodeString([int[]]$Codes) {
 $ExtractToLabel = New-UnicodeString @(0x89E3, 0x58D3, 0x7E2E, 0x5230, 0xFF1A)
 $RuntimeFilesLabel = New-UnicodeString @(0x89E3, 0x58D3, 0x5F8C, 0x9019, 0x500B, 0x8CC7, 0x6599, 0x593E, 0x5167, 0x61C9, 0x76F4, 0x63A5, 0x5305, 0x542B, 0xFF1A)
 $ModelFolderLabel = New-UnicodeString @(0x89E3, 0x58D3, 0x5F8C, 0x6A21, 0x578B, 0x8CC7, 0x6599, 0x593E, 0x61C9, 0x4F4D, 0x65BC, 0xFF1A)
+$RuntimeSkippedWarning = (New-UnicodeString @(0x5DF2, 0x7565, 0x904E)) + " runtime zip" + (New-UnicodeString @(0xFF1B, 0x9700, 0x8981, 0x767C, 0x5E03)) + " runtime " + (New-UnicodeString @(0x8207)) + " CUDA DLL " + (New-UnicodeString @(0x6642, 0x8ACB, 0x52A0, 0x4E0A)) + " -RuntimeSource" + (New-UnicodeString @(0x3002))
 
 $AppStage = Join-Path $Out "_stage_app"
 New-Item -ItemType Directory -Path $AppStage | Out-Null
@@ -112,7 +113,7 @@ if (-not [string]::IsNullOrWhiteSpace($RuntimeSource)) {
   Compress-FolderContents $RuntimeStage $RuntimeZip
   $Created += $RuntimeZip
 } else {
-  Write-Warning "Runtime zip skipped. Pass -RuntimeSource to publish the runtime and CUDA DLL zip."
+  Write-Warning $RuntimeSkippedWarning
 }
 
 if (-not [string]::IsNullOrWhiteSpace($ModelsSource)) {

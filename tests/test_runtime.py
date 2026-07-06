@@ -123,6 +123,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertNotIn("Inno Setup", script)
         self.assertNotIn("RealtimeAudioTranslatorSetup", script)
         self.assertNotIn(".iss", script)
+        self.assertIn("$RuntimeSkippedWarning", script)
 
     def test_package_script_creates_app_runtime_zips_and_checksums(self):
         root = Path(__file__).parents[1]
