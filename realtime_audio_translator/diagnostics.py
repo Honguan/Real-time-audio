@@ -25,6 +25,13 @@ def _devices_overlap(left: str, right: str) -> bool:
     return bool(left_name and right_name and (left_name in right_name or right_name in left_name))
 
 
+def _find_device_safe(name_part: str, want_output: bool) -> int | None:
+    try:
+        return find_device(name_part, want_output=want_output)
+    except Exception:
+        return None
+
+
 def _model_exists(config: dict, repo_root: Path) -> bool:
     model = config.get("model", "")
     app_models = models_dir(config)
@@ -86,7 +93,7 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
         config.get("tts_enabled", True)
         and config.get("virtual_mic_enabled", False)
         and "cable input" in tts_output_device.lower()
-        and find_device(tts_output_device, want_output=True) is None
+        and _find_device_safe(tts_output_device, want_output=True) is None
     ):
         issues.append(DiagnosticIssue(
             "virtual_mic_device_missing",
@@ -105,9 +112,9 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
             "「麥克風來源」請選實體麥克風；Discord 的麥克風才選 CABLE Output",
             "audio_settings",
         ))
-    if config.get("speaker_enabled", True) and not find_device(config.get("speaker_device", ""), want_output=True):
+    if config.get("speaker_enabled", True) and not _find_device_safe(config.get("speaker_device", ""), want_output=True):
         issues.append(DiagnosticIssue("speaker_device_missing", "warning", "找不到喇叭來源", "未選到可用輸出裝置", "選擇正在播放 Discord 或遊戲語音的喇叭", "audio_settings"))
-    if config.get("microphone_enabled", True) and not find_device(config.get("microphone_device", ""), want_output=False):
+    if config.get("microphone_enabled", True) and not _find_device_safe(config.get("microphone_device", ""), want_output=False):
         issues.append(DiagnosticIssue("microphone_device_missing", "warning", "找不到麥克風", "未選到可用輸入裝置", "選擇你的實體麥克風", "audio_settings"))
     cloud = [name for name in (config.get("provider"), config.get("tts_provider")) if name in ("openai", "google")]
     if "openai" in cloud and not os.environ.get("OPENAI_API_KEY"):

@@ -577,6 +577,35 @@ class CoreTests(unittest.TestCase):
         self.assertIn("VB-CABLE", issue.title)
         self.assertIn("CABLE Input", issue.fix)
 
+    def test_diagnostics_do_not_crash_when_audio_device_query_fails(self):
+        import realtime_audio_translator.diagnostics as diagnostics_module
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            runtime = root / "runtime"
+            model = root / "models" / "medium"
+            runtime.mkdir()
+            model.mkdir(parents=True)
+            (model / "model.bin").write_text("model", encoding="utf-8")
+            (runtime / "faster-whisper-xxl.exe").write_text("exe", encoding="utf-8")
+            (runtime / "ffmpeg.exe").write_text("ff", encoding="utf-8")
+            (runtime / "_xxl_data").mkdir()
+            config = DEFAULT_CONFIG.copy()
+            config["runtime_dir"] = str(runtime)
+            config["model"] = "medium"
+            config["speaker_device"] = "Speakers"
+            config["microphone_device"] = "Microphone"
+            original_find_device = diagnostics_module.find_device
+            diagnostics_module.find_device = lambda _name, want_output: (_ for _ in ()).throw(RuntimeError("audio backend unavailable"))
+            try:
+                issues = collect_diagnostics(config, root)
+            finally:
+                diagnostics_module.find_device = original_find_device
+
+        codes = [item.code for item in issues]
+        self.assertIn("speaker_device_missing", codes)
+        self.assertIn("microphone_device_missing", codes)
+
     def test_diagnostics_warn_when_microphone_captures_virtual_mic_output(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
