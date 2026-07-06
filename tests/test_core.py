@@ -1696,6 +1696,16 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(audio, b"pcm")
         self.assertEqual(calls[0][1]["json"]["response_format"], "pcm")
 
+    def test_openai_tts_missing_key_uses_chinese_error(self):
+        original_key = os.environ.get("OPENAI_API_KEY")
+        os.environ.pop("OPENAI_API_KEY", None)
+        try:
+            with self.assertRaisesRegex(RuntimeError, "未設定 OPENAI_API_KEY"):
+                TextToSpeech(DEFAULT_CONFIG.copy()).synthesize_openai_linear16("hello")
+        finally:
+            if original_key is not None:
+                os.environ["OPENAI_API_KEY"] = original_key
+
     def test_google_tts_can_request_configured_voice(self):
         import realtime_audio_translator.providers as providers_module
 

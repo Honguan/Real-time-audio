@@ -156,7 +156,7 @@ class Translator:
         request = build_openai_translation_request(text, target_language, source_language, self.config["openai_model"], self.context, self.config.get("translation_style", "plain"), self._glossary())
         api_key = os.environ.get("OPENAI_API_KEY", "")
         if not api_key:
-            raise RuntimeError("OPENAI_API_KEY is not set")
+            raise RuntimeError("未設定 OPENAI_API_KEY，請先設定環境變數或改用本機翻譯服務")
         request["headers"]["Authorization"] = f"Bearer {api_key}"
         response = requests.post(request["url"], headers=request["headers"], json=request["json"], timeout=30)
         response.raise_for_status()
@@ -219,7 +219,7 @@ class TextToSpeech:
     def synthesize_openai_mp3(self, text: str) -> bytes:
         api_key = os.environ.get("OPENAI_API_KEY", "")
         if not api_key:
-            raise RuntimeError("OPENAI_API_KEY is not set")
+            raise RuntimeError("未設定 OPENAI_API_KEY，請先設定環境變數或改用本機 TTS")
         response = requests.post(
             OPENAI_SPEECH_URL,
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
@@ -236,7 +236,7 @@ class TextToSpeech:
     def synthesize_openai_linear16(self, text: str) -> bytes:
         api_key = os.environ.get("OPENAI_API_KEY", "")
         if not api_key:
-            raise RuntimeError("OPENAI_API_KEY is not set")
+            raise RuntimeError("未設定 OPENAI_API_KEY，請先設定環境變數或改用本機 TTS")
         response = requests.post(
             OPENAI_SPEECH_URL,
             headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
