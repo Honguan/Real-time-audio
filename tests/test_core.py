@@ -2345,6 +2345,26 @@ class CoreTests(unittest.TestCase):
 
         self.assertNotIn("--language", calls[0])
 
+    def test_whisper_model_records_language_probability_and_confidence(self):
+        transcriber = AudioTranscriber.__new__(AudioTranscriber)
+
+        class Model:
+            def transcribe(self, *_args, **_kwargs):
+                info = type("Info", (), {"language": "en", "language_probability": 0.91})()
+                segments = [
+                    type("Segment", (), {"text": " hello ", "avg_logprob": 0.0})(),
+                    type("Segment", (), {"text": " world ", "avg_logprob": -1.0})(),
+                ]
+                return segments, info
+
+        transcriber.model = Model()
+        text = transcriber.transcribe(Path("clip.wav"), "auto")
+
+        self.assertEqual(text, "hello world")
+        self.assertEqual(transcriber.last_language, "en")
+        self.assertEqual(transcriber.last_language_probability, 0.91)
+        self.assertAlmostEqual(transcriber.last_confidence, (1.0 + 0.36787944117144233) / 2)
+
     def test_add_xxl_data_prefers_runtime_folder(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

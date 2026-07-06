@@ -1,3 +1,4 @@
+import math
 import os
 import subprocess
 import sys
@@ -31,6 +32,8 @@ class AudioTranscriber:
         self.exe_path = whisper_exe(runtime_root)
         self.model = None
         self.last_language: str | None = None
+        self.last_language_probability: float | None = None
+        self.last_confidence: float | None = None
         try:
             from faster_whisper import WhisperModel
 
@@ -49,6 +52,8 @@ class AudioTranscriber:
     def transcribe(self, wav_path: Path, language: str | None = None) -> str:
         if language == "auto":
             language = None
+        self.last_language_probability = None
+        self.last_confidence = None
         if self.model is None:
             return self._transcribe_with_exe(wav_path, language)
         segments, info = self.model.transcribe(
@@ -60,7 +65,19 @@ class AudioTranscriber:
             without_timestamps=True,
         )
         self.last_language = getattr(info, "language", None) or language
-        return " ".join(segment.text.strip() for segment in segments).strip()
+        self.last_language_probability = getattr(info, "language_probability", None)
+        texts = []
+        confidences = []
+        for segment in segments:
+            texts.append(segment.text.strip())
+            avg_logprob = getattr(segment, "avg_logprob", None)
+            if avg_logprob is not None:
+                try:
+                    confidences.append(min(1.0, max(0.0, math.exp(float(avg_logprob)))))
+                except Exception:
+                    pass
+        self.last_confidence = sum(confidences) / len(confidences) if confidences else None
+        return " ".join(text for text in texts if text).strip()
 
     def _transcribe_with_exe(self, wav_path: Path, language: str | None = None) -> str:
         if language == "auto":
