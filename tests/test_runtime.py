@@ -123,6 +123,10 @@ class RuntimeTests(unittest.TestCase):
         self.assertNotIn("Inno Setup", script)
         self.assertNotIn("RealtimeAudioTranslatorSetup", script)
         self.assertNotIn(".iss", script)
+        self.assertNotIn("Missing app build", script)
+        self.assertNotIn("Nothing to zip", script)
+        self.assertNotIn("RuntimeSource must contain", script)
+        self.assertNotIn("ModelsSource not found", script)
         self.assertIn("$RuntimeSkippedWarning", script)
 
     def test_package_script_creates_app_runtime_zips_and_checksums(self):
@@ -224,6 +228,8 @@ class RuntimeTests(unittest.TestCase):
                 cwd=root,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
             )
 
             self.assertNotEqual(result.returncode, 0)
@@ -264,6 +270,8 @@ class RuntimeTests(unittest.TestCase):
                 cwd=root,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
             )
 
             self.assertNotEqual(result.returncode, 0)
@@ -291,6 +299,8 @@ class RuntimeTests(unittest.TestCase):
                 cwd=root,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
             )
 
             self.assertNotEqual(result.returncode, 0)

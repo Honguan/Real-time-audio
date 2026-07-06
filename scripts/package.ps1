@@ -36,21 +36,6 @@ if (Test-Path -LiteralPath $Out) {
 }
 New-Item -ItemType Directory -Path $Out | Out-Null
 
-$AppExe = Join-Path $DistDir "RealtimeAudioTranslator.exe"
-if (-not (Test-Path -LiteralPath $AppExe)) {
-  throw "Missing app build: $AppExe"
-}
-
-$Created = @()
-
-function Compress-FolderContents($SourceDir, $DestinationZip) {
-  $Items = Get-ChildItem -LiteralPath $SourceDir -Force
-  if (-not $Items) {
-    throw "Nothing to zip: $SourceDir"
-  }
-  Compress-Archive -LiteralPath $Items.FullName -DestinationPath $DestinationZip -CompressionLevel Optimal
-}
-
 function New-UnicodeString([int[]]$Codes) {
   -join ($Codes | ForEach-Object { [char]$_ })
 }
@@ -58,7 +43,26 @@ function New-UnicodeString([int[]]$Codes) {
 $ExtractToLabel = New-UnicodeString @(0x89E3, 0x58D3, 0x7E2E, 0x5230, 0xFF1A)
 $RuntimeFilesLabel = New-UnicodeString @(0x89E3, 0x58D3, 0x5F8C, 0x9019, 0x500B, 0x8CC7, 0x6599, 0x593E, 0x5167, 0x61C9, 0x76F4, 0x63A5, 0x5305, 0x542B, 0xFF1A)
 $ModelFolderLabel = New-UnicodeString @(0x89E3, 0x58D3, 0x5F8C, 0x6A21, 0x578B, 0x8CC7, 0x6599, 0x593E, 0x61C9, 0x4F4D, 0x65BC, 0xFF1A)
+$MissingAppBuildLabel = (New-UnicodeString @(0x627E, 0x4E0D, 0x5230)) + " app " + (New-UnicodeString @(0x5EFA, 0x7F6E, 0xFF1A))
+$EmptyZipLabel = "zip " + (New-UnicodeString @(0x6C92, 0x6709, 0x53EF, 0x58D3, 0x7E2E, 0x5167, 0x5BB9, 0xFF1A))
+$RuntimeMissingLabel = "runtime " + (New-UnicodeString @(0x8CC7, 0x6599, 0x593E, 0x7F3A, 0x5C11, 0xFF1A))
+$ModelsMissingLabel = "ModelsSource " + (New-UnicodeString @(0x4E0D, 0x5B58, 0x5728, 0xFF1A))
 $RuntimeSkippedWarning = (New-UnicodeString @(0x5DF2, 0x7565, 0x904E)) + " runtime zip" + (New-UnicodeString @(0xFF1B, 0x9700, 0x8981, 0x767C, 0x5E03)) + " runtime " + (New-UnicodeString @(0x8207)) + " CUDA DLL " + (New-UnicodeString @(0x6642, 0x8ACB, 0x52A0, 0x4E0A)) + " -RuntimeSource" + (New-UnicodeString @(0x3002))
+
+$AppExe = Join-Path $DistDir "RealtimeAudioTranslator.exe"
+if (-not (Test-Path -LiteralPath $AppExe)) {
+  throw "$MissingAppBuildLabel$AppExe"
+}
+
+$Created = @()
+
+function Compress-FolderContents($SourceDir, $DestinationZip) {
+  $Items = Get-ChildItem -LiteralPath $SourceDir -Force
+  if (-not $Items) {
+    throw "$EmptyZipLabel$SourceDir"
+  }
+  Compress-Archive -LiteralPath $Items.FullName -DestinationPath $DestinationZip -CompressionLevel Optimal
+}
 
 $AppStage = Join-Path $Out "_stage_app"
 New-Item -ItemType Directory -Path $AppStage | Out-Null
@@ -78,17 +82,17 @@ $Created += $AppZip
 if (-not [string]::IsNullOrWhiteSpace($RuntimeSource)) {
   $CudaDlls = @("cublas64_12.dll", "cublasLt64_12.dll", "cudnn64_9.dll")
   if (-not (Test-Path -LiteralPath (Join-Path $RuntimeSource "faster-whisper-xxl.exe"))) {
-    throw "RuntimeSource must contain faster-whisper-xxl.exe: $RuntimeSource"
+    throw "$RuntimeMissingLabel faster-whisper-xxl.exe ($RuntimeSource)"
   }
   if (-not (Test-Path -LiteralPath (Join-Path $RuntimeSource "ffmpeg.exe"))) {
-    throw "RuntimeSource must contain ffmpeg.exe: $RuntimeSource"
+    throw "$RuntimeMissingLabel ffmpeg.exe ($RuntimeSource)"
   }
   if (-not (Test-Path -LiteralPath (Join-Path $RuntimeSource "_xxl_data"))) {
-    throw "RuntimeSource must contain _xxl_data: $RuntimeSource"
+    throw "$RuntimeMissingLabel _xxl_data ($RuntimeSource)"
   }
   foreach ($CudaDll in $CudaDlls) {
     if (-not (Test-Path -LiteralPath (Join-Path $RuntimeSource $CudaDll))) {
-      throw "RuntimeSource must contain ${CudaDll}: $RuntimeSource"
+      throw "$RuntimeMissingLabel ${CudaDll} ($RuntimeSource)"
     }
   }
   $RuntimeStage = Join-Path $Out "_stage_runtime"
@@ -118,7 +122,7 @@ if (-not [string]::IsNullOrWhiteSpace($RuntimeSource)) {
 
 if (-not [string]::IsNullOrWhiteSpace($ModelsSource)) {
   if (-not (Test-Path -LiteralPath $ModelsSource)) {
-    throw "ModelsSource not found: $ModelsSource"
+    throw "$ModelsMissingLabel$ModelsSource"
   }
   if ([string]::IsNullOrWhiteSpace($ModelName)) {
     $ModelName = Split-Path -Leaf $ModelsSource
