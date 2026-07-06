@@ -106,6 +106,16 @@ class CoreTests(unittest.TestCase):
 
             self.assertEqual(load_config(root)["target_language"], "ko")
 
+    def test_load_config_creates_public_settings_from_config_json(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ensure_app_dirs(root)
+            (root / "config" / "settings.json").unlink(missing_ok=True)
+            (root / "config.json").write_text(json.dumps({"target_language": "ja"}), encoding="utf-8")
+
+            self.assertEqual(load_config(root)["target_language"], "ja")
+            self.assertEqual(json.loads((root / "config" / "settings.json").read_text(encoding="utf-8"))["target_language"], "ja")
+
     def test_load_config_rejects_invalid_languages(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

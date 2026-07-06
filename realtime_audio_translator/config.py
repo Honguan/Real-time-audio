@@ -160,6 +160,8 @@ def load_config(root: Path = APP_DIR) -> dict:
         config["source_language"] = DEFAULT_CONFIG["source_language"]
     if config.get("target_language") not in TARGET_LANGUAGE_CHOICES:
         config["target_language"] = DEFAULT_CONFIG["target_language"]
+    if not settings_path.exists():
+        save_config(root, config)
     return config
 
 
