@@ -21,7 +21,7 @@ from realtime_audio_translator.ai_memory import add_glossary_term, cache_transla
 from realtime_audio_translator.app_log import append_app_log
 from realtime_audio_translator.diagnostics import DiagnosticIssue, collect_diagnostics
 from realtime_audio_translator.engine import RealtimeEngine, audio_devices_overlap, direction_label, drain_queue, overlay_text_from_config
-from realtime_audio_translator.gui import LANGUAGE_CHOICES, PERFORMANCE_CHOICES, PROVIDER_CHOICES, TTS_PROVIDER_CHOICES, TranslatorApp, diagnostic_action_label, first_diagnostic_action, first_run_setup_action, first_run_wizard_needed, format_overlay_line, language_lock_value, latency_seconds_value, main_status_summary, mode_notice, overlay_clipboard_text, overlay_font_size_value, overlay_hold_seconds_value, overlay_opacity_value, overlay_visibility_action, performance_segment_seconds, record_logs_requires_confirmation, subtitle_updates_allowed, swap_language_values, troubleshooting_action, visible_button_texts, visible_setting_keys
+from realtime_audio_translator.gui import LANGUAGE_CHOICES, PERFORMANCE_CHOICES, PROVIDER_CHOICES, TARGET_LANGUAGE_CHOICES, TTS_PROVIDER_CHOICES, TranslatorApp, diagnostic_action_label, first_diagnostic_action, first_run_setup_action, first_run_wizard_needed, format_overlay_line, language_lock_value, latency_seconds_value, main_status_summary, mode_notice, overlay_clipboard_text, overlay_font_size_value, overlay_hold_seconds_value, overlay_opacity_value, overlay_visibility_action, performance_segment_seconds, record_logs_requires_confirmation, subtitle_updates_allowed, swap_language_values, troubleshooting_action, visible_button_texts, visible_setting_keys
 from realtime_audio_translator.logbook import ConversationLog
 from realtime_audio_translator.models import cuda_hardware_from_check_output, list_models, model_available, model_download_command, model_install_message, models_dir, recommend_model
 from realtime_audio_translator.providers import TextToSpeech, Translator, build_google_translate_request, build_openai_translation_request, google_access_token
@@ -2252,6 +2252,7 @@ class CoreTests(unittest.TestCase):
 
     def test_swap_language_values(self):
         self.assertEqual(swap_language_values("zh", "en"), ("en", "zh"))
+        self.assertEqual(swap_language_values("auto", "zh"), ("zh", "zh"))
 
     def test_language_lock_uses_last_detected_language_only_from_auto(self):
         self.assertEqual(language_lock_value("auto", "en"), "en")
@@ -2262,6 +2263,9 @@ class CoreTests(unittest.TestCase):
 
     def test_language_choices_cover_mvp_languages(self):
         self.assertEqual(LANGUAGE_CHOICES, ("auto", "zh", "en", "ja", "ko"))
+        self.assertEqual(TARGET_LANGUAGE_CHOICES, ("zh", "en", "ja", "ko"))
+        gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
+        self.assertIn('values = LANGUAGE_CHOICES if key == "source_language" else TARGET_LANGUAGE_CHOICES', gui_source)
 
     def test_google_translate_auto_source_omits_source_language(self):
         request = build_google_translate_request("hello", "zh", "auto", "project")

@@ -25,6 +25,7 @@ from .tts import list_windows_sapi_voices, play_linear16
 
 
 LANGUAGE_CHOICES = ("auto", "zh", "en", "ja", "ko")
+TARGET_LANGUAGE_CHOICES = ("zh", "en", "ja", "ko")
 PROVIDER_CHOICES = ("local", "google", "openai")
 TTS_PROVIDER_CHOICES = ("local", "google", "openai")
 PERFORMANCE_CHOICES = ("low_latency", "balanced", "quality", "offline_light")
@@ -195,6 +196,8 @@ def subtitle_updates_allowed(paused: bool) -> bool:
 
 
 def swap_language_values(source_language: str, target_language: str) -> tuple[str, str]:
+    if source_language == "auto":
+        return target_language, target_language
     return target_language, source_language
 
 
@@ -356,7 +359,8 @@ class TranslatorApp(tk.Tk):
             label_widget.grid(row=row, column=0, sticky="w", pady=4)
             row_widgets.append(label_widget)
             if key in ("source_language", "target_language"):
-                widget = ttk.Combobox(frame, textvariable=self.vars[key], values=LANGUAGE_CHOICES)
+                values = LANGUAGE_CHOICES if key == "source_language" else TARGET_LANGUAGE_CHOICES
+                widget = ttk.Combobox(frame, textvariable=self.vars[key], values=values)
                 widget.bind("<<ComboboxSelected>>", lambda _event: self._save())
             elif key in ("provider", "tts_provider", "performance_mode", "scenario"):
                 values = SCENARIO_CHOICES if key == "scenario" else PERFORMANCE_CHOICES if key == "performance_mode" else TTS_PROVIDER_CHOICES if key == "tts_provider" else PROVIDER_CHOICES
