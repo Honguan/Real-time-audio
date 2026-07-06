@@ -16,7 +16,7 @@ def models_dir(config: dict | None = None) -> Path:
 
 
 def model_path(model: str, local_models: Path, app_models: Path) -> Path | None:
-    candidate = Path(model).expanduser()
+    candidate = Path(os.path.expandvars(model)).expanduser()
     if candidate.exists():
         return candidate
     for root in (local_models, app_models):

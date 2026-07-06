@@ -1953,6 +1953,13 @@ class CoreTests(unittest.TestCase):
             self.assertTrue(model_available("small", Path(tmp) / "missing", app_models))
             self.assertFalse(model_available("large-v3-turbo", Path(tmp) / "missing", app_models))
 
+    def test_model_available_expands_environment_model_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            model = Path(tmp) / "whisper-small"
+            model.mkdir()
+            with patch.dict(os.environ, {"RTA_TEST_MODEL": str(model)}):
+                self.assertTrue(model_available(r"%RTA_TEST_MODEL%", Path(tmp) / "missing", Path(tmp) / "models"))
+
     def test_model_install_message_shows_model_folder(self):
         message = model_install_message("medium", Path(r"C:\Users\me\.realtime-audio\models"))
 
