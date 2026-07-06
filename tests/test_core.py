@@ -1221,6 +1221,7 @@ class CoreTests(unittest.TestCase):
         self.assertIn("def _show_first_run_wizard", gui_source)
         self.assertIn("first_run_setup_action", gui_source)
         self.assertIn("self._optimize_settings()", gui_source)
+        self.assertIn('name == "scenario" else self._save()', gui_source)
         self.assertIn('self.vars["setup_guide_shown"].set("True")', gui_source)
         self.assertIn("def _show_diagnostics", gui_source)
         self.assertIn("def _run_diagnostic_action", gui_source)
@@ -1321,8 +1322,10 @@ class CoreTests(unittest.TestCase):
             "測試虛擬麥克風",
             "測試喇叭",
             "測試 TTS",
+            "測試麥克風",
             "測試字幕",
             "開始",
+            "停止",
             "修復本機翻譯",
             "清除快取",
             "開啟紀錄",
@@ -1334,25 +1337,22 @@ class CoreTests(unittest.TestCase):
         simple = visible_button_texts(buttons, False)
         advanced = visible_button_texts(buttons, True)
 
-        self.assertIn("設定精靈", simple)
-        self.assertIn("套用場景", simple)
-        self.assertIn("自動優化", simple)
-        self.assertIn("下載模型", simple)
-        self.assertIn("一鍵診斷", simple)
-        self.assertIn("測試虛擬麥克風", simple)
-        self.assertIn("測試喇叭", simple)
-        self.assertIn("測試 TTS", simple)
-        self.assertIn("測試字幕", simple)
-        self.assertIn("開始", simple)
-        self.assertIn("按住說話", simple)
+        self.assertEqual(simple, ["設定精靈", "一鍵診斷", "測試虛擬麥克風", "測試麥克風", "開始", "停止"])
         self.assertNotIn("重新整理", simple)
+        self.assertNotIn("套用場景", simple)
+        self.assertNotIn("自動優化", simple)
+        self.assertNotIn("下載模型", simple)
         self.assertNotIn("測試 API", simple)
+        self.assertNotIn("測試喇叭", simple)
+        self.assertNotIn("測試 TTS", simple)
+        self.assertNotIn("測試字幕", simple)
         self.assertNotIn("開啟程式資料夾", simple)
         self.assertNotIn("修復本機翻譯", simple)
         self.assertNotIn("清除快取", simple)
         self.assertNotIn("開啟紀錄", simple)
         self.assertNotIn("清除紀錄", simple)
         self.assertNotIn("清除本機資料", simple)
+        self.assertNotIn("按住說話", simple)
         self.assertEqual(advanced, buttons)
 
     def test_clear_logs_and_cache_keep_app_dirs(self):

@@ -40,10 +40,10 @@ Whisper 模型可放在 `models\whisper-small`；翻譯模型放在 `models\tran
 1. 安裝 VB-Audio Virtual Cable。
 2. 開啟 `RealtimeAudioTranslator.exe`。
 3. 選擇「喇叭來源」、「麥克風來源」、「TTS 輸出」、來源語言與目標語言；若要聽對方語音的翻譯，開「播放對方翻譯」並選「對方翻譯播放輸出」。
-4. 選擇「場景」後按「套用場景」套用常用場景。
+4. 選擇「場景」後會自動套用常用場景。
 5. 按「一鍵診斷」檢查 runtime、模型、音訊與 API 設定。
-6. 按「測試字幕」確認字幕 bar 會出現。
-7. 按「測試喇叭」、「測試麥克風」、「測試 TTS」、「測試虛擬麥克風」確認聲音路由。
+6. 按「測試麥克風」與「測試虛擬麥克風」確認主要聲音路由。
+7. 需要更細的檢查時，切到進階模式按「測試字幕」、「測試喇叭」與「測試 TTS」。
 8. 按「開始」開始翻譯。
 
 ## VB-CABLE 路由
@@ -69,7 +69,7 @@ Whisper 模型可放在 `models\whisper-small`；翻譯模型放在 `models\tran
 - 「開啟程式資料夾」：開啟 `%USERPROFILE%\.realtime-audio`，設定鏡像在 `config\settings.json`，術語表在 `config\glossary.json`，音訊裝置快照在 `config\audio_devices.json`。
 - 「新增術語」：加入固定術語翻譯，例如 `cooldown` → `冷卻`。
 - 「顯示語言」：在字幕前顯示語言代碼。
-- 「套用場景」：套用遊戲、Discord、會議、客服、字幕-only、自己說話翻譯或雙向翻譯預設。
+- 「場景」：選擇遊戲、Discord、會議、客服、字幕-only、自己說話翻譯或雙向翻譯預設後會自動套用；進階模式也可按「套用場景」。
 - 「效能模式」：可選 `low_latency`、`balanced`、`quality` 或離線省資源 `offline_light`。
 - 「自動優化」：使用 AI 決策中樞依場景、硬體、延遲與診斷結果切換模型、裝置與低延遲設定。
 - 「一鍵診斷」：顯示目前缺少的 runtime、模型、音訊或 API 設定。

@@ -82,19 +82,11 @@ BASIC_SETTING_KEYS = {
 ADVANCED_SETTING_KEYS = {key for _label, key in SETTING_ROWS} - BASIC_SETTING_KEYS
 BASIC_BUTTON_TEXTS = {
     "設定精靈",
-    "套用場景",
-    "自動優化",
-    "下載模型",
     "一鍵診斷",
     "開始",
     "停止",
     "測試麥克風",
-    "測試喇叭",
-    "測試 TTS",
-    "測試字幕",
     "測試虛擬麥克風",
-    "按住說話",
-    "離開",
 }
 FIRST_RUN_ISSUE_CODES = {
     "runtime_missing",
@@ -367,7 +359,7 @@ class TranslatorApp(tk.Tk):
             elif key in ("provider", "tts_provider", "performance_mode", "scenario"):
                 values = SCENARIO_CHOICES if key == "scenario" else PERFORMANCE_CHOICES if key == "performance_mode" else TTS_PROVIDER_CHOICES if key == "tts_provider" else PROVIDER_CHOICES
                 widget = ttk.Combobox(frame, textvariable=self.vars[key], values=values, state="readonly")
-                widget.bind("<<ComboboxSelected>>", lambda _event, name=key: self._apply_performance_mode() if name == "performance_mode" else self._save())
+                widget.bind("<<ComboboxSelected>>", lambda _event, name=key: self._apply_performance_mode() if name == "performance_mode" else self._apply_scenario() if name == "scenario" else self._save())
             elif key in AUDIO_DEVICE_KEYS or key in ("model", "device", "compute_type", "tts_voice_name"):
                 widget = ttk.Combobox(frame, textvariable=self.vars[key], values=[])
                 widget.bind("<<ComboboxSelected>>", lambda _event: self._save())
@@ -830,7 +822,7 @@ class TranslatorApp(tk.Tk):
             "2. 按「下載模型」，或把模型 zip 解壓到 models 資料夾。\n"
             "3. 選擇「喇叭來源」、「麥克風來源」與「TTS 輸出」。\n"
             "4. Discord 麥克風選 CABLE Output，本工具「TTS 輸出」選 CABLE Input。\n"
-            "5. 選場景後按「套用場景」，再按「自動優化」。\n"
+            "5. 選場景會自動套用；進階模式也可按「套用場景」與「自動優化」。\n"
             "6. 開始前先跑「測試字幕」、「測試喇叭」、「測試麥克風」與「測試虛擬麥克風」。",
         )
 
