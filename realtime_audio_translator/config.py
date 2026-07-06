@@ -203,6 +203,7 @@ def clear_logs(root: Path = APP_DIR, log_dir: Path | None = None) -> None:
     shutil.rmtree(target, ignore_errors=True)
     if log_dir and target != root / "logs":
         shutil.rmtree(root / "logs", ignore_errors=True)
+    shutil.rmtree(root / "exports" / "subtitles", ignore_errors=True)
     ensure_app_dirs(root)
     if log_dir:
         target.mkdir(parents=True, exist_ok=True)
