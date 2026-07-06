@@ -58,7 +58,7 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
             "error",
             "找不到語音辨識模型",
             f"目前模型：{config.get('model', '')}",
-            "按 Download model，或把模型 zip 解壓到 models 資料夾",
+            "按「下載模型」，或把模型 zip 解壓到 models 資料夾",
             "download_model",
         ))
     tts_overlaps_speaker = _devices_overlap(config.get("speaker_device", ""), config.get("tts_output_device", ""))
@@ -127,7 +127,7 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
             "warning",
             "ASR confidence is low",
             f"Recent ASR confidence is about {round(asr_confidence * 100)}%",
-            "Run Mic test or Speaker test, reduce background noise, or try a larger model",
+            "先跑「測試麥克風」或「測試喇叭」，降低背景噪音，或改用較大模型",
             "audio_settings",
         ))
     try:
@@ -170,7 +170,7 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
             "virtual_mic_no_output",
             "warning",
             "Discord 沒有收到虛擬麥克風聲音",
-            "最近一次 Virtual mic test 播放失敗",
+            "最近一次「測試虛擬麥克風」播放失敗",
             "確認 TTS output 選 CABLE Input，並把 Discord 麥克風設為 CABLE Output",
             "audio_settings",
         ))
@@ -197,7 +197,7 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
             "microphone_no_sound",
             "warning",
             "麥克風沒有聲音",
-            "最近一次 Mic test 音量低於語音門檻",
+            "最近一次「測試麥克風」音量低於語音門檻",
             "確認麥克風輸入裝置、系統音量與權限設定",
             "audio_settings",
         ))
@@ -206,7 +206,7 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
             "speaker_no_sound",
             "warning",
             "系統音訊沒有聲音",
-            "最近一次 Speaker test 沒有偵測到有效聲音",
+            "最近一次「測試喇叭」沒有偵測到有效聲音",
             "播放 Discord 或遊戲語音後再測試，並確認喇叭來源選對裝置",
             "audio_settings",
         ))
@@ -235,7 +235,7 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
             "warning",
             "字幕延遲過高",
             f"最近一次處理延遲約 {current_latency:.1f} 秒",
-            "按 Optimize settings 套用低延遲分段與 VAD 設定",
+            "按「自動優化」套用低延遲分段與 VAD 設定",
             "optimize_settings",
         ))
     cuda_devices = config.get("last_cuda_devices")
@@ -258,7 +258,7 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
                 "warning",
                 "GPU 不支援或無法使用",
                 "最近一次 CUDA 檢查沒有偵測到可用 GPU",
-                "按 Optimize settings 切換 CPU 與較小模型，或確認 CUDA12 runtime 已解壓",
+                "按「自動優化」切換 CPU 與較小模型，或確認 CUDA12 runtime 已解壓",
                 "optimize_settings",
             ))
         if cuda_devices >= 1 and vram_gb < 4 and config.get("model") != "medium":
@@ -267,7 +267,7 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
                 "warning",
                 "GPU 記憶體不足",
                 f"最近一次 CUDA 檢查 VRAM 約 {vram_gb} GB",
-                "按 Optimize settings 改用 medium 模型",
+                "按「自動優化」改用 medium 模型",
                 "optimize_settings",
             ))
     if config.get("ai_auto_optimize", True):
@@ -283,7 +283,7 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
                 "info",
                 "可套用自動優化建議",
                 "；".join(item.title for item in tuning),
-                "按 Optimize settings 套用建議設定",
+                "按「自動優化」套用建議設定",
                 "optimize_settings",
             ))
     return issues

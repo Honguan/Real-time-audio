@@ -79,19 +79,19 @@ BASIC_SETTING_KEYS = {
 }
 ADVANCED_SETTING_KEYS = {key for _label, key in SETTING_ROWS} - BASIC_SETTING_KEYS
 BASIC_BUTTON_TEXTS = {
-    "Setup guide",
-    "Apply scenario",
-    "Optimize settings",
-    "Download model",
-    "Run diagnostics",
-    "Start",
-    "Stop",
-    "Mic test",
-    "Speaker test",
-    "Subtitle test",
-    "Virtual mic test",
-    "Push to talk",
-    "Quit",
+    "設定精靈",
+    "套用場景",
+    "自動優化",
+    "下載模型",
+    "一鍵診斷",
+    "開始",
+    "停止",
+    "測試麥克風",
+    "測試喇叭",
+    "測試字幕",
+    "測試虛擬麥克風",
+    "按住說話",
+    "離開",
 }
 FIRST_RUN_ISSUE_CODES = {
     "runtime_missing",
@@ -213,13 +213,13 @@ def troubleshooting_action(issue: str) -> tuple[str, str]:
 
 def diagnostic_action_label(action: str) -> str:
     return {
-        "open_runtime": "Open runtime folder / Download runtime files",
-        "download_model": "Download model",
-        "audio_settings": "Speaker test / Mic test / Virtual mic test",
+        "open_runtime": "開啟 runtime 資料夾 / 下載 runtime",
+        "download_model": "下載模型",
+        "audio_settings": "測試喇叭 / 測試麥克風 / 測試虛擬麥克風",
         "api_settings": "API test",
-        "local_translation": "Fix local translation",
-        "optimize_settings": "Optimize settings",
-        "language_settings": "Source language",
+        "local_translation": "修復本機翻譯",
+        "optimize_settings": "自動優化",
+        "language_settings": "來源語言",
     }.get(action, action)
 
 
@@ -434,14 +434,14 @@ class TranslatorApp(tk.Tk):
             self.status.set("subtitles copied")
 
         for text, command in (
-            ("Setup guide", self._show_setup_guide),
+            ("設定精靈", self._show_setup_guide),
             ("Refresh", self._refresh_lists),
             ("Swap languages", self._swap_languages),
-            ("Apply scenario", self._apply_scenario),
-            ("Optimize settings", self._optimize_settings),
+            ("套用場景", self._apply_scenario),
+            ("自動優化", self._optimize_settings),
             ("Recommend model", self._recommend),
-            ("Download model", self._download_model),
-            ("Run diagnostics", self._run_diagnostics),
+            ("下載模型", self._download_model),
+            ("一鍵診斷", self._run_diagnostics),
             ("Lock language", self._lock_language),
             ("Check updates", self._check_updates),
             ("Update command config", self._refresh_commands),
@@ -452,13 +452,13 @@ class TranslatorApp(tk.Tk):
             ("API test", self._test_api),
             ("Device tone", self._test_tone),
             ("TTS test", self._test_tts),
-            ("Virtual mic test", self._test_virtual_mic),
-            ("Speaker test", self._test_speaker),
-            ("Mic test", self._test_mic),
-            ("Subtitle test", self._test_subtitles),
-            ("Start", self._start),
-            ("Stop", self._stop),
-            ("Quit", self._quit),
+            ("測試虛擬麥克風", self._test_virtual_mic),
+            ("測試喇叭", self._test_speaker),
+            ("測試麥克風", self._test_mic),
+            ("測試字幕", self._test_subtitles),
+            ("開始", self._start),
+            ("停止", self._stop),
+            ("離開", self._quit),
             ("Pause/resume", self._toggle_pause),
             ("Mute/unmute", self._toggle_mute),
             ("Toggle subtitles", self._toggle_subtitles),
@@ -477,10 +477,10 @@ class TranslatorApp(tk.Tk):
         ):
             button = ttk.Button(buttons, text=text, command=command)
             self.button_widgets.append((text, button))
-        ptt_button = ttk.Button(buttons, text="Push to talk")
+        ptt_button = ttk.Button(buttons, text="按住說話")
         ptt_button.bind("<ButtonPress-1>", lambda _event: self._push_to_talk(True))
         ptt_button.bind("<ButtonRelease-1>", lambda _event: self._push_to_talk(False))
-        self.button_widgets.append(("Push to talk", ptt_button))
+        self.button_widgets.append(("按住說話", ptt_button))
 
         ttk.Label(frame, textvariable=self.status).grid(row=next_row + 9, column=0, columnspan=3, sticky="ew")
         frame.grid_columnconfigure(1, weight=1)
@@ -714,11 +714,11 @@ class TranslatorApp(tk.Tk):
             self.vars["last_ffmpeg_failed"].set(str(config["last_ffmpeg_failed"]))
             self.config = config
             save_config(APP_DIR, self.config)
-            note = "Runtime ready"
+            note = "runtime 已就緒"
             if status["warnings"]:
-                note += f"; recommended CUDA package: {status['cuda_package']}"
+                note += f"；建議 CUDA 套件：{status['cuda_package']}"
             if not model_available(config["model"], self.repo_root / "_models", models_dir(config)):
-                note += f"; model missing: {config['model']}"
+                note += f"；找不到模型：{config['model']}"
             self.runtime_text.set(note)
         else:
             self.runtime_text.set(runtime_install_message(runtime_dir(config)))
@@ -810,18 +810,18 @@ class TranslatorApp(tk.Tk):
         messagebox.showinfo(
             "設定指南",
             "1. 匯入 runtime，或開啟 runtime 資料夾放入解壓後檔案。\n"
-            "2. 按 Download model，或把模型 zip 解壓到 models 資料夾。\n"
+            "2. 按「下載模型」，或把模型 zip 解壓到 models 資料夾。\n"
             "3. 選擇喇叭、麥克風與 TTS output。\n"
             "4. Discord 麥克風選 CABLE Output，本工具 TTS output 選 CABLE Input。\n"
-            "5. 選 Scenario 後按 Apply scenario，再按 Optimize settings。\n"
-            "6. 開始前先跑 Subtitle test、Speaker test、Mic test 與 Virtual mic test。",
+            "5. 選場景後按「套用場景」，再按「自動優化」。\n"
+            "6. 開始前先跑「測試字幕」、「測試喇叭」、「測試麥克風」與「測試虛擬麥克風」。",
         )
 
     def _recommend(self) -> None:
         config = self._config_from_vars()
         exe = whisper_exe(runtime_dir(config))
         if not exe.exists():
-            self.status.set("runtime missing")
+            self.status.set("找不到 runtime")
             self.vars["model"].set("medium")
             return
         cuda = subprocess.run([str(exe), "--checkcuda"], capture_output=True, text=True, check=False)
@@ -899,7 +899,7 @@ class TranslatorApp(tk.Tk):
         self._save()
         exe = whisper_exe(runtime_dir(self.config))
         if not exe.exists():
-            messagebox.showerror("Runtime missing", runtime_install_message(exe.parent))
+            messagebox.showerror("找不到 runtime", runtime_install_message(exe.parent))
             return
         model = self.config["model"]
         app_models = models_dir(self.config)
@@ -915,7 +915,7 @@ class TranslatorApp(tk.Tk):
     def _refresh_commands(self) -> None:
         exe = whisper_exe(runtime_dir(self._config_from_vars()))
         if not exe.exists():
-            messagebox.showerror("Runtime missing", runtime_install_message(exe.parent))
+            messagebox.showerror("找不到 runtime", runtime_install_message(exe.parent))
             return
         refresh_commands(exe, APP_DIR / "commands.json")
         self._refresh_lists()
@@ -950,12 +950,12 @@ class TranslatorApp(tk.Tk):
             config["last_tts_failed"] = False
             self.config = config
             save_config(APP_DIR, self.config)
-            self.status.set("tts output tested")
+            self.status.set("TTS 輸出測試完成")
         except Exception as exc:
             config["last_tts_failed"] = True
             self.config = config
             save_config(APP_DIR, self.config)
-            messagebox.showerror("TTS test failed", str(exc))
+            messagebox.showerror("TTS 測試失敗", str(exc))
 
     def _test_virtual_mic(self) -> None:
         config = self._config_from_vars()
@@ -964,12 +964,12 @@ class TranslatorApp(tk.Tk):
             config["last_virtual_mic_failed"] = False
             self.config = config
             save_config(APP_DIR, self.config)
-            self.status.set("virtual mic output tested")
+            self.status.set("虛擬麥克風測試完成")
         except Exception as exc:
             config["last_virtual_mic_failed"] = True
             self.config = config
             save_config(APP_DIR, self.config)
-            messagebox.showerror("Virtual mic test failed", str(exc))
+            messagebox.showerror("虛擬麥克風測試失敗", str(exc))
 
     def _play_tts_test(self, config: dict) -> None:
         provider = config.get("tts_provider", "local")
@@ -994,9 +994,9 @@ class TranslatorApp(tk.Tk):
             config["last_speaker_quiet"] = not active
             self.config = config
             save_config(APP_DIR, self.config)
-            self.status.set("speaker audio detected" if active else "speaker audio quiet")
+            self.status.set("喇叭已偵測到聲音" if active else "喇叭目前沒有偵測到聲音")
         except Exception as exc:
-            messagebox.showerror("Speaker test failed", str(exc))
+            messagebox.showerror("喇叭測試失敗", str(exc))
 
     def _test_mic(self) -> None:
         import numpy as np
@@ -1011,15 +1011,15 @@ class TranslatorApp(tk.Tk):
             config["last_mic_quiet"] = level < float(self.vars["speech_threshold"].get())
             self.config = config
             save_config(APP_DIR, self.config)
-            self.status.set(f"mic level {level:.4f}")
+            self.status.set(f"麥克風音量 {level:.4f}")
         except Exception as exc:
-            messagebox.showerror("Mic test failed", str(exc))
+            messagebox.showerror("麥克風測試失敗", str(exc))
 
     def _test_subtitles(self) -> None:
         self.overlay_visible.set(True)
         self._apply_overlay()
-        self.overlay.update_lines("Subtitle test", "字幕測試")
-        self.status.set("subtitle overlay tested")
+        self.overlay.update_lines("字幕測試", "Subtitle test")
+        self.status.set("字幕測試完成")
 
     def _troubleshoot(self, issue: str) -> None:
         action, target = troubleshooting_action(issue)
@@ -1040,8 +1040,8 @@ class TranslatorApp(tk.Tk):
         app_models = models_dir(self.config)
         if not model_available(self.config["model"], self.repo_root / "_models", app_models):
             append_app_log(APP_DIR, "model_missing", model=self.config["model"])
-            messagebox.showerror("Model missing", model_install_message(self.config["model"], app_models))
-            self.status.set(f"model missing: {self.config['model']}")
+            messagebox.showerror("找不到模型", model_install_message(self.config["model"], app_models))
+            self.status.set(f"找不到模型：{self.config['model']}")
             return
         append_app_log(APP_DIR, "start", model=self.config["model"], provider=self.config["provider"])
         self.engine = RealtimeEngine(self.repo_root, self.config, self._overlay_update, self.status.set)

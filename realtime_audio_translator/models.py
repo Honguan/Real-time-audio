@@ -34,7 +34,7 @@ def model_available(model: str, local_models: Path, app_models: Path) -> bool:
 def model_install_message(model: str, model_dir: Path) -> str:
     return (
         f"找不到模型：{model}\n"
-        "請點 Download model，或把模型 zip 解壓到：\n"
+        "請點「下載模型」，或把模型 zip 解壓到：\n"
         f"{model_dir}"
     )
 

@@ -238,7 +238,7 @@ class CoreTests(unittest.TestCase):
         self.assertIn('self.start_muted = tk.BooleanVar(value=bool(self.config.get("start_muted", False)))', gui_source)
         self.assertIn('ttk.Checkbutton(frame, text="Start muted", variable=self.start_muted, command=self._save)', gui_source)
         self.assertIn('config["start_muted"] = self.start_muted.get()', gui_source)
-        self.assertIn('ptt_button = ttk.Button(buttons, text="Push to talk")', gui_source)
+        self.assertIn('ptt_button = ttk.Button(buttons, text="按住說話")', gui_source)
         self.assertIn('ptt_button.bind("<ButtonPress-1>", lambda _event: self._push_to_talk(True))', gui_source)
         self.assertIn('ptt_button.bind("<ButtonRelease-1>", lambda _event: self._push_to_talk(False))', gui_source)
         self.assertIn('self.engine.set_muted(False)', gui_source)
@@ -246,9 +246,9 @@ class CoreTests(unittest.TestCase):
     def test_subtitle_test_button_updates_overlay(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
 
-        self.assertIn('("Subtitle test", self._test_subtitles)', gui_source)
+        self.assertIn('("測試字幕", self._test_subtitles)', gui_source)
         self.assertIn('def _test_subtitles(self) -> None:', gui_source)
-        self.assertIn('self.overlay.update_lines("Subtitle test", "字幕測試")', gui_source)
+        self.assertIn('self.overlay.update_lines("字幕測試", "Subtitle test")', gui_source)
 
     def test_overlay_quick_toggle_switches_visibility(self):
         import realtime_audio_translator.gui as gui_module
@@ -290,25 +290,25 @@ class CoreTests(unittest.TestCase):
     def test_mic_test_button_reports_input_level(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
 
-        self.assertIn('("Mic test", self._test_mic)', gui_source)
+        self.assertIn('("測試麥克風", self._test_mic)', gui_source)
         self.assertIn('def _test_mic(self) -> None:', gui_source)
-        self.assertIn('self.status.set(f"mic level {level:.4f}")', gui_source)
+        self.assertIn('self.status.set(f"麥克風音量 {level:.4f}")', gui_source)
         self.assertIn('config["last_mic_quiet"] = level < float(self.vars["speech_threshold"].get())', gui_source)
 
     def test_speaker_test_button_uses_loopback_capture(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
 
-        self.assertIn('("Speaker test", self._test_speaker)', gui_source)
+        self.assertIn('("測試喇叭", self._test_speaker)', gui_source)
         self.assertIn('def _test_speaker(self) -> None:', gui_source)
         self.assertIn('capture_wav(path, device, 0.5, loopback=True)', gui_source)
-        self.assertIn('self.status.set("speaker audio detected" if active else "speaker audio quiet")', gui_source)
+        self.assertIn('self.status.set("喇叭已偵測到聲音" if active else "喇叭目前沒有偵測到聲音")', gui_source)
         self.assertIn('config["last_speaker_quiet"] = not active', gui_source)
 
     def test_tts_test_button_uses_configured_output(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
 
         self.assertIn('("TTS test", self._test_tts)', gui_source)
-        self.assertIn('("Virtual mic test", self._test_virtual_mic)', gui_source)
+        self.assertIn('("測試虛擬麥克風", self._test_virtual_mic)', gui_source)
         self.assertIn('def _test_tts(self) -> None:', gui_source)
         self.assertIn('def _test_virtual_mic(self) -> None:', gui_source)
         self.assertIn('config["last_virtual_mic_failed"] = False', gui_source)
@@ -321,15 +321,15 @@ class CoreTests(unittest.TestCase):
     def test_setup_guide_button_shows_first_run_steps(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
 
-        self.assertIn('("Setup guide", self._show_setup_guide)', gui_source)
+        self.assertIn('("設定精靈", self._show_setup_guide)', gui_source)
         self.assertIn('def _show_setup_guide(self) -> None:', gui_source)
         self.assertIn("匯入 runtime", gui_source)
-        self.assertIn("Download model", gui_source)
+        self.assertIn("下載模型", gui_source)
         self.assertIn("選擇喇叭、麥克風", gui_source)
         self.assertIn("CABLE Output", gui_source)
-        self.assertIn("Apply scenario", gui_source)
-        self.assertIn("Optimize settings", gui_source)
-        self.assertIn("Subtitle test", gui_source)
+        self.assertIn("套用場景", gui_source)
+        self.assertIn("自動優化", gui_source)
+        self.assertIn("測試字幕", gui_source)
 
     def test_first_run_wizard_opens_for_audio_setup_issues(self):
         issues = [DiagnosticIssue("microphone_device_missing", "warning", "找不到麥克風", "", "", "audio_settings")]
@@ -378,7 +378,7 @@ class CoreTests(unittest.TestCase):
 
     def test_quit_button_stops_engine_and_closes_window(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
-        self.assertIn('("Quit", self._quit)', gui_source)
+        self.assertIn('("離開", self._quit)', gui_source)
         self.assertIn('self.protocol("WM_DELETE_WINDOW", self._quit)', gui_source)
 
         app = TranslatorApp.__new__(TranslatorApp)
@@ -541,7 +541,7 @@ class CoreTests(unittest.TestCase):
         issue = next(item for item in issues if item.code == "subtitle_latency_high")
         self.assertEqual(issue.action, "optimize_settings")
         self.assertIn("4.2", issue.detail)
-        self.assertIn("Optimize settings", issue.fix)
+        self.assertIn("自動優化", issue.fix)
 
     def test_local_provider_without_translate_url_is_info_not_fatal(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -651,7 +651,7 @@ class CoreTests(unittest.TestCase):
 
         issue = next(item for item in issues if item.code == "asr_confidence_low")
         self.assertEqual(issue.action, "audio_settings")
-        self.assertIn("larger model", issue.fix)
+        self.assertIn("較大模型", issue.fix)
 
     def test_diagnostics_report_tts_failure(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1061,9 +1061,9 @@ class CoreTests(unittest.TestCase):
 
         self.assertIn('("Scenario", "scenario")', gui_source)
         self.assertIn("SCENARIO_CHOICES", gui_source)
-        self.assertIn('("Apply scenario", self._apply_scenario)', gui_source)
-        self.assertIn('("Optimize settings", self._optimize_settings)', gui_source)
-        self.assertIn('("Run diagnostics", self._run_diagnostics)', gui_source)
+        self.assertIn('("套用場景", self._apply_scenario)', gui_source)
+        self.assertIn('("自動優化", self._optimize_settings)', gui_source)
+        self.assertIn('("一鍵診斷", self._run_diagnostics)', gui_source)
         self.assertIn("def _show_first_run_wizard", gui_source)
         self.assertIn("first_run_setup_action", gui_source)
         self.assertIn('self.vars["setup_guide_shown"].set("True")', gui_source)
@@ -1123,8 +1123,8 @@ class CoreTests(unittest.TestCase):
         self.assertIsNone(latency_seconds_value(""))
 
     def test_diagnostic_action_label_shows_user_button_names(self):
-        self.assertEqual(diagnostic_action_label("open_runtime"), "Open runtime folder / Download runtime files")
-        self.assertEqual(diagnostic_action_label("download_model"), "Download model")
+        self.assertEqual(diagnostic_action_label("open_runtime"), "開啟 runtime 資料夾 / 下載 runtime")
+        self.assertEqual(diagnostic_action_label("download_model"), "下載模型")
         self.assertEqual(diagnostic_action_label("unknown"), "unknown")
 
     def test_performance_mode_controls_segment_seconds(self):
@@ -1153,38 +1153,38 @@ class CoreTests(unittest.TestCase):
 
     def test_simple_mode_hides_advanced_buttons(self):
         buttons = [
-            "Setup guide",
+            "設定精靈",
             "Refresh",
-            "Apply scenario",
-            "Optimize settings",
-            "Download model",
-            "Run diagnostics",
+            "套用場景",
+            "自動優化",
+            "下載模型",
+            "一鍵診斷",
             "API test",
             "Open app folder",
-            "Virtual mic test",
-            "Speaker test",
-            "Subtitle test",
-            "Start",
+            "測試虛擬麥克風",
+            "測試喇叭",
+            "測試字幕",
+            "開始",
             "Fix local translation",
             "Clear cache",
             "Open logs",
             "Clear logs",
-            "Push to talk",
+            "按住說話",
         ]
 
         simple = visible_button_texts(buttons, False)
         advanced = visible_button_texts(buttons, True)
 
-        self.assertIn("Setup guide", simple)
-        self.assertIn("Apply scenario", simple)
-        self.assertIn("Optimize settings", simple)
-        self.assertIn("Download model", simple)
-        self.assertIn("Run diagnostics", simple)
-        self.assertIn("Virtual mic test", simple)
-        self.assertIn("Speaker test", simple)
-        self.assertIn("Subtitle test", simple)
-        self.assertIn("Start", simple)
-        self.assertIn("Push to talk", simple)
+        self.assertIn("設定精靈", simple)
+        self.assertIn("套用場景", simple)
+        self.assertIn("自動優化", simple)
+        self.assertIn("下載模型", simple)
+        self.assertIn("一鍵診斷", simple)
+        self.assertIn("測試虛擬麥克風", simple)
+        self.assertIn("測試喇叭", simple)
+        self.assertIn("測試字幕", simple)
+        self.assertIn("開始", simple)
+        self.assertIn("按住說話", simple)
         self.assertNotIn("Refresh", simple)
         self.assertNotIn("API test", simple)
         self.assertNotIn("Open app folder", simple)
@@ -1888,14 +1888,14 @@ class CoreTests(unittest.TestCase):
 
         self.assertIn("medium", message)
         self.assertIn(r"C:\Users\me\.realtime-audio\models", message)
-        self.assertIn("Download model", message)
+        self.assertIn("下載模型", message)
 
     def test_start_checks_model_before_engine(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
 
         self.assertIn("app_models = models_dir(self.config)", gui_source)
         self.assertIn('if not model_available(self.config["model"], self.repo_root / "_models", app_models):', gui_source)
-        self.assertIn('messagebox.showerror("Model missing", model_install_message(self.config["model"], app_models))', gui_source)
+        self.assertIn('messagebox.showerror("找不到模型", model_install_message(self.config["model"], app_models))', gui_source)
 
     def test_runtime_status_uses_configured_model_folder(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
