@@ -195,10 +195,10 @@ class CoreTests(unittest.TestCase):
     def test_record_logs_toggle_saves_immediately(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
 
-        self.assertIn('record_logs_widget = ttk.Checkbutton(frame, text="Record logs", variable=self.record_logs, command=self._save)', gui_source)
+        self.assertIn('record_logs_widget = ttk.Checkbutton(frame, text="儲存對話紀錄", variable=self.record_logs, command=self._save)', gui_source)
         self.assertIn("self.advanced_mode_widgets = [record_logs_widget]", gui_source)
         self.assertIn("for widget in self.advanced_mode_widgets:", gui_source)
-        self.assertIn('ttk.Checkbutton(frame, text="Show translation", variable=self.show_translated_text, command=self._save)', gui_source)
+        self.assertIn('ttk.Checkbutton(frame, text="顯示譯文", variable=self.show_translated_text, command=self._save)', gui_source)
 
     def test_open_logs_button_opens_configured_log_dir(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
@@ -236,7 +236,7 @@ class CoreTests(unittest.TestCase):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
 
         self.assertIn('self.start_muted = tk.BooleanVar(value=bool(self.config.get("start_muted", False)))', gui_source)
-        self.assertIn('ttk.Checkbutton(frame, text="Start muted", variable=self.start_muted, command=self._save)', gui_source)
+        self.assertIn('ttk.Checkbutton(frame, text="啟動時先靜音", variable=self.start_muted, command=self._save)', gui_source)
         self.assertIn('config["start_muted"] = self.start_muted.get()', gui_source)
         self.assertIn('ptt_button = ttk.Button(buttons, text="按住說話")', gui_source)
         self.assertIn('ptt_button.bind("<ButtonPress-1>", lambda _event: self._push_to_talk(True))', gui_source)
@@ -271,7 +271,7 @@ class CoreTests(unittest.TestCase):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
         self.assertIn('("Toggle speech", self._toggle_speech)', gui_source)
         self.assertIn("self.tts_enabled.set(toggle_speech_enabled(self.tts_enabled.get()))", gui_source)
-        self.assertIn("Virtual mic output", gui_source)
+        self.assertIn("輸出到虛擬麥克風", gui_source)
         self.assertIn('config["virtual_mic_enabled"] = self.virtual_mic_enabled.get()', gui_source)
         self.assertIn('self.virtual_mic_enabled.set(bool(updated.get("virtual_mic_enabled", self.virtual_mic_enabled.get())))', gui_source)
 
@@ -2005,12 +2005,12 @@ class CoreTests(unittest.TestCase):
         readme = Path("README.md").read_text(encoding="utf-8")
         notes = Path("docs/RELEASE_NOTES.md").read_text(encoding="utf-8")
 
-        self.assertIn("Start muted", readme)
+        self.assertIn("啟動時先靜音", readme)
         self.assertIn("Push to talk", readme)
         self.assertIn("按住說話", readme)
         self.assertIn("按住才暫時取消靜音", readme)
         self.assertNotIn("hold it to unmute TTS output", readme)
-        self.assertIn("Start muted", notes)
+        self.assertIn("啟動時先靜音", notes)
         self.assertIn("Push to talk", notes)
         self.assertIn("按住說話", notes)
 
@@ -2019,7 +2019,7 @@ class CoreTests(unittest.TestCase):
         notes = Path("docs/RELEASE_NOTES.md").read_text(encoding="utf-8")
 
         for text in (readme, notes):
-            self.assertIn("Virtual mic output", text)
+            self.assertIn("輸出到虛擬麥克風", text)
 
     def test_readme_and_release_notes_mention_confidence_status(self):
         readme = Path("README.md").read_text(encoding="utf-8")
@@ -2135,8 +2135,8 @@ class CoreTests(unittest.TestCase):
     def test_readme_mentions_overlay_language_and_topmost(self):
         readme = Path("README.md").read_text(encoding="utf-8")
 
-        self.assertIn("Show language", readme)
-        self.assertIn("Overlay topmost", readme)
+        self.assertIn("顯示語言", readme)
+        self.assertIn("字幕最上層", readme)
 
     def test_readme_mentions_release_checksums(self):
         readme = Path("README.md").read_text(encoding="utf-8")
@@ -2318,8 +2318,8 @@ class CoreTests(unittest.TestCase):
     def test_runtime_controls_link_cuda12_dependency(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
 
-        self.assertIn('text="Download runtime files"', gui_source)
-        self.assertIn('text="Fallback runtime source"', gui_source)
+        self.assertIn('text="下載 runtime 檔案"', gui_source)
+        self.assertIn('text="備用 runtime 來源"', gui_source)
         self.assertIn("RUNTIME_RELEASE_URL", gui_source)
         self.assertIn("UPSTREAM_RUNTIME_RELEASE_URL", gui_source)
         self.assertIn('subprocess.run([str(runtime_dir(config) / "ffmpeg.exe"), "-version"]', gui_source)
@@ -3170,7 +3170,7 @@ class CoreTests(unittest.TestCase):
             engine_module.AudioTranscriber = original_transcriber
 
         self.assertEqual(started, ["me"])
-        self.assertEqual(statuses[-1], "running; speaker capture skipped: matches TTS output")
+        self.assertEqual(statuses[-1], "執行中；喇叭擷取已略過：和 TTS 輸出相同")
 
     def test_engine_start_skips_microphone_capture_matching_virtual_mic_output(self):
         import realtime_audio_translator.engine as engine_module
@@ -3194,7 +3194,7 @@ class CoreTests(unittest.TestCase):
             engine_module.AudioTranscriber = original_transcriber
 
         self.assertEqual(started, [])
-        self.assertEqual(statuses[-1], "no audio devices; microphone capture skipped: matches virtual mic output")
+        self.assertEqual(statuses[-1], "沒有可用音訊裝置；麥克風擷取已略過：和虛擬麥克風輸出相同")
 
     def test_engine_start_stops_when_no_audio_devices_start(self):
         import realtime_audio_translator.engine as engine_module
@@ -3219,7 +3219,7 @@ class CoreTests(unittest.TestCase):
             engine_module.find_device = original_find_device
 
         self.assertFalse(engine.running)
-        self.assertEqual(statuses[-1], "no audio devices")
+        self.assertEqual(statuses[-1], "沒有可用音訊裝置")
 
     def test_engine_default_microphone_capture_uses_microphone_not_cable_output(self):
         import realtime_audio_translator.engine as engine_module

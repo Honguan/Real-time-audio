@@ -93,14 +93,14 @@ class RealtimeEngine:
                 started.append(self._start_direction("me", self.config.get("microphone_device", ""), False))
         skips = []
         if skipped_feedback:
-            skips.append("speaker capture skipped: matches TTS output")
+            skips.append("喇叭擷取已略過：和 TTS 輸出相同")
         if skipped_mic_feedback:
-            skips.append("microphone capture skipped: matches virtual mic output")
+            skips.append("麥克風擷取已略過：和虛擬麥克風輸出相同")
         if any(started):
-            self.status("running" + (f"; {'; '.join(skips)}" if skips else ""))
+            self.status("執行中" + (f"；{'；'.join(skips)}" if skips else ""))
         else:
             self.running = False
-            self.status("no audio devices" + (f"; {'; '.join(skips)}" if skips else ""))
+            self.status("沒有可用音訊裝置" + (f"；{'；'.join(skips)}" if skips else ""))
 
     def stop(self) -> None:
         self.running = False

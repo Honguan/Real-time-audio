@@ -10,7 +10,7 @@
 6. 若語言判斷信心偏低，診斷會提示把「來源語言」從 `auto` 改成固定語言。
 7. 可按 `Check updates` 檢查 GitHub Releases 是否有新版本。
 8. 可按 `Export subtitles` 把最新 JSONL 對話紀錄匯出成 SRT 與 TXT，檔案放在 `%USERPROFILE%\.realtime-audio\exports\subtitles`。
-9. 預設是自動發話；勾選 `Start muted` 後可用「按住說話」（Push to talk）按住才送出我方翻譯語音。
+9. 預設是自動發話；勾選「啟動時先靜音」後可用「按住說話」（Push to talk）按住才送出我方翻譯語音。
 10. 切換到 Google 或 OpenAI 時，工具會先提示語音或文字可能傳送到第三方服務並可能產生費用。
 11. 若提示缺 runtime，下載並解壓 runtime zip：
 
@@ -52,16 +52,16 @@ RealtimeAudioTranslator-runtime-cuda12-<tag>.zip
 1. 會議軟體或 Discord 的麥克風選 `CABLE Output (VB-Audio Virtual Cable)`。
 2. 本工具的「TTS 輸出」選 `CABLE Input`。
 3. 本工具的喇叭選你正在聽對方聲音的裝置。
-4. 若要聽對方語音翻譯，開 `Speak opponent`，「對方翻譯播放輸出」可留空使用系統預設喇叭。
+4. 若要聽對方語音翻譯，開「播放對方翻譯」，「對方翻譯播放輸出」可留空使用系統預設喇叭。
 5. 本工具的麥克風選你的實體麥克風。
 
 ## 常見問題
 
-- 沒有字幕：確認 `Show overlay` 已開啟，並按「測試字幕」。
+- 沒有字幕：確認「顯示字幕」已開啟，並按「測試字幕」。
 - 聽不到對方聲音：確認喇叭來源選的是 Discord 或遊戲正在播放的裝置，再按「測試喇叭」。
 - 找不到 runtime：確認 `RealtimeAudioTranslator-runtime-cuda12-<tag>.zip` 已解壓到 `%USERPROFILE%\.realtime-audio\runtime\cuda12`。
 - 找不到模型：在工具內下載模型，或解壓模型 zip 到 `%USERPROFILE%\.realtime-audio\models`。
-- 對方聽不到翻譯語音：確認 `Speak translations` 與 `Virtual mic output` 已開啟，且「TTS 輸出」選 `CABLE Input`。
+- 對方聽不到翻譯語音：確認「播放翻譯語音」與「輸出到虛擬麥克風」已開啟，且「TTS 輸出」選 `CABLE Input`。
 - Discord 沒有收到虛擬麥克風聲音：Discord 麥克風請選 `CABLE Output (VB-Audio Virtual Cable)`。
 - 字幕延遲太高：把「效能模式」改成 `low_latency`，並先用較小模型測試。
 - GPU 無法使用：把 `Device` 改成 CPU，或確認 CUDA12 runtime 已正確解壓。

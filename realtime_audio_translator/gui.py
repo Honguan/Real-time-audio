@@ -400,26 +400,26 @@ class TranslatorApp(tk.Tk):
 
         runtime_buttons = ttk.Frame(frame)
         runtime_buttons.grid(row=next_row + 2, column=0, columnspan=3, sticky="ew", pady=4)
-        ttk.Button(runtime_buttons, text="Open runtime folder", command=self._open_runtime_dir).pack(side="left", padx=3)
-        ttk.Button(runtime_buttons, text="Import extracted runtime", command=self._import_runtime).pack(side="left", padx=3)
-        ttk.Button(runtime_buttons, text="Download runtime files", command=lambda: webbrowser.open(RUNTIME_RELEASE_URL)).pack(side="left", padx=3)
-        ttk.Button(runtime_buttons, text="Fallback runtime source", command=lambda: webbrowser.open(UPSTREAM_RUNTIME_RELEASE_URL)).pack(side="left", padx=3)
+        ttk.Button(runtime_buttons, text="開啟 runtime 資料夾", command=self._open_runtime_dir).pack(side="left", padx=3)
+        ttk.Button(runtime_buttons, text="匯入已解壓 runtime", command=self._import_runtime).pack(side="left", padx=3)
+        ttk.Button(runtime_buttons, text="下載 runtime 檔案", command=lambda: webbrowser.open(RUNTIME_RELEASE_URL)).pack(side="left", padx=3)
+        ttk.Button(runtime_buttons, text="備用 runtime 來源", command=lambda: webbrowser.open(UPSTREAM_RUNTIME_RELEASE_URL)).pack(side="left", padx=3)
 
-        ttk.Checkbutton(frame, text="Show overlay", variable=self.overlay_visible, command=self._apply_overlay).grid(row=next_row + 3, column=0, sticky="w")
-        ttk.Checkbutton(frame, text="Overlay topmost", variable=self.overlay_topmost, command=self._apply_overlay).grid(row=next_row + 3, column=1, sticky="w")
-        ttk.Checkbutton(frame, text="Show language", variable=self.show_language_labels, command=self._save).grid(row=next_row + 3, column=2, sticky="w")
-        ttk.Checkbutton(frame, text="Show original", variable=self.show_original_text, command=self._save).grid(row=next_row + 4, column=0, sticky="w")
-        ttk.Checkbutton(frame, text="Show translation", variable=self.show_translated_text, command=self._save).grid(row=next_row + 4, column=1, sticky="w")
-        ttk.Checkbutton(frame, text="Speak translations", variable=self.tts_enabled, command=self._save).grid(row=next_row + 4, column=2, sticky="w")
-        ttk.Checkbutton(frame, text="Speaker capture", variable=self.speaker_enabled, command=self._save).grid(row=next_row + 5, column=0, sticky="w")
-        ttk.Checkbutton(frame, text="Mic capture", variable=self.microphone_enabled, command=self._save).grid(row=next_row + 5, column=1, sticky="w")
-        ttk.Checkbutton(frame, text="Advanced settings", variable=self.advanced_mode, command=self._apply_mode).grid(row=next_row + 5, column=2, sticky="w")
-        record_logs_widget = ttk.Checkbutton(frame, text="Record logs", variable=self.record_logs, command=self._save)
+        ttk.Checkbutton(frame, text="顯示字幕", variable=self.overlay_visible, command=self._apply_overlay).grid(row=next_row + 3, column=0, sticky="w")
+        ttk.Checkbutton(frame, text="字幕最上層", variable=self.overlay_topmost, command=self._apply_overlay).grid(row=next_row + 3, column=1, sticky="w")
+        ttk.Checkbutton(frame, text="顯示語言", variable=self.show_language_labels, command=self._save).grid(row=next_row + 3, column=2, sticky="w")
+        ttk.Checkbutton(frame, text="顯示原文", variable=self.show_original_text, command=self._save).grid(row=next_row + 4, column=0, sticky="w")
+        ttk.Checkbutton(frame, text="顯示譯文", variable=self.show_translated_text, command=self._save).grid(row=next_row + 4, column=1, sticky="w")
+        ttk.Checkbutton(frame, text="播放翻譯語音", variable=self.tts_enabled, command=self._save).grid(row=next_row + 4, column=2, sticky="w")
+        ttk.Checkbutton(frame, text="擷取喇叭", variable=self.speaker_enabled, command=self._save).grid(row=next_row + 5, column=0, sticky="w")
+        ttk.Checkbutton(frame, text="擷取麥克風", variable=self.microphone_enabled, command=self._save).grid(row=next_row + 5, column=1, sticky="w")
+        ttk.Checkbutton(frame, text="進階設定", variable=self.advanced_mode, command=self._apply_mode).grid(row=next_row + 5, column=2, sticky="w")
+        record_logs_widget = ttk.Checkbutton(frame, text="儲存對話紀錄", variable=self.record_logs, command=self._save)
         record_logs_widget.grid(row=next_row + 6, column=0, sticky="w")
         self.advanced_mode_widgets = [record_logs_widget]
-        ttk.Checkbutton(frame, text="Virtual mic output", variable=self.virtual_mic_enabled, command=self._save).grid(row=next_row + 6, column=1, sticky="w")
-        ttk.Checkbutton(frame, text="Speak opponent", variable=self.speaker_tts_enabled, command=self._save).grid(row=next_row + 6, column=2, sticky="w")
-        ttk.Checkbutton(frame, text="Start muted", variable=self.start_muted, command=self._save).grid(row=next_row + 7, column=0, sticky="w")
+        ttk.Checkbutton(frame, text="輸出到虛擬麥克風", variable=self.virtual_mic_enabled, command=self._save).grid(row=next_row + 6, column=1, sticky="w")
+        ttk.Checkbutton(frame, text="播放對方翻譯", variable=self.speaker_tts_enabled, command=self._save).grid(row=next_row + 6, column=2, sticky="w")
+        ttk.Checkbutton(frame, text="啟動時先靜音", variable=self.start_muted, command=self._save).grid(row=next_row + 7, column=0, sticky="w")
 
         buttons = ttk.Frame(frame)
         buttons.grid(row=next_row + 8, column=0, columnspan=3, sticky="ew", pady=12)
@@ -427,11 +427,11 @@ class TranslatorApp(tk.Tk):
         def copy_overlay() -> None:
             text = overlay_clipboard_text(self.overlay.speaker.get(), self.overlay.mine.get())
             if not text:
-                self.status.set("no subtitles to copy")
+                self.status.set("沒有字幕可複製")
                 return
             self.clipboard_clear()
             self.clipboard_append(text)
-            self.status.set("subtitles copied")
+            self.status.set("字幕已複製")
 
         for text, command in (
             ("設定精靈", self._show_setup_guide),
