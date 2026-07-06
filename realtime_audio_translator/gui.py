@@ -808,13 +808,13 @@ class TranslatorApp(tk.Tk):
 
     def _show_setup_guide(self) -> None:
         messagebox.showinfo(
-            "Setup guide",
-            "1. Import runtime or open runtime folder.\n"
-            "2. Download model or put model zip under the models folder.\n"
-            "3. Select speaker, microphone, and TTS output.\n"
-            "4. For Discord, select CABLE Output as microphone and CABLE Input as TTS output.\n"
-            "5. Choose Scenario, then Apply scenario and Optimize settings.\n"
-            "6. Run Subtitle test, Speaker test, Mic test, and Virtual mic test before Start.",
+            "設定指南",
+            "1. 匯入 runtime，或開啟 runtime 資料夾放入解壓後檔案。\n"
+            "2. 按 Download model，或把模型 zip 解壓到 models 資料夾。\n"
+            "3. 選擇喇叭、麥克風與 TTS output。\n"
+            "4. Discord 麥克風選 CABLE Output，本工具 TTS output 選 CABLE Input。\n"
+            "5. 選 Scenario 後按 Apply scenario，再按 Optimize settings。\n"
+            "6. 開始前先跑 Subtitle test、Speaker test、Mic test 與 Virtual mic test。",
         )
 
     def _recommend(self) -> None:

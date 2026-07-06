@@ -323,8 +323,9 @@ class CoreTests(unittest.TestCase):
 
         self.assertIn('("Setup guide", self._show_setup_guide)', gui_source)
         self.assertIn('def _show_setup_guide(self) -> None:', gui_source)
-        self.assertIn("Import runtime", gui_source)
+        self.assertIn("匯入 runtime", gui_source)
         self.assertIn("Download model", gui_source)
+        self.assertIn("選擇喇叭、麥克風", gui_source)
         self.assertIn("CABLE Output", gui_source)
         self.assertIn("Apply scenario", gui_source)
         self.assertIn("Optimize settings", gui_source)
