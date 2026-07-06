@@ -1175,6 +1175,7 @@ class CoreTests(unittest.TestCase):
             "開啟程式資料夾",
             "測試虛擬麥克風",
             "測試喇叭",
+            "測試 TTS",
             "測試字幕",
             "開始",
             "修復本機翻譯",
@@ -1194,6 +1195,7 @@ class CoreTests(unittest.TestCase):
         self.assertIn("一鍵診斷", simple)
         self.assertIn("測試虛擬麥克風", simple)
         self.assertIn("測試喇叭", simple)
+        self.assertIn("測試 TTS", simple)
         self.assertIn("測試字幕", simple)
         self.assertIn("開始", simple)
         self.assertIn("按住說話", simple)
