@@ -37,7 +37,7 @@ class AudioTranscriber:
             self.model = WhisperModel(self._model_path(), device=device, compute_type=compute_type, download_root=str(model_dir))
         except Exception:
             if not self.exe_path.exists():
-                raise RuntimeError(f"Runtime missing: {self.exe_path}")
+                raise RuntimeError(f"找不到 runtime：{self.exe_path}")
 
     def _model_path(self) -> str:
         for name in (self.model_name, f"faster-whisper-{self.model_name}"):

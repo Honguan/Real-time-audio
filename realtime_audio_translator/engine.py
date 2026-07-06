@@ -75,7 +75,10 @@ class RealtimeEngine:
         except Exception as exc:
             self.running = False
             self.config["last_asr_failed"] = True
-            self.status(str(exc))
+            message = str(exc)
+            if message.startswith("Runtime missing: "):
+                message = "找不到 runtime：" + message.removeprefix("Runtime missing: ")
+            self.status(message)
             return
         self.config["last_asr_failed"] = False
         started = []
@@ -108,22 +111,22 @@ class RealtimeEngine:
             worker.stop()
         self.workers.clear()
         self.threads.clear()
-        self.status("stopped")
+        self.status("已停止")
 
     def set_paused(self, paused: bool) -> None:
         self.paused = paused
-        self.status("paused" if paused else "running")
+        self.status("已暫停" if paused else "執行中")
 
     def set_muted(self, muted: bool) -> None:
         self.muted = muted
-        self.status("muted" if muted else "running")
+        self.status("已靜音" if muted else "執行中")
 
     def _start_direction(self, direction: str, device_hint: str, loopback: bool) -> bool:
         device = find_device(device_hint, want_output=loopback) if device_hint else None
         if device is None:
             device = find_device("Microphone" if not loopback else "Speakers", want_output=loopback)
         if device is None:
-            self.status(f"{direction}: no device")
+            self.status(f"{'喇叭' if direction == 'speaker' else '麥克風'}：找不到音訊裝置")
             return False
         worker = SegmentWorker(APP_DIR / "cache" / "audio", device, float(self.config["segment_seconds"]), loopback)
         self.workers.append(worker)

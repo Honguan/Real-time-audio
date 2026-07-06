@@ -3265,13 +3265,14 @@ class CoreTests(unittest.TestCase):
             engine_module.AudioTranscriber = original_transcriber
 
         self.assertFalse(engine.running)
-        self.assertEqual(statuses[-1], "Runtime missing: faster-whisper-xxl.exe")
+        self.assertEqual(statuses[-1], "找不到 runtime：faster-whisper-xxl.exe")
         self.assertTrue(engine.config["last_asr_failed"])
 
     def test_engine_stop_stops_workers(self):
         config = DEFAULT_CONFIG.copy()
         config["record_logs"] = False
-        engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, lambda status: None)
+        statuses = []
+        engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, statuses.append)
 
         class Worker:
             def __init__(self):
@@ -3291,6 +3292,7 @@ class CoreTests(unittest.TestCase):
         self.assertTrue(worker.stopped)
         self.assertEqual(engine.workers, [])
         self.assertEqual(engine.threads, [])
+        self.assertEqual(statuses[-1], "已停止")
 
 
 if __name__ == "__main__":
