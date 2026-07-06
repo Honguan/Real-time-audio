@@ -577,6 +577,42 @@ class CoreTests(unittest.TestCase):
         self.assertIn("VB-CABLE", issue.title)
         self.assertIn("CABLE Input", issue.fix)
 
+    def test_diagnostics_warn_when_virtual_mic_cable_output_input_missing(self):
+        import realtime_audio_translator.diagnostics as diagnostics_module
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            runtime = root / "runtime"
+            model = root / "models" / "medium"
+            runtime.mkdir()
+            model.mkdir(parents=True)
+            (model / "model.bin").write_text("model", encoding="utf-8")
+            (runtime / "faster-whisper-xxl.exe").write_text("exe", encoding="utf-8")
+            (runtime / "ffmpeg.exe").write_text("ff", encoding="utf-8")
+            (runtime / "_xxl_data").mkdir()
+            config = DEFAULT_CONFIG.copy()
+            config["runtime_dir"] = str(runtime)
+            config["model"] = "medium"
+            config["virtual_mic_enabled"] = True
+            config["tts_output_device"] = "CABLE Input"
+            original_find_device = diagnostics_module.find_device
+
+            def fake_find_device(name, want_output):
+                if name == "CABLE Input" and want_output:
+                    return 1
+                return None
+
+            diagnostics_module.find_device = fake_find_device
+            try:
+                issues = collect_diagnostics(config, root)
+            finally:
+                diagnostics_module.find_device = original_find_device
+
+        issue = next(item for item in issues if item.code == "virtual_mic_input_missing")
+        self.assertEqual(issue.action, "audio_settings")
+        self.assertIn("CABLE Output", issue.fix)
+        self.assertIn("Discord", issue.detail)
+
     def test_diagnostics_do_not_crash_when_audio_device_query_fails(self):
         import realtime_audio_translator.diagnostics as diagnostics_module
 
