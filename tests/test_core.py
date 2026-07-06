@@ -174,6 +174,7 @@ class CoreTests(unittest.TestCase):
             config["model"] = "medium"
             config["provider"] = "openai"
             config["tts_provider"] = "local"
+            config["cloud_api_enabled"] = True
             config["runtime_dir"] = str(root / "runtime" / "cuda12")
 
             save_config(root, config)
@@ -193,6 +194,21 @@ class CoreTests(unittest.TestCase):
             saved = json.loads((root / "config" / "settings.json").read_text(encoding="utf-8"))
             self.assertEqual(saved["source_language"], DEFAULT_CONFIG["source_language"])
             self.assertEqual(saved["target_language"], DEFAULT_CONFIG["target_language"])
+
+    def test_save_config_blocks_cloud_without_public_confirmation_flag(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config = DEFAULT_CONFIG.copy()
+            config["provider"] = "openai"
+            config["tts_provider"] = "google"
+            config["cloud_api_enabled"] = False
+
+            save_config(root, config)
+            saved = json.loads((root / "config" / "settings.json").read_text(encoding="utf-8"))
+            self.assertEqual(saved["provider"], "local")
+            self.assertEqual(saved["tts_provider"], "local")
+            self.assertEqual(saved["translation_engine"], "local")
+            self.assertEqual(saved["tts_engine"], "system")
 
     def test_ensure_glossary_file_creates_parent_and_preserves_existing(self):
         with tempfile.TemporaryDirectory() as tmp:

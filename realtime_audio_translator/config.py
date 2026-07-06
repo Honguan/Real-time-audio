@@ -170,6 +170,11 @@ def save_config(root: Path, config: dict) -> None:
     config = config.copy()
     config["ui_mode"] = "advanced" if config.get("advanced_mode") else "simple"
     config["asr_model"] = config.get("model", config.get("asr_model", "small"))
+    if not config.get("cloud_api_enabled", False):
+        if config.get("provider") in ("google", "openai"):
+            config["provider"] = "local"
+        if config.get("tts_provider") in ("google", "openai"):
+            config["tts_provider"] = "local"
     config["translation_engine"] = config.get("provider", config.get("translation_engine", "local"))
     config["tts_engine"] = "system" if config.get("tts_provider", "local") == "local" else config.get("tts_provider")
     config["runtime_path"] = config.get("runtime_dir", config.get("runtime_path", str(APP_DIR / "runtime" / "cuda12")))
