@@ -607,6 +607,7 @@ class CoreTests(unittest.TestCase):
             config["model"] = "medium"
             config["provider"] = "local"
             config["local_translate_url"] = ""
+            (model / "model.bin").write_text("model", encoding="utf-8")
 
             issues = collect_diagnostics(config, root)
 
@@ -623,6 +624,7 @@ class CoreTests(unittest.TestCase):
             model = configured_models / "medium"
             runtime.mkdir()
             model.mkdir(parents=True)
+            (model / "model.bin").write_text("model", encoding="utf-8")
             (runtime / "faster-whisper-xxl.exe").write_text("exe", encoding="utf-8")
             (runtime / "ffmpeg.exe").write_text("ff", encoding="utf-8")
             (runtime / "_xxl_data").mkdir()
@@ -1948,15 +1950,21 @@ class CoreTests(unittest.TestCase):
             app_models = Path(tmp) / "models"
             (app_models / "faster-whisper-medium").mkdir(parents=True)
             (app_models / "whisper-small").mkdir(parents=True)
+            (app_models / "faster-whisper-medium" / "model.bin").write_text("model", encoding="utf-8")
+            (app_models / "whisper-small" / "model.bin").write_text("model", encoding="utf-8")
+            (app_models / "whisper-empty").mkdir()
 
             self.assertTrue(model_available("medium", Path(tmp) / "missing", app_models))
             self.assertTrue(model_available("small", Path(tmp) / "missing", app_models))
+            self.assertFalse(model_available("", Path(tmp) / "missing", app_models))
+            self.assertFalse(model_available("empty", Path(tmp) / "missing", app_models))
             self.assertFalse(model_available("large-v3-turbo", Path(tmp) / "missing", app_models))
 
     def test_model_available_expands_environment_model_path(self):
         with tempfile.TemporaryDirectory() as tmp:
             model = Path(tmp) / "whisper-small"
             model.mkdir()
+            (model / "model.bin").write_text("model", encoding="utf-8")
             with patch.dict(os.environ, {"RTA_TEST_MODEL": str(model)}):
                 self.assertTrue(model_available(r"%RTA_TEST_MODEL%", Path(tmp) / "missing", Path(tmp) / "models"))
 

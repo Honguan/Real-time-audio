@@ -10,19 +10,28 @@ from .config import APP_DIR
 KNOWN_MODELS = ("small", "medium", "large-v3-turbo", "large-v2")
 
 
+def _usable_model_path(path: Path) -> bool:
+    try:
+        return path.is_file() or (path.is_dir() and any(path.iterdir()))
+    except OSError:
+        return False
+
+
 def models_dir(config: dict | None = None) -> Path:
     configured = (config or {}).get("models_path")
     return Path(os.path.expandvars(configured)).expanduser() if configured else APP_DIR / "models"
 
 
 def model_path(model: str, local_models: Path, app_models: Path) -> Path | None:
+    if not model:
+        return None
     candidate = Path(os.path.expandvars(model)).expanduser()
-    if candidate.exists():
+    if _usable_model_path(candidate):
         return candidate
     for root in (local_models, app_models):
         for name in (model, f"faster-whisper-{model}", f"whisper-{model}"):
             path = root / name
-            if path.exists():
+            if _usable_model_path(path):
                 return path
     return None
 
