@@ -103,6 +103,7 @@ FIRST_RUN_ISSUE_CODES = {
     "microphone_device_missing",
     "virtual_mic_route",
     "virtual_mic_device_missing",
+    "virtual_mic_input_missing",
     "virtual_mic_no_output",
 }
 
@@ -764,6 +765,7 @@ class TranslatorApp(tk.Tk):
         if action == "diagnostics":
             self._show_diagnostics("首次設定", issues)
         elif action == "guide":
+            self._optimize_settings()
             self._show_setup_guide()
             if "setup_guide_shown" in self.vars:
                 self.vars["setup_guide_shown"].set("True")

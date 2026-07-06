@@ -380,9 +380,11 @@ class CoreTests(unittest.TestCase):
 
     def test_first_run_wizard_opens_for_audio_setup_issues(self):
         issues = [DiagnosticIssue("microphone_device_missing", "warning", "找不到麥克風", "", "", "audio_settings")]
+        virtual_mic = [DiagnosticIssue("virtual_mic_input_missing", "warning", "找不到 VB-CABLE 麥克風", "", "", "audio_settings")]
         info_only = [DiagnosticIssue("local_translate_url_missing", "info", "本機翻譯 URL 未設定", "", "", "local_translation")]
 
         self.assertTrue(first_run_wizard_needed(issues))
+        self.assertTrue(first_run_wizard_needed(virtual_mic))
         self.assertFalse(first_run_wizard_needed(info_only))
 
     def test_first_run_setup_action_shows_guide_once_when_no_blocking_issues(self):
@@ -1218,6 +1220,7 @@ class CoreTests(unittest.TestCase):
         self.assertIn('("一鍵診斷", self._run_diagnostics)', gui_source)
         self.assertIn("def _show_first_run_wizard", gui_source)
         self.assertIn("first_run_setup_action", gui_source)
+        self.assertIn("self._optimize_settings()", gui_source)
         self.assertIn('self.vars["setup_guide_shown"].set("True")', gui_source)
         self.assertIn("def _show_diagnostics", gui_source)
         self.assertIn("def _run_diagnostic_action", gui_source)
