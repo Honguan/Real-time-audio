@@ -2525,7 +2525,10 @@ class CoreTests(unittest.TestCase):
         self.assertIn('if not status["ready"]:', gui_source)
         self.assertIn('refresh_commands(whisper_exe(target), APP_DIR / "commands.json")', gui_source)
         self.assertIn('self._refresh_lists()\n        self.status.set("runtime 已匯入；commands.json 已更新")', gui_source)
-        self.assertIn('refresh_commands(exe, APP_DIR / "commands.json")\n        self._refresh_lists()', gui_source)
+        self.assertIn('refresh_commands(exe, APP_DIR / "commands.json")', gui_source)
+        self.assertIn('self._refresh_lists()\n        self.status.set("commands.json 已更新")', gui_source)
+        self.assertIn('messagebox.showerror("commands.json 更新失敗", str(exc))', gui_source)
+        self.assertIn('message = f"模型下載失敗：{exc}"', gui_source)
 
     def test_provider_choices_are_fixed(self):
         self.assertEqual(PROVIDER_CHOICES, ("local", "google", "openai"))

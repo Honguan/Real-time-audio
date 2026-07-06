@@ -922,8 +922,12 @@ class TranslatorApp(tk.Tk):
         self.status.set(f"正在下載模型 {model}")
 
         def run() -> None:
-            code = download_model(exe, model, app_models)
-            self.after(0, self.status.set, "模型下載完成" if code == 0 else f"模型下載失敗：{code}")
+            try:
+                code = download_model(exe, model, app_models)
+                message = "模型下載完成" if code == 0 else f"模型下載失敗：{code}"
+            except Exception as exc:
+                message = f"模型下載失敗：{exc}"
+            self.after(0, self.status.set, message)
             self.after(0, self._refresh_lists)
 
         threading.Thread(target=run, daemon=True).start()
@@ -935,7 +939,11 @@ class TranslatorApp(tk.Tk):
             messagebox.showerror("找不到 runtime", runtime_install_message(runtime))
             return
         exe = whisper_exe(runtime)
-        refresh_commands(exe, APP_DIR / "commands.json")
+        try:
+            refresh_commands(exe, APP_DIR / "commands.json")
+        except Exception as exc:
+            messagebox.showerror("commands.json 更新失敗", str(exc))
+            return
         self._refresh_lists()
         self.status.set("commands.json 已更新")
 
