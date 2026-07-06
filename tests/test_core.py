@@ -24,7 +24,7 @@ from realtime_audio_translator.engine import RealtimeEngine, audio_devices_overl
 from realtime_audio_translator.gui import LANGUAGE_CHOICES, PERFORMANCE_CHOICES, PROVIDER_CHOICES, TTS_PROVIDER_CHOICES, TranslatorApp, diagnostic_action_label, first_diagnostic_action, first_run_setup_action, first_run_wizard_needed, format_overlay_line, language_lock_value, latency_seconds_value, main_status_summary, mode_notice, overlay_clipboard_text, overlay_font_size_value, overlay_hold_seconds_value, overlay_opacity_value, overlay_visibility_action, performance_segment_seconds, record_logs_requires_confirmation, subtitle_updates_allowed, swap_language_values, troubleshooting_action, visible_button_texts, visible_setting_keys
 from realtime_audio_translator.logbook import ConversationLog
 from realtime_audio_translator.models import cuda_hardware_from_check_output, list_models, model_available, model_download_command, model_install_message, models_dir, recommend_model
-from realtime_audio_translator.providers import TextToSpeech, Translator, build_google_translate_request, build_openai_translation_request
+from realtime_audio_translator.providers import TextToSpeech, Translator, build_google_translate_request, build_openai_translation_request, google_access_token
 from realtime_audio_translator.release_updater import RELEASES_URL, current_version, is_newer_version, latest_release_tag_from_json, release_update_message
 from realtime_audio_translator.scenarios import SCENARIO_CHOICES, apply_scenario, scenario_label
 from realtime_audio_translator.subtitle_export import export_jsonl_to_srt, export_jsonl_to_txt, srt_timestamp
@@ -443,7 +443,7 @@ class CoreTests(unittest.TestCase):
             config = DEFAULT_CONFIG.copy()
             config["runtime_dir"] = str(root / "runtime")
             config["model"] = "missing-model"
-            config["provider"] = "openai"
+            config["provider"] = "google"
             config["speaker_device"] = "CABLE Input [Windows WASAPI]"
             config["tts_output_device"] = "CABLE Input"
 
@@ -455,7 +455,9 @@ class CoreTests(unittest.TestCase):
         self.assertIn("feedback_risk", codes)
         self.assertIn("cloud_credentials_missing", codes)
         runtime_issue = next(issue for issue in issues if issue.code == "runtime_missing")
+        cloud_issue = next(issue for issue in issues if issue.code == "cloud_credentials_missing")
         self.assertIn("RealtimeAudioTranslator-runtime-cuda12-<version>.zip", runtime_issue.fix)
+        self.assertIn("專案 ID", cloud_issue.detail)
         self.assertNotIn("runtime core", runtime_issue.fix)
         self.assertTrue(all(isinstance(issue.title, str) for issue in issues))
         self.assertTrue(all(issue.action for issue in issues))
@@ -2254,6 +2256,12 @@ class CoreTests(unittest.TestCase):
         request = build_google_translate_request("hello", "zh", "auto", "project")
         self.assertNotIn("sourceLanguageCode", request["json"])
         self.assertEqual(request["json"]["targetLanguageCode"], "zh")
+
+    def test_google_access_token_missing_json_uses_chinese_error(self):
+        with self.assertRaisesRegex(RuntimeError, "未設定 Google 服務帳戶 JSON"):
+            google_access_token("")
+        with self.assertRaisesRegex(RuntimeError, "找不到 Google 服務帳戶 JSON"):
+            google_access_token(str(Path("missing-google-service-account.json")))
 
     def test_whisper_auto_language_omits_language_flag(self):
         import realtime_audio_translator.asr as asr_module

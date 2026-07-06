@@ -48,6 +48,11 @@ def build_google_translate_request(text: str, target_language: str, source_langu
 
 
 def google_access_token(service_account_json: str) -> str:
+    if not service_account_json:
+        raise RuntimeError("未設定 Google 服務帳戶 JSON，請先選擇 JSON 檔或改用本機服務")
+    if not Path(service_account_json).exists():
+        raise RuntimeError(f"找不到 Google 服務帳戶 JSON：{service_account_json}")
+
     from google.auth.transport.requests import Request
     from google.oauth2 import service_account
 

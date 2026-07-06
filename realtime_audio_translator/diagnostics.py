@@ -98,7 +98,7 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
     if "openai" in cloud and not os.environ.get("OPENAI_API_KEY"):
         issues.append(DiagnosticIssue("cloud_credentials_missing", "error", "OpenAI API key 未設定", "OpenAI 翻譯服務需要 OPENAI_API_KEY", "設定環境變數 OPENAI_API_KEY，或改回本機翻譯服務", "api_settings"))
     if "google" in cloud and (not config.get("google_project_id") or not config.get("google_service_account_json")):
-        issues.append(DiagnosticIssue("cloud_credentials_missing", "error", "Google 憑證未設定", "Google 翻譯服務需要 project id 與 service account JSON", "填入 Google project 與 JSON 路徑，或改回本機翻譯服務", "api_settings"))
+        issues.append(DiagnosticIssue("cloud_credentials_missing", "error", "Google 憑證未設定", "Google 翻譯服務需要專案 ID 與服務帳戶 JSON", "填入 Google 專案 ID 與 JSON 路徑，或改回本機翻譯服務", "api_settings"))
     if config.get("provider") == "local" and not str(config.get("local_translate_url", "")).strip():
         issues.append(DiagnosticIssue(
             "local_translate_url_missing",
