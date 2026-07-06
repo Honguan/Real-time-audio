@@ -106,13 +106,15 @@ class CoreTests(unittest.TestCase):
 
             self.assertEqual(load_config(root)["target_language"], "ko")
 
-    def test_load_config_rejects_auto_target_language(self):
+    def test_load_config_rejects_invalid_languages(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             ensure_app_dirs(root)
-            (root / "config" / "settings.json").write_text(json.dumps({"target_language": "auto"}), encoding="utf-8")
+            (root / "config" / "settings.json").write_text(json.dumps({"source_language": "bad", "target_language": "auto"}), encoding="utf-8")
 
-            self.assertEqual(load_config(root)["target_language"], DEFAULT_CONFIG["target_language"])
+            config = load_config(root)
+            self.assertEqual(config["source_language"], DEFAULT_CONFIG["source_language"])
+            self.assertEqual(config["target_language"], DEFAULT_CONFIG["target_language"])
 
     def test_load_config_accepts_public_ui_mode_alias(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -176,8 +178,10 @@ class CoreTests(unittest.TestCase):
             self.assertFalse(saved["subtitle_always_on_top"])
 
             config["target_language"] = "auto"
+            config["source_language"] = "bad"
             save_config(root, config)
             saved = json.loads((root / "config" / "settings.json").read_text(encoding="utf-8"))
+            self.assertEqual(saved["source_language"], DEFAULT_CONFIG["source_language"])
             self.assertEqual(saved["target_language"], DEFAULT_CONFIG["target_language"])
 
     def test_ensure_glossary_file_creates_parent_and_preserves_existing(self):
