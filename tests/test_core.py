@@ -996,6 +996,7 @@ class CoreTests(unittest.TestCase):
         tuned = apply_tuning(config, recommendations)
 
         self.assertIn("speed_up_local_tts", [item.code for item in recommendations])
+        self.assertIn("加快本機 TTS", [item.title for item in recommendations])
         self.assertEqual(tuned["tts_rate"], 2)
 
     def test_auto_tuner_shows_original_when_translation_confidence_is_low(self):
@@ -1007,6 +1008,7 @@ class CoreTests(unittest.TestCase):
         tuned = apply_tuning(config, recommendations)
 
         self.assertIn("show_original_on_low_confidence", [item.code for item in recommendations])
+        self.assertIn("翻譯信心低時顯示原文", [item.title for item in recommendations])
         self.assertTrue(tuned["show_original_text"])
 
     def test_auto_tuner_locks_high_confidence_detected_language(self):
@@ -1019,6 +1021,7 @@ class CoreTests(unittest.TestCase):
         tuned = apply_tuning(config, recommendations)
 
         self.assertIn("lock_detected_language", [item.code for item in recommendations])
+        self.assertIn("鎖定穩定偵測語言", [item.title for item in recommendations])
         self.assertEqual(tuned["source_language"], "en")
 
     def test_confidence_status_reports_local_mode_latency_and_provider(self):
