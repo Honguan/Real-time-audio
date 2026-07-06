@@ -53,7 +53,7 @@ def build_confidence_snapshot(
 def format_confidence_status(snapshot: ConfidenceSnapshot, advanced: bool = False) -> str:
     mode = "雲端 API 模式" if snapshot.cloud_enabled else "本機免費模式"
     total = sum(value for value in (snapshot.asr_latency_seconds, snapshot.translation_latency_seconds, snapshot.tts_latency_seconds) if value is not None)
-    parts = [mode, f"latency {total:.2f}s", f"provider {snapshot.provider}", f"費用 {'可能' if snapshot.cost_risk else '否'}"]
+    parts = [mode, f"延遲 {total:.2f} 秒", f"翻譯服務 {_provider_label(snapshot.provider)}", f"費用 {'可能' if snapshot.cost_risk else '否'}"]
     if not advanced:
         return "; ".join(parts)
 
@@ -70,7 +70,7 @@ def format_confidence_status(snapshot: ConfidenceSnapshot, advanced: bool = Fals
         details.append(f"翻譯延遲 {_milliseconds(snapshot.translation_latency_seconds)}")
     if snapshot.tts_latency_seconds is not None:
         details.append(f"TTS 延遲 {_milliseconds(snapshot.tts_latency_seconds)}")
-    details.append(f"tts {snapshot.tts_provider}")
+    details.append(f"TTS 服務 {_provider_label(snapshot.tts_provider)}")
     return "; ".join(details)
 
 
@@ -80,3 +80,7 @@ def _milliseconds(seconds: float) -> str:
 
 def _percent(value: float) -> str:
     return f"{round(value * 100)}%"
+
+
+def _provider_label(provider: str) -> str:
+    return {"local": "本機", "google": "Google", "openai": "OpenAI"}.get(provider, provider)

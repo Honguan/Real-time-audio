@@ -695,7 +695,7 @@ class CoreTests(unittest.TestCase):
 
         issue = next(item for item in issues if item.code == "tts_latency_high")
         self.assertEqual(issue.action, "audio_settings")
-        self.assertIn("local TTS", issue.fix)
+        self.assertIn("本機 TTS", issue.fix)
 
     def test_diagnostics_report_virtual_mic_failure(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1029,8 +1029,8 @@ class CoreTests(unittest.TestCase):
         self.assertFalse(snapshot.cloud_enabled)
         self.assertFalse(snapshot.cost_risk)
         self.assertIn("本機免費模式", status)
-        self.assertIn("latency 0.93s", status)
-        self.assertIn("provider local", status)
+        self.assertIn("延遲 0.93 秒", status)
+        self.assertIn("翻譯服務 本機", status)
 
     def test_confidence_status_reports_cloud_cost_and_advanced_details(self):
         config = DEFAULT_CONFIG.copy()
@@ -1057,6 +1057,7 @@ class CoreTests(unittest.TestCase):
         self.assertIn("ASR 延遲 820ms", status)
         self.assertIn("翻譯延遲 110ms", status)
         self.assertIn("TTS 延遲 240ms", status)
+        self.assertIn("TTS 服務 Google", status)
 
     def test_gui_exposes_scenarios_and_diagnostics(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
@@ -2663,8 +2664,8 @@ class CoreTests(unittest.TestCase):
 
         self.assertIn("speaker", statuses[-1])
         self.assertIn("本機免費模式", statuses[-1])
-        self.assertIn("provider local", statuses[-1])
-        self.assertIn("latency", statuses[-1])
+        self.assertIn("翻譯服務 本機", statuses[-1])
+        self.assertIn("延遲", statuses[-1])
 
     def test_engine_records_translation_confidence_for_diagnostics(self):
         config = DEFAULT_CONFIG.copy()

@@ -74,7 +74,7 @@ Whisper 模型可放在 `models\whisper-small`；翻譯模型放在 `models\tran
 - 「自動優化」：使用 AI 決策中樞依場景、硬體、延遲與診斷結果切換模型、裝置與低延遲設定。
 - 「一鍵診斷」：顯示目前缺少的 runtime、模型、音訊或 API 設定。
 - 「檢查更新」：檢查 GitHub Releases 是否有新版本。
-- 狀態列會顯示信心提示、延遲、provider、本機/雲端模式與是否可能產生費用。
+- 狀態列會顯示信心提示、延遲、翻譯服務、本機/雲端模式與是否可能產生費用。
 - 若語言判斷信心偏低，診斷會提示把「來源語言」從 `auto` 改成固定語言。
 
 「按住說話」（Push to talk）是按住才暫時取消靜音；勾選「啟動時先靜音」時按住才輸出我方翻譯語音，未勾選時翻譯語音會自動輸出。
@@ -89,9 +89,9 @@ Whisper 模型可放在 `models\whisper-small`；翻譯模型放在 `models\tran
 http://127.0.0.1:5000/translate
 ```
 
-沒有「本機翻譯 URL」時會嘗試使用已安裝的 Argos Translate 離線模型；也可改用 OpenAI 或 Google provider。OpenAI 使用 `OPENAI_API_KEY` 環境變數，Google 使用 service account JSON 路徑。
+沒有「本機翻譯 URL」時會嘗試使用已安裝的 Argos Translate 離線模型；也可改用 OpenAI 或 Google 翻譯服務。OpenAI 使用 `OPENAI_API_KEY` 環境變數，Google 使用 service account JSON 路徑。
 
-「TTS 服務」可選本機、OpenAI 或 Google。進階設定可調「OpenAI 模型」、「OpenAI TTS 聲音」、OpenAI TTS model 與 Google TTS voice。
+「TTS 服務」可選本機、OpenAI 或 Google。進階設定可調「OpenAI 模型」、「OpenAI TTS 聲音」、「OpenAI TTS 模型」與「Google TTS 聲音」。
 
 翻譯快取會保存在 `%USERPROFILE%\.realtime-audio\cache\translation_cache.db`，術語表保存在 `config\glossary.json`，可按「新增術語」加入固定翻譯，按「修正上次翻譯」修正最近一句並加入術語，或按「開啟術語表」直接編輯。
 

@@ -69,7 +69,7 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
             "warning",
             "可能發生音訊回授",
             "喇叭來源與翻譯語音輸出看起來是同一個裝置",
-            "把「TTS 輸出」設為 CABLE Input，「對方翻譯播放輸出」改成不同喇叭或先關閉 Speak opponent",
+            "把「TTS 輸出」設為 CABLE Input，「對方翻譯播放輸出」改成不同喇叭或先關閉「播放對方翻譯」",
             "audio_settings",
         ))
     if config.get("tts_enabled", True) and config.get("virtual_mic_enabled", False) and "cable input" not in str(config.get("tts_output_device", "")).lower():
@@ -96,15 +96,15 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
         issues.append(DiagnosticIssue("microphone_device_missing", "warning", "找不到麥克風", "未選到可用輸入裝置", "選擇你的實體麥克風", "audio_settings"))
     cloud = [name for name in (config.get("provider"), config.get("tts_provider")) if name in ("openai", "google")]
     if "openai" in cloud and not os.environ.get("OPENAI_API_KEY"):
-        issues.append(DiagnosticIssue("cloud_credentials_missing", "error", "OpenAI API key 未設定", "OpenAI provider 需要 OPENAI_API_KEY", "設定環境變數 OPENAI_API_KEY，或改回 local provider", "api_settings"))
+        issues.append(DiagnosticIssue("cloud_credentials_missing", "error", "OpenAI API key 未設定", "OpenAI 翻譯服務需要 OPENAI_API_KEY", "設定環境變數 OPENAI_API_KEY，或改回本機翻譯服務", "api_settings"))
     if "google" in cloud and (not config.get("google_project_id") or not config.get("google_service_account_json")):
-        issues.append(DiagnosticIssue("cloud_credentials_missing", "error", "Google 憑證未設定", "Google provider 需要 project id 與 service account JSON", "填入 Google project 與 JSON 路徑，或改回 local provider", "api_settings"))
+        issues.append(DiagnosticIssue("cloud_credentials_missing", "error", "Google 憑證未設定", "Google 翻譯服務需要 project id 與 service account JSON", "填入 Google project 與 JSON 路徑，或改回本機翻譯服務", "api_settings"))
     if config.get("provider") == "local" and not str(config.get("local_translate_url", "")).strip():
         issues.append(DiagnosticIssue(
             "local_translate_url_missing",
             "info",
             "本機翻譯 URL 未設定",
-            "若未安裝 Argos Translate，local provider 只會套用 glossary 並保留原文",
+            "若未安裝 Argos Translate，本機翻譯服務只會套用術語表並保留原文",
             "安裝 Argos Translate 離線模型，或啟動 LibreTranslate 後填入 http://127.0.0.1:5000/translate",
             "local_translation",
         ))
@@ -114,7 +114,7 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
             "warning",
             "翻譯結果空白",
             "最近一次翻譯沒有回傳文字",
-            "檢查翻譯 provider、「本機翻譯 URL」或改用其他翻譯服務",
+            "檢查翻譯服務、「本機翻譯 URL」或改用其他翻譯服務",
             "local_translation",
         ))
     try:
@@ -162,7 +162,7 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
             "warning",
             "TTS 延遲過高",
             f"最近一次翻譯語音播放約 {tts_latency:.1f} 秒",
-            "改用 local TTS、降低語音輸出頻率，或檢查「TTS 輸出」裝置",
+            "改用本機 TTS、降低語音輸出頻率，或檢查「TTS 輸出」裝置",
             "audio_settings",
         ))
     if config.get("virtual_mic_enabled", False) and config.get("last_virtual_mic_failed"):
