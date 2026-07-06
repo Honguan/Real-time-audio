@@ -93,7 +93,7 @@ http://127.0.0.1:5000/translate
 
 「TTS 服務」可選本機、OpenAI 或 Google。進階設定可調「OpenAI 模型」、「OpenAI TTS 聲音」、「OpenAI TTS 模型」與「Google TTS 聲音」。
 
-翻譯快取會保存在 `%USERPROFILE%\.realtime-audio\cache\translation_cache.db`，術語表保存在 `config\glossary.json`，可按「新增術語」加入固定翻譯，按「修正上次翻譯」修正最近一句並加入術語，或按「開啟術語表」直接編輯。
+翻譯快取會保存在 `%USERPROFILE%\.realtime-audio\cache\translation_cache.db`，術語表保存在 `config\glossary.json`，可按「新增術語」加入固定翻譯，按「修正上次翻譯」修正最近一句，確認後加入術語，或按「開啟術語表」直接編輯。
 
 ## 常見問題
 

@@ -680,6 +680,9 @@ class TranslatorApp(tk.Tk):
         target = simpledialog.askstring("修正上次翻譯", f"請輸入修正翻譯：\n{source}", initialvalue=str(self.config.get("last_translated_text") or ""))
         if not target:
             return
+        if not messagebox.askyesno("加入術語表？", "是否將這個修正加入術語表？"):
+            self.status.set("翻譯修正未加入詞彙表")
+            return
         path = ensure_glossary_file(Path(self.config.get("glossary_path") or APP_DIR / "glossary.json"))
         add_glossary_term(path, source, target)
         self.status.set("翻譯修正已加入詞彙表")

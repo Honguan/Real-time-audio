@@ -1473,6 +1473,7 @@ class CoreTests(unittest.TestCase):
         self.assertIn('("修正上次翻譯", self._fix_last_translation)', gui_source)
         self.assertIn("last_source_text", gui_source)
         self.assertIn("simpledialog.askstring", gui_source)
+        self.assertIn("是否將這個修正加入術語表？", gui_source)
         self.assertIn("add_glossary_term", gui_source)
 
     def test_local_provider_returns_text_without_cloud_request(self):

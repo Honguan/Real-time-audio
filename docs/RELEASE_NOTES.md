@@ -43,7 +43,7 @@ RealtimeAudioTranslator-runtime-cuda12-<tag>.zip
 
 若 Release 沒有 runtime 檔案，可到 https://github.com/Purfview/whisper-standalone-win/releases 下載 Faster-Whisper-XXL Windows runtime 和 `cuBLAS.and.cuDNN_CUDA12_win_v3.7z`。本機翻譯會優先使用已安裝的 Argos Translate 離線模型，也可在「本機翻譯 URL」填入 LibreTranslate 端點。
 
-翻譯快取會保存在 `%USERPROFILE%\.realtime-audio\cache\translation_cache.db`，術語可用「新增術語」加入，也可用「修正上次翻譯」修正最近一句，或用「開啟術語表」編輯。
+翻譯快取會保存在 `%USERPROFILE%\.realtime-audio\cache\translation_cache.db`，術語可用「新增術語」加入，也可用「修正上次翻譯」修正最近一句，確認後加入術語，或用「開啟術語表」編輯。
 
 需要清除本機資料時，可在進階模式按「清除快取」/「清除紀錄」，清除翻譯快取、暫存音訊與對話紀錄。
 
