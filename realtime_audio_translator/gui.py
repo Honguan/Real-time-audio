@@ -19,7 +19,7 @@ from .paths import resource_root
 from .providers import TextToSpeech, Translator, google_access_token
 from .release_updater import RELEASES_URL, current_version, latest_release_tag, release_update_message
 from .runtime import DEFAULT_RUNTIME_DIR, RUNTIME_RELEASE_URL, UPSTREAM_RUNTIME_RELEASE_URL, install_runtime_from, runtime_dir, runtime_install_message, runtime_status, whisper_exe
-from .scenarios import SCENARIO_CHOICES, apply_scenario
+from .scenarios import SCENARIO_CHOICES, apply_scenario, scenario_label
 from .subtitle_export import export_jsonl_to_srt, export_jsonl_to_txt
 from .tts import list_windows_sapi_voices, play_linear16
 
@@ -238,7 +238,7 @@ def main_status_summary(config: dict) -> str:
     latency = latency_seconds_value(config.get("last_latency_seconds"))
     latency_text = f"{latency:.2f}s" if latency is not None else "尚未測試"
     return (
-        f"目前場景：{config.get('scenario', '')}；"
+        f"目前場景：{scenario_label(str(config.get('scenario', '')))}；"
         f"輸入音源：{speaker} / {microphone}；"
         f"輸出音源：{config.get('tts_output_device') or '未選擇'}；"
         f"對方翻譯播放：{'開啟' if config.get('speaker_tts_enabled', False) else '關閉'}；"
@@ -841,7 +841,7 @@ class TranslatorApp(tk.Tk):
                 updated["record_logs"] = False
         self._load_config_into_widgets(updated)
         self._save()
-        self.status.set(f"scenario applied: {updated['scenario']}")
+        self.status.set(f"已套用場景：{scenario_label(updated['scenario'])}")
 
     def _load_config_into_widgets(self, updated: dict) -> None:
         for key, variable in self.vars.items():

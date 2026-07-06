@@ -26,7 +26,7 @@ from realtime_audio_translator.logbook import ConversationLog
 from realtime_audio_translator.models import cuda_hardware_from_check_output, list_models, model_available, model_download_command, model_install_message, models_dir, recommend_model
 from realtime_audio_translator.providers import TextToSpeech, Translator, build_google_translate_request, build_openai_translation_request
 from realtime_audio_translator.release_updater import RELEASES_URL, current_version, is_newer_version, latest_release_tag_from_json, release_update_message
-from realtime_audio_translator.scenarios import SCENARIO_CHOICES, apply_scenario
+from realtime_audio_translator.scenarios import SCENARIO_CHOICES, apply_scenario, scenario_label
 from realtime_audio_translator.subtitle_export import export_jsonl_to_srt, export_jsonl_to_txt, srt_timestamp
 
 
@@ -887,6 +887,8 @@ class CoreTests(unittest.TestCase):
         self.assertTrue(two_way["microphone_enabled"])
         self.assertTrue(two_way["virtual_mic_enabled"])
         self.assertEqual(base["performance_mode"], DEFAULT_CONFIG["performance_mode"])
+        self.assertEqual(scenario_label("discord_chat"), "Discord 聊天")
+        self.assertEqual(scenario_label("custom"), "custom")
 
     def test_ai_orchestrator_combines_scenario_tuning_and_diagnostics_without_enabling_cloud(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -2376,7 +2378,7 @@ class CoreTests(unittest.TestCase):
 
         summary = main_status_summary(config)
 
-        for text in ("目前場景：discord_chat", "輸入音源：Speakers / Microphone", "輸出音源：CABLE Input", "來源語言：en", "目標語言：zh", "字幕：開啟", "TTS：開啟", "虛擬麥克風：關閉", "延遲：1.75s"):
+        for text in ("目前場景：Discord 聊天", "輸入音源：Speakers / Microphone", "輸出音源：CABLE Input", "來源語言：en", "目標語言：zh", "字幕：開啟", "TTS：開啟", "虛擬麥克風：關閉", "延遲：1.75s"):
             self.assertIn(text, summary)
 
     def test_readme_and_release_notes_mention_cloud_api_confirmation(self):

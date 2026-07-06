@@ -1,5 +1,15 @@
 SCENARIO_CHOICES = ("game_voice", "discord_chat", "meeting", "customer_support", "subtitle_only", "mic_translate", "two_way")
 
+SCENARIO_LABELS = {
+    "game_voice": "遊戲語音",
+    "discord_chat": "Discord 聊天",
+    "meeting": "遠端會議",
+    "customer_support": "客服對話",
+    "subtitle_only": "只顯示字幕",
+    "mic_translate": "自己說話翻譯輸出",
+    "two_way": "雙向完整翻譯",
+}
+
 SCENARIO_PRESETS = {
     "game_voice": {
         "performance_mode": "low_latency",
@@ -80,6 +90,10 @@ SCENARIO_PRESETS = {
         "record_logs": False,
     },
 }
+
+
+def scenario_label(scenario_key: str) -> str:
+    return SCENARIO_LABELS.get(scenario_key, scenario_key)
 
 
 def apply_scenario(config: dict, scenario_key: str) -> dict:
