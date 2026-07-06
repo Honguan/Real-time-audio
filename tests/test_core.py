@@ -2002,6 +2002,8 @@ class CoreTests(unittest.TestCase):
             text = path.read_text(encoding="utf-8")
             self.assertNotIn("兩個 runtime", text)
             self.assertNotIn("兩個檔案", text)
+            self.assertNotIn("`Device`", text)
+            self.assertIn("ASR 裝置", text)
             for item in required:
                 self.assertIn(item, text)
 

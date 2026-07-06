@@ -104,7 +104,7 @@ http://127.0.0.1:5000/translate
 - 對方聽不到翻譯語音：確認「播放翻譯語音」與「輸出到虛擬麥克風」已開啟，且「TTS 輸出」選 `CABLE Input`。
 - Discord 沒有收到虛擬麥克風聲音：Discord 麥克風請選 `CABLE Output (VB-Audio Virtual Cable)`。
 - 字幕延遲太高：把「效能模式」改成 `low_latency`，並先用較小模型測試。
-- GPU 無法使用：把 `Device` 改成 CPU，或確認 CUDA12 runtime 已正確解壓。
+- GPU 無法使用：把「ASR 裝置」改成 CPU，或確認 CUDA12 runtime 已正確解壓。
 
 ## 限制
 
