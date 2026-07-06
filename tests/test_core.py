@@ -1324,6 +1324,7 @@ class CoreTests(unittest.TestCase):
             "清除快取",
             "開啟紀錄",
             "清除紀錄",
+            "清除本機資料",
             "按住說話",
         ]
 
@@ -1348,6 +1349,7 @@ class CoreTests(unittest.TestCase):
         self.assertNotIn("清除快取", simple)
         self.assertNotIn("開啟紀錄", simple)
         self.assertNotIn("清除紀錄", simple)
+        self.assertNotIn("清除本機資料", simple)
         self.assertEqual(advanced, buttons)
 
     def test_clear_logs_and_cache_keep_app_dirs(self):
@@ -2280,6 +2282,7 @@ class CoreTests(unittest.TestCase):
         for text in (readme, notes):
             self.assertIn("清除快取", text)
             self.assertIn("清除紀錄", text)
+            self.assertIn("清除本機資料", text)
             self.assertIn("翻譯快取", text)
 
     def test_readme_mentions_open_app_folder(self):

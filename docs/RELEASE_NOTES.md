@@ -9,7 +9,7 @@
 5. 狀態列會顯示信心提示、延遲、翻譯服務、本機/雲端模式與是否可能產生費用。
 6. 若語言判斷信心偏低，診斷會提示把「來源語言」從 `auto` 改成固定語言。
 7. 可按「檢查更新」檢查 GitHub Releases 是否有新版本。
-8. 可按「匯出字幕」把最新 JSONL 對話紀錄匯出成 SRT 與 TXT，檔案放在 `%USERPROFILE%\.realtime-audio\exports\subtitles`。
+8. 可按「匯出字幕」把最新 JSONL 對話紀錄匯出成 SRT 與 TXT，檔案放在 `%USERPROFILE%\.realtime-audio\exports\subtitles`；也可按「清除本機資料」一次清除快取與紀錄。
 9. 預設是自動發話；勾選「啟動時先靜音」後可用「按住說話」（Push to talk）按住才送出我方翻譯語音。
 10. 切換到 Google 或 OpenAI 時，工具會先提示語音或文字可能傳送到第三方服務並可能產生費用。
 11. 若提示缺 runtime，下載並解壓 runtime zip：

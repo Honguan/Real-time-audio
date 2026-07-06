@@ -481,6 +481,7 @@ class TranslatorApp(tk.Tk):
             ("開啟紀錄", self._open_logs),
             ("匯出字幕", self._export_subtitles),
             ("清除紀錄", self._clear_logs),
+            ("清除本機資料", self._clear_local_data),
         ):
             button = ttk.Button(buttons, text=text, command=command)
             self.button_widgets.append((text, button))
@@ -1160,6 +1161,12 @@ class TranslatorApp(tk.Tk):
         self._save()
         clear_logs(APP_DIR, Path(self.config.get("log_dir") or APP_DIR / "logs"))
         self.status.set("紀錄已清除")
+
+    def _clear_local_data(self) -> None:
+        self._save()
+        clear_cache(APP_DIR, Path(self.config.get("translation_cache_path") or APP_DIR / "cache" / "translation_cache.db"))
+        clear_logs(APP_DIR, Path(self.config.get("log_dir") or APP_DIR / "logs"))
+        self.status.set("本機快取與紀錄已清除")
 
     def _overlay_update(self, speaker: str, mine: str) -> None:
         if self.engine and not subtitle_updates_allowed(self.engine.paused):
