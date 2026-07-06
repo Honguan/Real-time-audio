@@ -39,8 +39,8 @@ Whisper 模型可放在 `models\whisper-small`；翻譯模型放在 `models\tran
 
 1. 安裝 VB-Audio Virtual Cable。
 2. 開啟 `RealtimeAudioTranslator.exe`。
-3. 選擇喇叭、麥克風、`TTS output`、來源語言與目標語言；若要聽對方語音的翻譯，開 `Speak opponent` 並選 `Speaker TTS output`。
-4. 選擇 `Scenario` 後按「套用場景」套用常用場景。
+3. 選擇「喇叭來源」、「麥克風來源」、「TTS 輸出」、來源語言與目標語言；若要聽對方語音的翻譯，開 `Speak opponent` 並選「對方翻譯播放輸出」。
+4. 選擇「場景」後按「套用場景」套用常用場景。
 5. 按「一鍵診斷」檢查 runtime、模型、音訊與 API 設定。
 6. 按「測試字幕」確認字幕 bar 會出現。
 7. 按「測試喇叭」、「測試麥克風」、`TTS test`、「測試虛擬麥克風」確認聲音路由。
@@ -49,7 +49,7 @@ Whisper 模型可放在 `models\whisper-small`；翻譯模型放在 `models\tran
 ## VB-CABLE 路由
 
 1. 會議軟體或 Discord 的麥克風選 `CABLE Output (VB-Audio Virtual Cable)`。
-2. 本工具的 `TTS output` 選 `CABLE Input`。
+2. 本工具的「TTS 輸出」選 `CABLE Input`。
 3. 本工具的喇叭選你正在聽對方聲音的裝置。
 4. 本工具的麥克風選你的實體麥克風。
 
@@ -60,8 +60,8 @@ Whisper 模型可放在 `models\whisper-small`；翻譯模型放在 `models\tran
 - `Show original` / `Show translation`：切換原文與譯文。
 - `Speak translations`：開關翻譯語音輸出。
 - `Start muted`：啟動後先靜音，搭配「按住說話」變成按住才送出我方翻譯語音；不勾選時就是自動發話模式。
-- `Virtual mic output`：開啟後才會把我方翻譯語音送到 `TTS output`。
-- `Speak opponent`：開啟後才會把對方語音翻譯播放到 `Speaker TTS output`；留空則使用系統預設喇叭。
+- `Virtual mic output`：開啟後才會把我方翻譯語音送到「TTS 輸出」。
+- `Speak opponent`：開啟後才會把對方語音翻譯播放到「對方翻譯播放輸出」；留空則使用系統預設喇叭。
 - `Record logs`：儲存對話紀錄。
 - `Open logs`：開啟紀錄資料夾，`app.log` 會記錄開始、停止、缺模型與字幕匯出事件。
 - `Clear cache` / `Clear logs`：清除本機翻譯快取、暫存音訊與對話紀錄。
@@ -70,18 +70,18 @@ Whisper 模型可放在 `models\whisper-small`；翻譯模型放在 `models\tran
 - `Add glossary term`：加入固定術語翻譯，例如 `cooldown` → `冷卻`。
 - `Show language`：在字幕前顯示語言代碼。
 - 「套用場景」：套用遊戲、Discord、會議、客服、字幕-only、自己說話翻譯或雙向翻譯預設。
-- `Performance mode`：可選 `low_latency`、`balanced`、`quality` 或離線省資源 `offline_light`。
+- 「效能模式」：可選 `low_latency`、`balanced`、`quality` 或離線省資源 `offline_light`。
 - 「自動優化」：使用 AI 決策中樞依場景、硬體、延遲與診斷結果切換模型、裝置與低延遲設定。
 - 「一鍵診斷」：顯示目前缺少的 runtime、模型、音訊或 API 設定。
 - `Check updates`：檢查 GitHub Releases 是否有新版本。
 - 狀態列會顯示信心提示、延遲、provider、本機/雲端模式與是否可能產生費用。
-- 若語言判斷信心偏低，診斷會提示把 `Source language` 從 `auto` 改成固定語言。
+- 若語言判斷信心偏低，診斷會提示把「來源語言」從 `auto` 改成固定語言。
 
 「按住說話」（Push to talk）是按住才暫時取消靜音；勾選 `Start muted` 時按住才輸出我方翻譯語音，未勾選時翻譯語音會自動輸出。
 
 ## 翻譯與 TTS
 
-預設本機翻譯不會上傳雲端。若要使用真正翻譯，請先啟動 LibreTranslate，並把 `Local translate URL` 填成例如：
+預設本機翻譯不會上傳雲端。若要使用真正翻譯，請先啟動 LibreTranslate，並把「本機翻譯 URL」填成例如：
 
 切換到 Google 或 OpenAI 時，工具會先提示語音或文字可能傳送到第三方服務並可能產生費用。
 
@@ -89,7 +89,7 @@ Whisper 模型可放在 `models\whisper-small`；翻譯模型放在 `models\tran
 http://127.0.0.1:5000/translate
 ```
 
-沒有 `Local translate URL` 時會嘗試使用已安裝的 Argos Translate 離線模型；也可改用 OpenAI 或 Google provider。OpenAI 使用 `OPENAI_API_KEY` 環境變數，Google 使用 service account JSON 路徑。
+沒有「本機翻譯 URL」時會嘗試使用已安裝的 Argos Translate 離線模型；也可改用 OpenAI 或 Google provider。OpenAI 使用 `OPENAI_API_KEY` 環境變數，Google 使用 service account JSON 路徑。
 
 `TTS provider` 可選本機、OpenAI 或 Google。進階設定可調 `OpenAI model`、`OpenAI TTS voice`、OpenAI TTS model 與 Google TTS voice。
 
@@ -101,9 +101,9 @@ http://127.0.0.1:5000/translate
 - 聽不到對方聲音：確認喇叭來源選的是 Discord 或遊戲正在播放的裝置，再按「測試喇叭」。
 - 找不到 runtime：確認 `RealtimeAudioTranslator-runtime-cuda12-<tag>.zip` 已解壓到 `%USERPROFILE%\.realtime-audio\runtime\cuda12`。
 - 找不到模型：在工具內下載模型，或解壓模型 zip 到 `%USERPROFILE%\.realtime-audio\models`。
-- 對方聽不到翻譯語音：確認 `Speak translations` 與 `Virtual mic output` 已開啟，且 `TTS output` 選 `CABLE Input`。
+- 對方聽不到翻譯語音：確認 `Speak translations` 與 `Virtual mic output` 已開啟，且「TTS 輸出」選 `CABLE Input`。
 - Discord 沒有收到虛擬麥克風聲音：Discord 麥克風請選 `CABLE Output (VB-Audio Virtual Cable)`。
-- 字幕延遲太高：把 `Performance mode` 改成 `low_latency`，並先用較小模型測試。
+- 字幕延遲太高：把「效能模式」改成 `low_latency`，並先用較小模型測試。
 - GPU 無法使用：把 `Device` 改成 CPU，或確認 CUDA12 runtime 已正確解壓。
 
 ## 限制

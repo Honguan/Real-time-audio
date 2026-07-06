@@ -69,7 +69,7 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
             "warning",
             "可能發生音訊回授",
             "喇叭來源與翻譯語音輸出看起來是同一個裝置",
-            "把 TTS output 設為 CABLE Input，Speaker TTS output 改成不同喇叭或先關閉 Speak opponent",
+            "把「TTS 輸出」設為 CABLE Input，「對方翻譯播放輸出」改成不同喇叭或先關閉 Speak opponent",
             "audio_settings",
         ))
     if config.get("tts_enabled", True) and config.get("virtual_mic_enabled", False) and "cable input" not in str(config.get("tts_output_device", "")).lower():
@@ -77,8 +77,8 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
             "virtual_mic_route",
             "warning",
             "虛擬麥克風輸出可能未設定",
-            "TTS output 目前看起來不是 CABLE Input",
-            "把 TTS output 設為 CABLE Input，並把 Discord 麥克風設為 CABLE Output",
+            "「TTS 輸出」目前看起來不是 CABLE Input",
+            "把「TTS 輸出」設為 CABLE Input，並把 Discord 麥克風設為 CABLE Output",
             "audio_settings",
         ))
     if config.get("microphone_enabled", True) and config.get("tts_enabled", True) and config.get("virtual_mic_enabled", False) and virtual_mic_recaptures_tts(config.get("microphone_device", ""), config.get("tts_output_device", "")):
@@ -86,8 +86,8 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
             "microphone_feedback_risk",
             "warning",
             "麥克風可能收到翻譯語音",
-            "Microphone device 看起來選到 CABLE Output，會把送給 Discord 的翻譯語音再收回來",
-            "Microphone device 請選實體麥克風；Discord 的麥克風才選 CABLE Output",
+            "「麥克風來源」看起來選到 CABLE Output，會把送給 Discord 的翻譯語音再收回來",
+            "「麥克風來源」請選實體麥克風；Discord 的麥克風才選 CABLE Output",
             "audio_settings",
         ))
     if config.get("speaker_enabled", True) and not find_device(config.get("speaker_device", ""), want_output=True):
@@ -114,7 +114,7 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
             "warning",
             "翻譯結果空白",
             "最近一次翻譯沒有回傳文字",
-            "檢查翻譯 provider、Local translate URL 或改用其他翻譯服務",
+            "檢查翻譯 provider、「本機翻譯 URL」或改用其他翻譯服務",
             "local_translation",
         ))
     try:
@@ -140,7 +140,7 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
             "info",
             "翻譯信心偏低",
             f"最近一次翻譯信心約 {round(translation_confidence * 100)}%",
-            "可按 Fix last translation 加入術語，或設定 Local translate URL",
+            "可按 Fix last translation 加入術語，或設定「本機翻譯 URL」",
             "local_translation",
         ))
     if config.get("last_tts_failed"):
@@ -149,7 +149,7 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
             "warning",
             "TTS 沒有聲音",
             "最近一次翻譯語音播放失敗",
-            "檢查 TTS output、VB-CABLE 與 TTS provider 設定",
+            "檢查「TTS 輸出」、VB-CABLE 與 TTS provider 設定",
             "audio_settings",
         ))
     try:
@@ -162,7 +162,7 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
             "warning",
             "TTS 延遲過高",
             f"最近一次翻譯語音播放約 {tts_latency:.1f} 秒",
-            "改用 local TTS、降低語音輸出頻率，或檢查 TTS output 裝置",
+            "改用 local TTS、降低語音輸出頻率，或檢查「TTS 輸出」裝置",
             "audio_settings",
         ))
     if config.get("virtual_mic_enabled", False) and config.get("last_virtual_mic_failed"):
@@ -171,7 +171,7 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
             "warning",
             "Discord 沒有收到虛擬麥克風聲音",
             "最近一次「測試虛擬麥克風」播放失敗",
-            "確認 TTS output 選 CABLE Input，並把 Discord 麥克風設為 CABLE Output",
+            "確認「TTS 輸出」選 CABLE Input，並把 Discord 麥克風設為 CABLE Output",
             "audio_settings",
         ))
     if config.get("last_asr_failed"):
@@ -222,7 +222,7 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
                 "info",
                 "語言判斷信心偏低",
                 f"最近偵測為 {detected}，信心約 {round(language_confidence * 100)}%",
-                "若字幕語言跳動，請把 Source language 從 auto 改成固定語言。",
+                "若字幕語言跳動，請把「來源語言」從 auto 改成固定語言。",
                 "language_settings",
             ))
     try:

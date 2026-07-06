@@ -31,22 +31,22 @@ PERFORMANCE_CHOICES = ("low_latency", "balanced", "quality", "offline_light")
 CLOUD_PROVIDERS = ("google", "openai")
 AUDIO_DEVICE_KEYS = ("speaker_device", "microphone_device", "tts_output_device", "speaker_tts_output_device")
 SETTING_ROWS = (
-    ("Source language", "source_language"),
-    ("Target language", "target_language"),
+    ("來源語言", "source_language"),
+    ("目標語言", "target_language"),
     ("Provider", "provider"),
     ("Translation style", "translation_style"),
     ("TTS provider", "tts_provider"),
-    ("Scenario", "scenario"),
-    ("Performance mode", "performance_mode"),
-    ("Local translate URL", "local_translate_url"),
+    ("場景", "scenario"),
+    ("效能模式", "performance_mode"),
+    ("本機翻譯 URL", "local_translate_url"),
     ("OpenAI model", "openai_model"),
-    ("Model", "model"),
+    ("模型", "model"),
     ("ASR device", "device"),
     ("Compute type", "compute_type"),
-    ("Speaker device", "speaker_device"),
-    ("Microphone device", "microphone_device"),
-    ("TTS output", "tts_output_device"),
-    ("Speaker TTS output", "speaker_tts_output_device"),
+    ("喇叭來源", "speaker_device"),
+    ("麥克風來源", "microphone_device"),
+    ("TTS 輸出", "tts_output_device"),
+    ("對方翻譯播放輸出", "speaker_tts_output_device"),
     ("TTS rate", "tts_rate"),
     ("TTS volume", "tts_volume"),
     ("TTS voice", "tts_voice_name"),
@@ -62,7 +62,7 @@ SETTING_ROWS = (
     ("Overlay font size", "overlay_font_size"),
     ("Overlay hold seconds", "overlay_hold_seconds"),
     ("Log dir", "log_dir"),
-    ("Runtime dir", "runtime_dir"),
+    ("runtime 資料夾", "runtime_dir"),
 )
 BASIC_SETTING_KEYS = {
     "source_language",
@@ -791,7 +791,7 @@ class TranslatorApp(tk.Tk):
             return
         self.vars["source_language"].set(locked)
         self._save()
-        self.status.set(f"source language locked: {locked}")
+        self.status.set(f"來源語言已鎖定：{locked}")
 
     def _check_updates(self) -> None:
         self.status.set("checking updates")
@@ -811,8 +811,8 @@ class TranslatorApp(tk.Tk):
             "設定指南",
             "1. 匯入 runtime，或開啟 runtime 資料夾放入解壓後檔案。\n"
             "2. 按「下載模型」，或把模型 zip 解壓到 models 資料夾。\n"
-            "3. 選擇喇叭、麥克風與 TTS output。\n"
-            "4. Discord 麥克風選 CABLE Output，本工具 TTS output 選 CABLE Input。\n"
+            "3. 選擇「喇叭來源」、「麥克風來源」與「TTS 輸出」。\n"
+            "4. Discord 麥克風選 CABLE Output，本工具「TTS 輸出」選 CABLE Input。\n"
             "5. 選場景後按「套用場景」，再按「自動優化」。\n"
             "6. 開始前先跑「測試字幕」、「測試喇叭」、「測試麥克風」與「測試虛擬麥克風」。",
         )

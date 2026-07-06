@@ -325,7 +325,9 @@ class CoreTests(unittest.TestCase):
         self.assertIn('def _show_setup_guide(self) -> None:', gui_source)
         self.assertIn("匯入 runtime", gui_source)
         self.assertIn("下載模型", gui_source)
-        self.assertIn("選擇喇叭、麥克風", gui_source)
+        self.assertIn("喇叭來源", gui_source)
+        self.assertIn("麥克風來源", gui_source)
+        self.assertIn("TTS 輸出", gui_source)
         self.assertIn("CABLE Output", gui_source)
         self.assertIn("套用場景", gui_source)
         self.assertIn("自動優化", gui_source)
@@ -470,7 +472,7 @@ class CoreTests(unittest.TestCase):
             issues = collect_diagnostics(config, Path(tmp))
 
         issue = next(item for item in issues if item.code == "feedback_risk")
-        self.assertIn("Speaker TTS output", issue.fix)
+        self.assertIn("對方翻譯播放輸出", issue.fix)
 
     def test_diagnostics_warn_when_virtual_mic_output_is_not_cable_input(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1059,7 +1061,7 @@ class CoreTests(unittest.TestCase):
     def test_gui_exposes_scenarios_and_diagnostics(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
 
-        self.assertIn('("Scenario", "scenario")', gui_source)
+        self.assertIn('("場景", "scenario")', gui_source)
         self.assertIn("SCENARIO_CHOICES", gui_source)
         self.assertIn('("套用場景", self._apply_scenario)', gui_source)
         self.assertIn('("自動優化", self._optimize_settings)', gui_source)
@@ -1963,7 +1965,7 @@ class CoreTests(unittest.TestCase):
         self.assertIn("GitHub Releases", notes)
         self.assertIn("https://github.com/Purfview/whisper-standalone-win/releases", notes)
         self.assertIn("cuBLAS.and.cuDNN_CUDA12_win_v3.7z", notes)
-        self.assertIn("Local translate URL", notes)
+        self.assertIn("本機翻譯 URL", notes)
         self.assertNotIn("兩個 runtime", notes)
         self.assertNotIn("這兩個檔案", notes)
 
@@ -1974,11 +1976,11 @@ class CoreTests(unittest.TestCase):
         self.assertIn("RealtimeAudioTranslator-runtime-cuda12-<tag>.zip", quick_start)
         self.assertIn("%USERPROFILE%\\.realtime-audio\\runtime\\cuda12", quick_start)
         self.assertIn("%USERPROFILE%\\.realtime-audio\\models", quick_start)
-        self.assertIn("Scenario", quick_start)
+        self.assertIn("場景", quick_start)
         self.assertIn("一鍵診斷", quick_start)
         self.assertIn("CABLE Output", quick_start)
         self.assertIn("CABLE Input", quick_start)
-        self.assertIn("Local translate URL", quick_start)
+        self.assertIn("本機翻譯 URL", quick_start)
 
     def test_readme_and_release_notes_cover_required_faq(self):
         required = (
@@ -2066,7 +2068,7 @@ class CoreTests(unittest.TestCase):
 
         for text in (readme, notes):
             self.assertIn("語言判斷", text)
-            self.assertIn("Source language", text)
+            self.assertIn("來源語言", text)
 
     def test_readme_and_release_notes_mention_check_updates(self):
         readme = Path("README.md").read_text(encoding="utf-8")
