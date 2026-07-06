@@ -7,7 +7,7 @@ from typing import Callable
 from .asr import AudioTranscriber
 from .audio import SegmentWorker, audio_segment_active, device_name_from_label, find_device, virtual_mic_recaptures_tts
 from .ai_confidence import build_confidence_snapshot, format_confidence_status
-from .config import APP_DIR
+from .config import APP_DIR, DEFAULT_CONFIG, TARGET_LANGUAGE_CHOICES
 from .logbook import ConversationLog
 from .models import models_dir
 from .providers import TextToSpeech, Translator
@@ -45,6 +45,10 @@ def audio_devices_overlap(left: str, right: str) -> bool:
     left_name = device_name_from_label(left).lower().strip()
     right_name = device_name_from_label(right).lower().strip()
     return bool(left_name and right_name and (left_name in right_name or right_name in left_name))
+
+
+def safe_target_language(language: str, fallback: str) -> str:
+    return language if language in TARGET_LANGUAGE_CHOICES else fallback
 
 
 class RealtimeEngine:
@@ -144,8 +148,11 @@ class RealtimeEngine:
     def _process_segments(self, direction: str, worker: SegmentWorker) -> None:
         assert self.transcriber is not None
         source = "auto" if direction == "speaker" else self.config["source_language"]
-        fallback_source = self.config["target_language"] if direction == "speaker" else source
-        target = self.config["source_language"] if direction == "speaker" else self.config["target_language"]
+        fallback_source = safe_target_language(self.config["target_language"], DEFAULT_CONFIG["target_language"]) if direction == "speaker" else source
+        target = safe_target_language(
+            self.config["source_language"] if direction == "speaker" else self.config["target_language"],
+            DEFAULT_CONFIG["source_language"] if direction == "speaker" else DEFAULT_CONFIG["target_language"],
+        )
         while self.running:
             if self.paused:
                 drain_queue(worker.queue)

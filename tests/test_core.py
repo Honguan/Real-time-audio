@@ -20,7 +20,7 @@ from realtime_audio_translator.ai_confidence import build_confidence_snapshot, f
 from realtime_audio_translator.ai_memory import add_glossary_term, cache_translation, cached_translation
 from realtime_audio_translator.app_log import append_app_log
 from realtime_audio_translator.diagnostics import DiagnosticIssue, collect_diagnostics
-from realtime_audio_translator.engine import RealtimeEngine, audio_devices_overlap, direction_label, drain_queue, overlay_text_from_config
+from realtime_audio_translator.engine import RealtimeEngine, audio_devices_overlap, direction_label, drain_queue, overlay_text_from_config, safe_target_language
 from realtime_audio_translator.gui import LANGUAGE_CHOICES, PERFORMANCE_CHOICES, PROVIDER_CHOICES, TARGET_LANGUAGE_CHOICES, TTS_PROVIDER_CHOICES, TranslatorApp, diagnostic_action_label, first_diagnostic_action, first_run_setup_action, first_run_wizard_needed, format_overlay_line, language_lock_value, latency_seconds_value, main_status_summary, mode_notice, overlay_clipboard_text, overlay_font_size_value, overlay_hold_seconds_value, overlay_opacity_value, overlay_visibility_action, performance_segment_seconds, record_logs_requires_confirmation, subtitle_updates_allowed, swap_language_values, troubleshooting_action, visible_button_texts, visible_setting_keys
 from realtime_audio_translator.logbook import ConversationLog
 from realtime_audio_translator.models import cuda_hardware_from_check_output, list_models, model_available, model_download_command, model_install_message, models_dir, recommend_model
@@ -2296,6 +2296,10 @@ class CoreTests(unittest.TestCase):
     def test_swap_language_values(self):
         self.assertEqual(swap_language_values("zh", "en"), ("en", "zh"))
         self.assertEqual(swap_language_values("auto", "zh"), ("zh", "zh"))
+
+    def test_safe_target_language_rejects_auto(self):
+        self.assertEqual(safe_target_language("ja", "zh"), "ja")
+        self.assertEqual(safe_target_language("auto", "zh"), "zh")
 
     def test_language_lock_uses_last_detected_language_only_from_auto(self):
         self.assertEqual(language_lock_value("auto", "en"), "en")
