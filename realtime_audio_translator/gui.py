@@ -911,10 +911,12 @@ class TranslatorApp(tk.Tk):
 
     def _download_model(self) -> None:
         self._save()
-        exe = whisper_exe(runtime_dir(self.config))
-        if not exe.exists():
-            messagebox.showerror("找不到 runtime", runtime_install_message(exe.parent))
+        runtime = runtime_dir(self.config)
+        status = runtime_status(runtime)
+        if not status["ready"]:
+            messagebox.showerror("找不到 runtime", runtime_install_message(runtime))
             return
+        exe = whisper_exe(runtime)
         model = self.config["model"]
         app_models = models_dir(self.config)
         self.status.set(f"正在下載模型 {model}")
@@ -927,10 +929,12 @@ class TranslatorApp(tk.Tk):
         threading.Thread(target=run, daemon=True).start()
 
     def _refresh_commands(self) -> None:
-        exe = whisper_exe(runtime_dir(self._config_from_vars()))
-        if not exe.exists():
-            messagebox.showerror("找不到 runtime", runtime_install_message(exe.parent))
+        runtime = runtime_dir(self._config_from_vars())
+        status = runtime_status(runtime)
+        if not status["ready"]:
+            messagebox.showerror("找不到 runtime", runtime_install_message(runtime))
             return
+        exe = whisper_exe(runtime)
         refresh_commands(exe, APP_DIR / "commands.json")
         self._refresh_lists()
         self.status.set("commands.json 已更新")
