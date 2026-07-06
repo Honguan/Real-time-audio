@@ -30,6 +30,7 @@ TTS_PROVIDER_CHOICES = ("local", "google", "openai")
 PERFORMANCE_CHOICES = ("low_latency", "balanced", "quality", "offline_light")
 CLOUD_PROVIDERS = ("google", "openai")
 AUDIO_DEVICE_KEYS = ("speaker_device", "microphone_device", "tts_output_device", "speaker_tts_output_device")
+SEVERITY_LABELS = {"error": "錯誤", "warning": "警告", "info": "提示"}
 SETTING_ROWS = (
     ("來源語言", "source_language"),
     ("目標語言", "target_language"),
@@ -733,7 +734,7 @@ class TranslatorApp(tk.Tk):
         lines = []
         for issue in issues:
             lines.append(
-                f"[{issue.severity}]\n"
+                f"[{SEVERITY_LABELS.get(issue.severity, issue.severity)}]\n"
                 f"問題名稱：{issue.title}\n"
                 f"可能原因：{issue.detail}\n"
                 f"自動檢查結果：{issue.code}\n"

@@ -125,8 +125,8 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
         issues.append(DiagnosticIssue(
             "asr_confidence_low",
             "warning",
-            "ASR confidence is low",
-            f"Recent ASR confidence is about {round(asr_confidence * 100)}%",
+            "語音辨識信心偏低",
+            f"最近一次語音辨識信心約 {round(asr_confidence * 100)}%",
             "先跑「測試麥克風」或「測試喇叭」，降低背景噪音，或改用較大模型",
             "audio_settings",
         ))

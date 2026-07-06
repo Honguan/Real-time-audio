@@ -653,6 +653,8 @@ class CoreTests(unittest.TestCase):
 
         issue = next(item for item in issues if item.code == "asr_confidence_low")
         self.assertEqual(issue.action, "audio_settings")
+        self.assertEqual(issue.title, "語音辨識信心偏低")
+        self.assertIn("語音辨識信心約 40%", issue.detail)
         self.assertIn("較大模型", issue.fix)
 
     def test_diagnostics_report_tts_failure(self):
@@ -1083,6 +1085,8 @@ class CoreTests(unittest.TestCase):
         self.assertIn("建議修復步驟", gui_source)
         self.assertIn("一鍵修復按鈕", gui_source)
         self.assertIn("進階日誌", gui_source)
+        self.assertIn("SEVERITY_LABELS", gui_source)
+        self.assertIn("錯誤", gui_source)
         self.assertIn("app.log", gui_source)
         self.assertIn("plan_session", gui_source)
         self.assertIn('config["last_cuda_devices"] = devices', gui_source)
