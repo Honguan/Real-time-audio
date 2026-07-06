@@ -2002,7 +2002,8 @@ class CoreTests(unittest.TestCase):
 
         self.assertIn("Start muted", readme)
         self.assertIn("Push to talk", readme)
-        self.assertIn("hold it to unmute TTS output", readme)
+        self.assertIn("按住才暫時取消靜音", readme)
+        self.assertNotIn("hold it to unmute TTS output", readme)
         self.assertIn("Start muted", notes)
         self.assertIn("Push to talk", notes)
 

@@ -77,7 +77,7 @@ Whisper 模型可放在 `models\whisper-small`；翻譯模型放在 `models\tran
 - 狀態列會顯示信心提示、延遲、provider、本機/雲端模式與是否可能產生費用。
 - 若語言判斷信心偏低，診斷會提示把 `Source language` 從 `auto` 改成固定語言。
 
-`Push to talk` 會 hold it to unmute TTS output；勾選 `Start muted` 時按住才輸出我方翻譯語音，未勾選時翻譯語音會自動輸出。
+`Push to talk` 是按住才暫時取消靜音；勾選 `Start muted` 時按住才輸出我方翻譯語音，未勾選時翻譯語音會自動輸出。
 
 ## 翻譯與 TTS
 
