@@ -81,6 +81,21 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
             "把「TTS 輸出」設為 CABLE Input，並把 Discord 麥克風設為 CABLE Output",
             "audio_settings",
         ))
+    tts_output_device = str(config.get("tts_output_device", ""))
+    if (
+        config.get("tts_enabled", True)
+        and config.get("virtual_mic_enabled", False)
+        and "cable input" in tts_output_device.lower()
+        and find_device(tts_output_device, want_output=True) is None
+    ):
+        issues.append(DiagnosticIssue(
+            "virtual_mic_device_missing",
+            "warning",
+            "找不到 VB-CABLE 輸出",
+            "「TTS 輸出」選了 CABLE Input，但系統沒有找到可用輸出裝置",
+            "安裝 VB-CABLE，或重新選擇可用的 CABLE Input 輸出裝置",
+            "audio_settings",
+        ))
     if config.get("microphone_enabled", True) and config.get("tts_enabled", True) and config.get("virtual_mic_enabled", False) and virtual_mic_recaptures_tts(config.get("microphone_device", ""), config.get("tts_output_device", "")):
         issues.append(DiagnosticIssue(
             "microphone_feedback_risk",

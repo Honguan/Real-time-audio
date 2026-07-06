@@ -102,6 +102,7 @@ FIRST_RUN_ISSUE_CODES = {
     "speaker_device_missing",
     "microphone_device_missing",
     "virtual_mic_route",
+    "virtual_mic_device_missing",
     "virtual_mic_no_output",
 }
 
