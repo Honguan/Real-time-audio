@@ -11,5 +11,5 @@ RealtimeAudioTranslator 快速開始
 7. Discord 或遊戲語音的麥克風選 `CABLE Output`；App 的「TTS 輸出」選 `CABLE Input`。
 8. 本機翻譯可使用 Argos Translate；若使用 LibreTranslate，請在「本機翻譯 URL」填入端點，例如：
    `http://127.0.0.1:5000/translate`
-9. 按「測試字幕」確認字幕 bar，按「測試喇叭」/「測試麥克風」/`TTS test` 測試聲音。
+9. 按「測試字幕」確認字幕 bar，按「測試喇叭」/「測試麥克風」/「測試 TTS」測試聲音。
 10. 確認無誤後按「開始」開始即時字幕與翻譯。

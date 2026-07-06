@@ -2001,6 +2001,8 @@ class CoreTests(unittest.TestCase):
         self.assertIn("CABLE Output", quick_start)
         self.assertIn("CABLE Input", quick_start)
         self.assertIn("本機翻譯 URL", quick_start)
+        self.assertIn("測試 TTS", quick_start)
+        self.assertNotIn("TTS test", quick_start)
 
     def test_readme_and_release_notes_cover_required_faq(self):
         required = (
