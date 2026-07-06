@@ -153,6 +153,8 @@ def load_config(root: Path = APP_DIR) -> dict:
         config["record_logs"] = bool(loaded["save_conversation_history"])
     if "overlay_topmost" not in loaded and "subtitle_always_on_top" in loaded:
         config["overlay_topmost"] = bool(loaded["subtitle_always_on_top"])
+    if config.get("target_language") == "auto":
+        config["target_language"] = DEFAULT_CONFIG["target_language"]
     return config
 
 
@@ -166,6 +168,8 @@ def save_config(root: Path, config: dict) -> None:
     config["runtime_path"] = config.get("runtime_dir", config.get("runtime_path", str(APP_DIR / "runtime" / "cuda12")))
     config["save_conversation_history"] = bool(config.get("record_logs", False))
     config["subtitle_always_on_top"] = bool(config.get("overlay_topmost", True))
+    if config.get("target_language") == "auto":
+        config["target_language"] = DEFAULT_CONFIG["target_language"]
     with (root / "config.json").open("w", encoding="utf-8", newline="\n") as handle:
         json.dump(config, handle, ensure_ascii=False, indent=2)
     with (root / "config" / "settings.json").open("w", encoding="utf-8", newline="\n") as handle:

@@ -106,6 +106,14 @@ class CoreTests(unittest.TestCase):
 
             self.assertEqual(load_config(root)["target_language"], "ko")
 
+    def test_load_config_rejects_auto_target_language(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ensure_app_dirs(root)
+            (root / "config" / "settings.json").write_text(json.dumps({"target_language": "auto"}), encoding="utf-8")
+
+            self.assertEqual(load_config(root)["target_language"], DEFAULT_CONFIG["target_language"])
+
     def test_load_config_accepts_public_ui_mode_alias(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -166,6 +174,11 @@ class CoreTests(unittest.TestCase):
             self.assertEqual(saved["runtime_path"], str(root / "runtime" / "cuda12"))
             self.assertTrue(saved["save_conversation_history"])
             self.assertFalse(saved["subtitle_always_on_top"])
+
+            config["target_language"] = "auto"
+            save_config(root, config)
+            saved = json.loads((root / "config" / "settings.json").read_text(encoding="utf-8"))
+            self.assertEqual(saved["target_language"], DEFAULT_CONFIG["target_language"])
 
     def test_ensure_glossary_file_creates_parent_and_preserves_existing(self):
         with tempfile.TemporaryDirectory() as tmp:
