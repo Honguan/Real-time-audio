@@ -837,7 +837,7 @@ class TranslatorApp(tk.Tk):
     def _apply_scenario(self) -> None:
         updated = apply_scenario(self._config_from_vars(), self.vars["scenario"].get())
         if record_logs_requires_confirmation(bool(self.config.get("record_logs", False)), bool(updated.get("record_logs", False))):
-            if not messagebox.askyesno("Enable conversation logs?", "這個場景會開啟對話紀錄。\n是否允許本機保存本次對話紀錄？"):
+            if not messagebox.askyesno("啟用對話紀錄？", "這個場景會開啟對話紀錄。\n是否允許本機保存本次對話紀錄？"):
                 updated["record_logs"] = False
         self._load_config_into_widgets(updated)
         self._save()

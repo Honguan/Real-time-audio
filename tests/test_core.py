@@ -2371,7 +2371,7 @@ class CoreTests(unittest.TestCase):
         self.assertIn("cloud_activation_requires_confirmation", gui_source)
         self.assertIn('config["cloud_api_enabled"] = cloud_enabled', gui_source)
         self.assertIn("record_logs_requires_confirmation", gui_source)
-        self.assertIn("Enable conversation logs?", gui_source)
+        self.assertIn("啟用對話紀錄？", gui_source)
 
     def test_main_status_summary_shows_required_main_screen_state(self):
         config = DEFAULT_CONFIG.copy()
