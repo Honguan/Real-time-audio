@@ -36,8 +36,8 @@ def is_newer_version(latest: str, current: str) -> bool:
 
 def release_update_message(current: str, latest: str) -> str:
     if is_newer_version(latest, current):
-        return f"new version available: {latest} ({RELEASES_URL})"
-    return f"already latest: {current}"
+        return f"有新版本可下載：{latest}（{RELEASES_URL}）"
+    return f"已是最新版本：{current}"
 
 
 def _version_parts(value: str) -> tuple[int, ...]:

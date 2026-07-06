@@ -64,7 +64,9 @@ class CoreTests(unittest.TestCase):
         self.assertTrue(is_newer_version("v0.2.0", "v0.1.9"))
         self.assertFalse(is_newer_version("v0.1.0", "v0.1.0"))
         self.assertEqual(latest_release_tag_from_json(b'{"tag_name":"v1.2.3"}'), "v1.2.3")
+        self.assertIn("有新版本可下載", release_update_message("v0.1.0", "v0.2.0"))
         self.assertIn("v0.2.0", release_update_message("v0.1.0", "v0.2.0"))
+        self.assertIn("已是最新版本", release_update_message("v0.1.0", "v0.1.0"))
 
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
