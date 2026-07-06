@@ -20,7 +20,7 @@ from realtime_audio_translator.ai_confidence import build_confidence_snapshot, f
 from realtime_audio_translator.ai_memory import add_glossary_term, cache_translation, cached_translation
 from realtime_audio_translator.app_log import append_app_log
 from realtime_audio_translator.diagnostics import DiagnosticIssue, collect_diagnostics
-from realtime_audio_translator.engine import RealtimeEngine, audio_devices_overlap, drain_queue, overlay_text_from_config
+from realtime_audio_translator.engine import RealtimeEngine, audio_devices_overlap, direction_label, drain_queue, overlay_text_from_config
 from realtime_audio_translator.gui import LANGUAGE_CHOICES, PERFORMANCE_CHOICES, PROVIDER_CHOICES, TTS_PROVIDER_CHOICES, TranslatorApp, diagnostic_action_label, first_diagnostic_action, first_run_setup_action, first_run_wizard_needed, format_overlay_line, language_lock_value, latency_seconds_value, main_status_summary, mode_notice, overlay_clipboard_text, overlay_font_size_value, overlay_hold_seconds_value, overlay_opacity_value, overlay_visibility_action, performance_segment_seconds, record_logs_requires_confirmation, subtitle_updates_allowed, swap_language_values, troubleshooting_action, visible_button_texts, visible_setting_keys
 from realtime_audio_translator.logbook import ConversationLog
 from realtime_audio_translator.models import cuda_hardware_from_check_output, list_models, model_available, model_download_command, model_install_message, models_dir, recommend_model
@@ -2182,6 +2182,10 @@ class CoreTests(unittest.TestCase):
         self.assertTrue(audio_devices_overlap("CABLE Input", "CABLE Input (VB-Audio Virtual Cable) [Windows WASAPI]"))
         self.assertFalse(audio_devices_overlap("Speakers", "CABLE Input"))
 
+    def test_direction_label_is_user_facing(self):
+        self.assertEqual(direction_label("speaker"), "喇叭")
+        self.assertEqual(direction_label("me"), "麥克風")
+
     def test_virtual_mic_recaptures_tts_matches_vb_cable_pair(self):
         self.assertTrue(virtual_mic_recaptures_tts("CABLE Output (VB-Audio Virtual Cable)", "CABLE Input (VB-Audio Virtual Cable)"))
         self.assertFalse(virtual_mic_recaptures_tts("Microphone", "CABLE Input"))
@@ -2449,7 +2453,7 @@ class CoreTests(unittest.TestCase):
             engine.translator = Translator()
             engine._process_segments("speaker", Worker(wav))
 
-        self.assertTrue(any(status.startswith("speaker latency ") for status in statuses))
+        self.assertTrue(any(status.startswith("喇叭延遲 ") for status in statuses))
 
     def test_engine_can_overlay_original_and_translation(self):
         overlays = []
@@ -2689,7 +2693,7 @@ class CoreTests(unittest.TestCase):
             engine.translator = Translator()
             engine._process_segments("speaker", Worker(wav))
 
-        self.assertIn("speaker", statuses[-1])
+        self.assertIn("喇叭延遲", statuses[-1])
         self.assertIn("本機免費模式", statuses[-1])
         self.assertIn("翻譯服務 本機", statuses[-1])
         self.assertIn("延遲", statuses[-1])

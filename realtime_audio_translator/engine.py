@@ -18,6 +18,10 @@ OverlayCallback = Callable[[str, str], None]
 StatusCallback = Callable[[str], None]
 
 
+def direction_label(direction: str) -> str:
+    return "喇叭" if direction == "speaker" else "麥克風"
+
+
 def drain_queue(items) -> int:
     removed = 0
     while True:
@@ -126,7 +130,7 @@ class RealtimeEngine:
         if device is None:
             device = find_device("Microphone" if not loopback else "Speakers", want_output=loopback)
         if device is None:
-            self.status(f"{'喇叭' if direction == 'speaker' else '麥克風'}：找不到音訊裝置")
+            self.status(f"{direction_label(direction)}：找不到音訊裝置")
             return False
         worker = SegmentWorker(APP_DIR / "cache" / "audio", device, float(self.config["segment_seconds"]), loopback)
         self.workers.append(worker)
@@ -193,7 +197,7 @@ class RealtimeEngine:
                 except Exception as exc:
                     translated = text
                     translation_failed = True
-                    self.status(f"{direction}: translation failed: {exc}")
+                    self.status(f"{direction_label(direction)}：翻譯失敗：{exc}")
                 self.config["last_translation_empty"] = not translation_failed and not bool(str(translated).strip())
                 if not translation_failed:
                     self.config["last_source_text"] = text
@@ -228,9 +232,9 @@ class RealtimeEngine:
                         asr_confidence=asr_confidence,
                         translation_confidence=translation_confidence,
                     )
-                    self.status(f"{direction} latency {latency:.2f}s; {format_confidence_status(snapshot, bool(self.config.get('advanced_mode')))}")
+                    self.status(f"{direction_label(direction)}延遲 {latency:.2f} 秒；{format_confidence_status(snapshot, bool(self.config.get('advanced_mode')))}")
             except Exception as exc:
-                self.status(f"{direction}: {exc}")
+                self.status(f"{direction_label(direction)}：{exc}")
 
     def _speak_translation(self, direction: str, translated: str, target: str, tts_device: str) -> float:
         tts_started = time.perf_counter()
@@ -246,5 +250,5 @@ class RealtimeEngine:
             self.config["last_tts_failed"] = False
         except Exception as exc:
             self.config["last_tts_failed"] = True
-            self.status(f"{direction}: tts failed: {exc}")
+            self.status(f"{direction_label(direction)}：TTS 失敗：{exc}")
         return time.perf_counter() - tts_started
