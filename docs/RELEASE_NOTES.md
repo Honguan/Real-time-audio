@@ -8,8 +8,8 @@
 4. 低階電腦可把「效能模式」改成離線省資源 `offline_light`。
 5. 狀態列會顯示信心提示、延遲、provider、本機/雲端模式與是否可能產生費用。
 6. 若語言判斷信心偏低，診斷會提示把「來源語言」從 `auto` 改成固定語言。
-7. 可按 `Check updates` 檢查 GitHub Releases 是否有新版本。
-8. 可按 `Export subtitles` 把最新 JSONL 對話紀錄匯出成 SRT 與 TXT，檔案放在 `%USERPROFILE%\.realtime-audio\exports\subtitles`。
+7. 可按「檢查更新」檢查 GitHub Releases 是否有新版本。
+8. 可按「匯出字幕」把最新 JSONL 對話紀錄匯出成 SRT 與 TXT，檔案放在 `%USERPROFILE%\.realtime-audio\exports\subtitles`。
 9. 預設是自動發話；勾選「啟動時先靜音」後可用「按住說話」（Push to talk）按住才送出我方翻譯語音。
 10. 切換到 Google 或 OpenAI 時，工具會先提示語音或文字可能傳送到第三方服務並可能產生費用。
 11. 若提示缺 runtime，下載並解壓 runtime zip：
@@ -43,9 +43,9 @@ RealtimeAudioTranslator-runtime-cuda12-<tag>.zip
 
 若 Release 沒有 runtime 檔案，可到 https://github.com/Purfview/whisper-standalone-win/releases 下載 Faster-Whisper-XXL Windows runtime 和 `cuBLAS.and.cuDNN_CUDA12_win_v3.7z`。本機翻譯會優先使用已安裝的 Argos Translate 離線模型，也可在「本機翻譯 URL」填入 LibreTranslate 端點。
 
-翻譯快取會保存在 `%USERPROFILE%\.realtime-audio\cache\translation_cache.db`，術語可用 `Add glossary term` 加入，也可用 `Fix last translation` 修正最近一句，或用 `Open glossary` 編輯。
+翻譯快取會保存在 `%USERPROFILE%\.realtime-audio\cache\translation_cache.db`，術語可用「新增術語」加入，也可用「修正上次翻譯」修正最近一句，或用「開啟術語表」編輯。
 
-需要清除本機資料時，可在進階模式按 `Clear cache` / `Clear logs`，清除翻譯快取、暫存音訊與對話紀錄。
+需要清除本機資料時，可在進階模式按「清除快取」/「清除紀錄」，清除翻譯快取、暫存音訊與對話紀錄。
 
 ## VB-CABLE 設定
 

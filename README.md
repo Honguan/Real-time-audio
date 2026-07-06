@@ -43,7 +43,7 @@ Whisper 模型可放在 `models\whisper-small`；翻譯模型放在 `models\tran
 4. 選擇「場景」後按「套用場景」套用常用場景。
 5. 按「一鍵診斷」檢查 runtime、模型、音訊與 API 設定。
 6. 按「測試字幕」確認字幕 bar 會出現。
-7. 按「測試喇叭」、「測試麥克風」、`TTS test`、「測試虛擬麥克風」確認聲音路由。
+7. 按「測試喇叭」、「測試麥克風」、「測試 TTS」、「測試虛擬麥克風」確認聲音路由。
 8. 按「開始」開始翻譯。
 
 ## VB-CABLE 路由
@@ -63,17 +63,17 @@ Whisper 模型可放在 `models\whisper-small`；翻譯模型放在 `models\tran
 - 「輸出到虛擬麥克風」：開啟後才會把我方翻譯語音送到「TTS 輸出」。
 - 「播放對方翻譯」：開啟後才會把對方語音翻譯播放到「對方翻譯播放輸出」；留空則使用系統預設喇叭。
 - 「儲存對話紀錄」：儲存對話紀錄。
-- `Open logs`：開啟紀錄資料夾，`app.log` 會記錄開始、停止、缺模型與字幕匯出事件。
-- `Clear cache` / `Clear logs`：清除本機翻譯快取、暫存音訊與對話紀錄。
-- `Export subtitles`：把最新 JSONL 對話紀錄匯出成 SRT 與 TXT，檔案放在 `%USERPROFILE%\.realtime-audio\exports\subtitles`。
-- `Open app folder`：開啟 `%USERPROFILE%\.realtime-audio`，設定鏡像在 `config\settings.json`，術語表在 `config\glossary.json`，音訊裝置快照在 `config\audio_devices.json`。
-- `Add glossary term`：加入固定術語翻譯，例如 `cooldown` → `冷卻`。
+- 「開啟紀錄」：開啟紀錄資料夾，`app.log` 會記錄開始、停止、缺模型與字幕匯出事件。
+- 「清除快取」/「清除紀錄」：清除本機翻譯快取、暫存音訊與對話紀錄。
+- 「匯出字幕」：把最新 JSONL 對話紀錄匯出成 SRT 與 TXT，檔案放在 `%USERPROFILE%\.realtime-audio\exports\subtitles`。
+- 「開啟程式資料夾」：開啟 `%USERPROFILE%\.realtime-audio`，設定鏡像在 `config\settings.json`，術語表在 `config\glossary.json`，音訊裝置快照在 `config\audio_devices.json`。
+- 「新增術語」：加入固定術語翻譯，例如 `cooldown` → `冷卻`。
 - 「顯示語言」：在字幕前顯示語言代碼。
 - 「套用場景」：套用遊戲、Discord、會議、客服、字幕-only、自己說話翻譯或雙向翻譯預設。
 - 「效能模式」：可選 `low_latency`、`balanced`、`quality` 或離線省資源 `offline_light`。
 - 「自動優化」：使用 AI 決策中樞依場景、硬體、延遲與診斷結果切換模型、裝置與低延遲設定。
 - 「一鍵診斷」：顯示目前缺少的 runtime、模型、音訊或 API 設定。
-- `Check updates`：檢查 GitHub Releases 是否有新版本。
+- 「檢查更新」：檢查 GitHub Releases 是否有新版本。
 - 狀態列會顯示信心提示、延遲、provider、本機/雲端模式與是否可能產生費用。
 - 若語言判斷信心偏低，診斷會提示把「來源語言」從 `auto` 改成固定語言。
 
@@ -91,9 +91,9 @@ http://127.0.0.1:5000/translate
 
 沒有「本機翻譯 URL」時會嘗試使用已安裝的 Argos Translate 離線模型；也可改用 OpenAI 或 Google provider。OpenAI 使用 `OPENAI_API_KEY` 環境變數，Google 使用 service account JSON 路徑。
 
-`TTS provider` 可選本機、OpenAI 或 Google。進階設定可調 `OpenAI model`、`OpenAI TTS voice`、OpenAI TTS model 與 Google TTS voice。
+「TTS 服務」可選本機、OpenAI 或 Google。進階設定可調「OpenAI 模型」、「OpenAI TTS 聲音」、OpenAI TTS model 與 Google TTS voice。
 
-翻譯快取會保存在 `%USERPROFILE%\.realtime-audio\cache\translation_cache.db`，術語表保存在 `config\glossary.json`，可按 `Add glossary term` 加入固定翻譯，按 `Fix last translation` 修正最近一句並加入術語，或按 `Open glossary` 直接編輯。
+翻譯快取會保存在 `%USERPROFILE%\.realtime-audio\cache\translation_cache.db`，術語表保存在 `config\glossary.json`，可按「新增術語」加入固定翻譯，按「修正上次翻譯」修正最近一句並加入術語，或按「開啟術語表」直接編輯。
 
 ## 常見問題
 

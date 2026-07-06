@@ -33,35 +33,35 @@ AUDIO_DEVICE_KEYS = ("speaker_device", "microphone_device", "tts_output_device",
 SETTING_ROWS = (
     ("來源語言", "source_language"),
     ("目標語言", "target_language"),
-    ("Provider", "provider"),
-    ("Translation style", "translation_style"),
-    ("TTS provider", "tts_provider"),
+    ("翻譯服務", "provider"),
+    ("翻譯風格", "translation_style"),
+    ("TTS 服務", "tts_provider"),
     ("場景", "scenario"),
     ("效能模式", "performance_mode"),
     ("本機翻譯 URL", "local_translate_url"),
-    ("OpenAI model", "openai_model"),
+    ("OpenAI 模型", "openai_model"),
     ("模型", "model"),
-    ("ASR device", "device"),
-    ("Compute type", "compute_type"),
+    ("ASR 裝置", "device"),
+    ("運算精度", "compute_type"),
     ("喇叭來源", "speaker_device"),
     ("麥克風來源", "microphone_device"),
     ("TTS 輸出", "tts_output_device"),
     ("對方翻譯播放輸出", "speaker_tts_output_device"),
-    ("TTS rate", "tts_rate"),
-    ("TTS volume", "tts_volume"),
-    ("TTS voice", "tts_voice_name"),
-    ("Google TTS voice", "google_tts_voice"),
-    ("OpenAI TTS model", "openai_tts_model"),
-    ("OpenAI TTS voice", "openai_tts_voice"),
-    ("Google project", "google_project_id"),
+    ("TTS 速度", "tts_rate"),
+    ("TTS 音量", "tts_volume"),
+    ("TTS 聲音", "tts_voice_name"),
+    ("Google TTS 聲音", "google_tts_voice"),
+    ("OpenAI TTS 模型", "openai_tts_model"),
+    ("OpenAI TTS 聲音", "openai_tts_voice"),
+    ("Google 專案", "google_project_id"),
     ("Google JSON", "google_service_account_json"),
-    ("Glossary JSON", "glossary_path"),
-    ("Segment seconds", "segment_seconds"),
-    ("Speech threshold", "speech_threshold"),
-    ("Overlay opacity", "overlay_opacity"),
-    ("Overlay font size", "overlay_font_size"),
-    ("Overlay hold seconds", "overlay_hold_seconds"),
-    ("Log dir", "log_dir"),
+    ("術語表 JSON", "glossary_path"),
+    ("分段秒數", "segment_seconds"),
+    ("語音閾值", "speech_threshold"),
+    ("字幕透明度", "overlay_opacity"),
+    ("字幕字級", "overlay_font_size"),
+    ("字幕停留秒數", "overlay_hold_seconds"),
+    ("紀錄資料夾", "log_dir"),
     ("runtime 資料夾", "runtime_dir"),
 )
 BASIC_SETTING_KEYS = {
@@ -216,7 +216,7 @@ def diagnostic_action_label(action: str) -> str:
         "open_runtime": "開啟 runtime 資料夾 / 下載 runtime",
         "download_model": "下載模型",
         "audio_settings": "測試喇叭 / 測試麥克風 / 測試虛擬麥克風",
-        "api_settings": "API test",
+        "api_settings": "測試 API",
         "local_translation": "修復本機翻譯",
         "optimize_settings": "自動優化",
         "language_settings": "來源語言",
@@ -311,7 +311,7 @@ class TranslatorApp(tk.Tk):
         self.title("Realtime Audio Translator")
         self.geometry("900x680")
         self.protocol("WM_DELETE_WINDOW", self._quit)
-        self.status = tk.StringVar(value="ready")
+        self.status = tk.StringVar(value="就緒")
         self.runtime_text = tk.StringVar(value="")
         self.mode_text = tk.StringVar(value=self._mode_text())
         self.overlay_generation = 0
@@ -369,27 +369,27 @@ class TranslatorApp(tk.Tk):
             widget.grid(row=row, column=1, sticky="ew", pady=4, padx=8)
             row_widgets.append(widget)
             if key == "google_service_account_json":
-                button = ttk.Button(frame, text="Select", command=self._pick_google_json)
+                button = ttk.Button(frame, text="選擇", command=self._pick_google_json)
                 button.grid(row=row, column=2, sticky="ew")
                 row_widgets.append(button)
             if key == "glossary_path":
-                button = ttk.Button(frame, text="Select", command=self._pick_glossary_json)
+                button = ttk.Button(frame, text="選擇", command=self._pick_glossary_json)
                 button.grid(row=row, column=2, sticky="ew")
                 row_widgets.append(button)
             if key in ("overlay_opacity", "overlay_font_size", "overlay_hold_seconds"):
-                button = ttk.Button(frame, text="Apply", command=self._apply_overlay)
+                button = ttk.Button(frame, text="套用", command=self._apply_overlay)
                 button.grid(row=row, column=2, sticky="ew")
                 row_widgets.append(button)
             if key == "runtime_dir":
-                button = ttk.Button(frame, text="Select", command=self._pick_runtime_dir)
+                button = ttk.Button(frame, text="選擇", command=self._pick_runtime_dir)
                 button.grid(row=row, column=2, sticky="ew")
                 row_widgets.append(button)
             if key == "log_dir":
-                button = ttk.Button(frame, text="Select", command=self._pick_log_dir)
+                button = ttk.Button(frame, text="選擇", command=self._pick_log_dir)
                 button.grid(row=row, column=2, sticky="ew")
                 row_widgets.append(button)
             if key == "tts_voice_name":
-                button = ttk.Button(frame, text="List", command=self._list_tts_voices)
+                button = ttk.Button(frame, text="列出", command=self._list_tts_voices)
                 button.grid(row=row, column=2, sticky="ew")
                 row_widgets.append(button)
             self.setting_widgets[key] = row_widgets
@@ -435,23 +435,23 @@ class TranslatorApp(tk.Tk):
 
         for text, command in (
             ("設定精靈", self._show_setup_guide),
-            ("Refresh", self._refresh_lists),
-            ("Swap languages", self._swap_languages),
+            ("重新整理", self._refresh_lists),
+            ("交換語言", self._swap_languages),
             ("套用場景", self._apply_scenario),
             ("自動優化", self._optimize_settings),
-            ("Recommend model", self._recommend),
+            ("推薦模型", self._recommend),
             ("下載模型", self._download_model),
             ("一鍵診斷", self._run_diagnostics),
-            ("Lock language", self._lock_language),
-            ("Check updates", self._check_updates),
-            ("Update command config", self._refresh_commands),
-            ("Open app folder", self._open_app_dir),
-            ("Open glossary", self._open_glossary),
-            ("Add glossary term", self._add_glossary_term),
-            ("Fix last translation", self._fix_last_translation),
-            ("API test", self._test_api),
-            ("Device tone", self._test_tone),
-            ("TTS test", self._test_tts),
+            ("鎖定語言", self._lock_language),
+            ("檢查更新", self._check_updates),
+            ("更新指令設定", self._refresh_commands),
+            ("開啟程式資料夾", self._open_app_dir),
+            ("開啟術語表", self._open_glossary),
+            ("新增術語", self._add_glossary_term),
+            ("修正上次翻譯", self._fix_last_translation),
+            ("測試 API", self._test_api),
+            ("測試裝置音", self._test_tone),
+            ("測試 TTS", self._test_tts),
             ("測試虛擬麥克風", self._test_virtual_mic),
             ("測試喇叭", self._test_speaker),
             ("測試麥克風", self._test_mic),
@@ -459,21 +459,21 @@ class TranslatorApp(tk.Tk):
             ("開始", self._start),
             ("停止", self._stop),
             ("離開", self._quit),
-            ("Pause/resume", self._toggle_pause),
-            ("Mute/unmute", self._toggle_mute),
-            ("Toggle subtitles", self._toggle_subtitles),
-            ("Toggle speech", self._toggle_speech),
-            ("Toggle speaker", self._toggle_speaker),
-            ("Toggle mic", self._toggle_microphone),
-            ("Copy subtitles", copy_overlay),
-            ("Fix speaker audio", lambda: self._troubleshoot("speaker_audio")),
-            ("Fix mic output", lambda: self._troubleshoot("mic_output")),
-            ("Fix subtitles", lambda: self._troubleshoot("subtitles")),
-            ("Fix local translation", lambda: self._troubleshoot("local_translation")),
-            ("Clear cache", self._clear_cache),
-            ("Open logs", self._open_logs),
-            ("Export subtitles", self._export_subtitles),
-            ("Clear logs", self._clear_logs),
+            ("暫停/繼續", self._toggle_pause),
+            ("靜音/取消靜音", self._toggle_mute),
+            ("切換字幕", self._toggle_subtitles),
+            ("切換語音", self._toggle_speech),
+            ("切換喇叭", self._toggle_speaker),
+            ("切換麥克風", self._toggle_microphone),
+            ("複製字幕", copy_overlay),
+            ("修復喇叭音訊", lambda: self._troubleshoot("speaker_audio")),
+            ("修復麥克風輸出", lambda: self._troubleshoot("mic_output")),
+            ("修復字幕", lambda: self._troubleshoot("subtitles")),
+            ("修復本機翻譯", lambda: self._troubleshoot("local_translation")),
+            ("清除快取", self._clear_cache),
+            ("開啟紀錄", self._open_logs),
+            ("匯出字幕", self._export_subtitles),
+            ("清除紀錄", self._clear_logs),
         ):
             button = ttk.Button(buttons, text=text, command=command)
             self.button_widgets.append((text, button))
@@ -509,10 +509,10 @@ class TranslatorApp(tk.Tk):
         try:
             voices = list_windows_sapi_voices()
         except Exception as exc:
-            self.status.set(f"could not list TTS voices: {exc}")
+            self.status.set(f"無法列出 Windows TTS 聲音：{exc}")
             return
         self.comboboxes["tts_voice_name"].configure(values=voices)
-        self.status.set("; ".join(voices) if voices else "no Windows TTS voices found")
+        self.status.set("; ".join(voices) if voices else "找不到 Windows TTS 聲音")
 
     def _swap_languages(self) -> None:
         source, target = swap_language_values(self.vars["source_language"].get(), self.vars["target_language"].get())
@@ -565,7 +565,7 @@ class TranslatorApp(tk.Tk):
         config = self._config_from_vars()
         cloud_enabled = bool({config["provider"], config["tts_provider"]} & set(CLOUD_PROVIDERS))
         if cloud_activation_requires_confirmation(self.config.get("provider", "local"), self.config.get("tts_provider", "local"), config["provider"], config["tts_provider"]):
-            if not messagebox.askyesno("Enable cloud API?", mode_notice(config["provider"], config["tts_provider"], bool(config["record_logs"]), config.get("local_translate_url", ""))):
+            if not messagebox.askyesno("啟用雲端 API？", mode_notice(config["provider"], config["tts_provider"], bool(config["record_logs"]), config.get("local_translate_url", ""))):
                 self._load_config_into_widgets(self.config)
                 self.status.set("雲端 API 未啟用")
                 return
@@ -618,13 +618,13 @@ class TranslatorApp(tk.Tk):
             self.overlay.withdraw()
 
     def _pick_google_json(self) -> None:
-        path = filedialog.askopenfilename(filetypes=[("JSON", "*.json"), ("All files", "*.*")])
+        path = filedialog.askopenfilename(filetypes=[("JSON", "*.json"), ("所有檔案", "*.*")])
         if path:
             self.vars["google_service_account_json"].set(path)
             self._save()
 
     def _pick_glossary_json(self) -> None:
-        path = filedialog.askopenfilename(filetypes=[("JSON", "*.json"), ("All files", "*.*")])
+        path = filedialog.askopenfilename(filetypes=[("JSON", "*.json"), ("所有檔案", "*.*")])
         if path:
             self.vars["glossary_path"].set(path)
             self._save()
@@ -659,10 +659,10 @@ class TranslatorApp(tk.Tk):
 
     def _add_glossary_term(self) -> None:
         self._save()
-        source = simpledialog.askstring("Add glossary term", "Source text")
+        source = simpledialog.askstring("新增術語", "原文")
         if not source:
             return
-        target = simpledialog.askstring("Add glossary term", "Target text")
+        target = simpledialog.askstring("新增術語", "譯文")
         if not target:
             return
         path = ensure_glossary_file(Path(self.config.get("glossary_path") or APP_DIR / "glossary.json"))
@@ -675,7 +675,7 @@ class TranslatorApp(tk.Tk):
         if not source:
             self.status.set("沒有可修正的近期翻譯")
             return
-        target = simpledialog.askstring("Fix last translation", f"Correct translation for:\n{source}", initialvalue=str(self.config.get("last_translated_text") or ""))
+        target = simpledialog.askstring("修正上次翻譯", f"請輸入修正翻譯：\n{source}", initialvalue=str(self.config.get("last_translated_text") or ""))
         if not target:
             return
         path = ensure_glossary_file(Path(self.config.get("glossary_path") or APP_DIR / "glossary.json"))
@@ -683,7 +683,7 @@ class TranslatorApp(tk.Tk):
         self.status.set("翻譯修正已加入詞彙表")
 
     def _import_runtime(self) -> None:
-        source = filedialog.askdirectory(title="Select extracted Faster-Whisper-XXL folder")
+        source = filedialog.askdirectory(title="選擇已解壓的 Faster-Whisper-XXL 資料夾")
         if not source:
             return
         try:
@@ -747,7 +747,7 @@ class TranslatorApp(tk.Tk):
         issues = collect_diagnostics(self._config_from_vars(), self.repo_root)
         action = first_run_setup_action(issues, bool(self.config.get("setup_guide_shown", False)))
         if action == "diagnostics":
-            self._show_diagnostics("First run setup", issues)
+            self._show_diagnostics("首次設定", issues)
         elif action == "guide":
             self._show_setup_guide()
             if "setup_guide_shown" in self.vars:
@@ -756,7 +756,7 @@ class TranslatorApp(tk.Tk):
             save_config(APP_DIR, self.config)
 
     def _run_diagnostics(self) -> None:
-        self._show_diagnostics("Diagnostics", collect_diagnostics(self._config_from_vars(), self.repo_root))
+        self._show_diagnostics("診斷結果", collect_diagnostics(self._config_from_vars(), self.repo_root))
 
     def _show_diagnostics(self, title: str, issues) -> None:
         action = first_diagnostic_action(issues)
@@ -976,12 +976,12 @@ class TranslatorApp(tk.Tk):
         device = self.vars["tts_output_device"].get()
         tts = TextToSpeech(config)
         if provider == "local":
-            tts.speak_local("Translation output test", device)
+            tts.speak_local("翻譯語音輸出測試", device)
         elif provider == "openai":
-            audio = tts.synthesize_openai_linear16("Translation output test")
+            audio = tts.synthesize_openai_linear16("翻譯語音輸出測試")
             play_linear16(audio, device)
         else:
-            audio = tts.synthesize_google_linear16("Translation output test", config["target_language"])
+            audio = tts.synthesize_google_linear16("翻譯語音輸出測試", config["target_language"])
             play_linear16(audio, device)
 
     def _test_speaker(self) -> None:
@@ -1018,7 +1018,7 @@ class TranslatorApp(tk.Tk):
     def _test_subtitles(self) -> None:
         self.overlay_visible.set(True)
         self._apply_overlay()
-        self.overlay.update_lines("字幕測試", "Subtitle test")
+        self.overlay.update_lines("字幕測試", "字幕測試")
         self.status.set("字幕測試完成")
 
     def _troubleshoot(self, issue: str) -> None:

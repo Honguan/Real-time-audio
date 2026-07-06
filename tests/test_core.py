@@ -203,8 +203,8 @@ class CoreTests(unittest.TestCase):
     def test_open_logs_button_opens_configured_log_dir(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
 
-        self.assertIn('("Open logs", self._open_logs)', gui_source)
-        self.assertIn('("Export subtitles", self._export_subtitles)', gui_source)
+        self.assertIn('("開啟紀錄", self._open_logs)', gui_source)
+        self.assertIn('("匯出字幕", self._export_subtitles)', gui_source)
         self.assertIn('def _open_logs(self) -> None:', gui_source)
         self.assertIn('def _export_subtitles(self) -> None:', gui_source)
         self.assertIn("export_jsonl_to_srt", gui_source)
@@ -216,7 +216,7 @@ class CoreTests(unittest.TestCase):
     def test_open_app_folder_button_opens_app_dir(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
 
-        self.assertIn('("Open app folder", self._open_app_dir)', gui_source)
+        self.assertIn('("開啟程式資料夾", self._open_app_dir)', gui_source)
         self.assertIn('def _open_app_dir(self) -> None:', gui_source)
         self.assertIn('path = APP_DIR', gui_source)
 
@@ -248,7 +248,7 @@ class CoreTests(unittest.TestCase):
 
         self.assertIn('("測試字幕", self._test_subtitles)', gui_source)
         self.assertIn('def _test_subtitles(self) -> None:', gui_source)
-        self.assertIn('self.overlay.update_lines("字幕測試", "Subtitle test")', gui_source)
+        self.assertIn('self.overlay.update_lines("字幕測試", "字幕測試")', gui_source)
 
     def test_overlay_quick_toggle_switches_visibility(self):
         import realtime_audio_translator.gui as gui_module
@@ -258,7 +258,7 @@ class CoreTests(unittest.TestCase):
         self.assertTrue(gui_module.toggle_overlay_visibility(False))
 
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
-        self.assertIn('("Toggle subtitles", self._toggle_subtitles)', gui_source)
+        self.assertIn('("切換字幕", self._toggle_subtitles)', gui_source)
         self.assertIn("self.overlay_visible.set(toggle_overlay_visibility(self.overlay_visible.get()))", gui_source)
 
     def test_speech_quick_toggle_switches_tts_output(self):
@@ -269,7 +269,7 @@ class CoreTests(unittest.TestCase):
         self.assertTrue(gui_module.toggle_speech_enabled(False))
 
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
-        self.assertIn('("Toggle speech", self._toggle_speech)', gui_source)
+        self.assertIn('("切換語音", self._toggle_speech)', gui_source)
         self.assertIn("self.tts_enabled.set(toggle_speech_enabled(self.tts_enabled.get()))", gui_source)
         self.assertIn("輸出到虛擬麥克風", gui_source)
         self.assertIn('config["virtual_mic_enabled"] = self.virtual_mic_enabled.get()', gui_source)
@@ -284,8 +284,8 @@ class CoreTests(unittest.TestCase):
         self.assertTrue(gui_module.toggle_source_enabled(False))
 
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
-        self.assertIn('("Toggle speaker", self._toggle_speaker)', gui_source)
-        self.assertIn('("Toggle mic", self._toggle_microphone)', gui_source)
+        self.assertIn('("切換喇叭", self._toggle_speaker)', gui_source)
+        self.assertIn('("切換麥克風", self._toggle_microphone)', gui_source)
 
     def test_mic_test_button_reports_input_level(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
@@ -307,16 +307,16 @@ class CoreTests(unittest.TestCase):
     def test_tts_test_button_uses_configured_output(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
 
-        self.assertIn('("TTS test", self._test_tts)', gui_source)
+        self.assertIn('("測試 TTS", self._test_tts)', gui_source)
         self.assertIn('("測試虛擬麥克風", self._test_virtual_mic)', gui_source)
         self.assertIn('def _test_tts(self) -> None:', gui_source)
         self.assertIn('def _test_virtual_mic(self) -> None:', gui_source)
         self.assertIn('config["last_virtual_mic_failed"] = False', gui_source)
         self.assertIn('config["last_virtual_mic_failed"] = True', gui_source)
         self.assertIn('provider = config.get("tts_provider", "local")', gui_source)
-        self.assertIn('tts.speak_local("Translation output test", device)', gui_source)
-        self.assertIn('audio = tts.synthesize_openai_linear16("Translation output test")', gui_source)
-        self.assertIn('audio = tts.synthesize_google_linear16("Translation output test", config["target_language"])', gui_source)
+        self.assertIn('tts.speak_local("翻譯語音輸出測試", device)', gui_source)
+        self.assertIn('audio = tts.synthesize_openai_linear16("翻譯語音輸出測試")', gui_source)
+        self.assertIn('audio = tts.synthesize_google_linear16("翻譯語音輸出測試", config["target_language"])', gui_source)
 
     def test_setup_guide_button_shows_first_run_steps(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
@@ -632,7 +632,7 @@ class CoreTests(unittest.TestCase):
 
         issue = next(item for item in issues if item.code == "translation_confidence_low")
         self.assertEqual(issue.action, "local_translation")
-        self.assertIn("Fix last translation", issue.fix)
+        self.assertIn("修正上次翻譯", issue.fix)
 
     def test_diagnostics_report_low_asr_confidence(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1085,7 +1085,7 @@ class CoreTests(unittest.TestCase):
         self.assertIn('config["last_vram_gb"] = vram_gb', gui_source)
         self.assertIn("def _auto_optimize_before_start", gui_source)
         self.assertIn("self._auto_optimize_before_start()", gui_source)
-        self.assertIn('("Check updates", self._check_updates)', gui_source)
+        self.assertIn('("檢查更新", self._check_updates)', gui_source)
         self.assertIn("latest_release_tag", gui_source)
 
     def test_auto_optimize_before_start_applies_recommended_config_only_when_enabled(self):
@@ -1156,21 +1156,21 @@ class CoreTests(unittest.TestCase):
     def test_simple_mode_hides_advanced_buttons(self):
         buttons = [
             "設定精靈",
-            "Refresh",
+            "重新整理",
             "套用場景",
             "自動優化",
             "下載模型",
             "一鍵診斷",
-            "API test",
-            "Open app folder",
+            "測試 API",
+            "開啟程式資料夾",
             "測試虛擬麥克風",
             "測試喇叭",
             "測試字幕",
             "開始",
-            "Fix local translation",
-            "Clear cache",
-            "Open logs",
-            "Clear logs",
+            "修復本機翻譯",
+            "清除快取",
+            "開啟紀錄",
+            "清除紀錄",
             "按住說話",
         ]
 
@@ -1187,13 +1187,13 @@ class CoreTests(unittest.TestCase):
         self.assertIn("測試字幕", simple)
         self.assertIn("開始", simple)
         self.assertIn("按住說話", simple)
-        self.assertNotIn("Refresh", simple)
-        self.assertNotIn("API test", simple)
-        self.assertNotIn("Open app folder", simple)
-        self.assertNotIn("Fix local translation", simple)
-        self.assertNotIn("Clear cache", simple)
-        self.assertNotIn("Open logs", simple)
-        self.assertNotIn("Clear logs", simple)
+        self.assertNotIn("重新整理", simple)
+        self.assertNotIn("測試 API", simple)
+        self.assertNotIn("開啟程式資料夾", simple)
+        self.assertNotIn("修復本機翻譯", simple)
+        self.assertNotIn("清除快取", simple)
+        self.assertNotIn("開啟紀錄", simple)
+        self.assertNotIn("清除紀錄", simple)
         self.assertEqual(advanced, buttons)
 
     def test_clear_logs_and_cache_keep_app_dirs(self):
@@ -1455,8 +1455,8 @@ class CoreTests(unittest.TestCase):
     def test_gui_can_add_glossary_term(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
 
-        self.assertIn('("Add glossary term", self._add_glossary_term)', gui_source)
-        self.assertIn('("Fix last translation", self._fix_last_translation)', gui_source)
+        self.assertIn('("新增術語", self._add_glossary_term)', gui_source)
+        self.assertIn('("修正上次翻譯", self._fix_last_translation)', gui_source)
         self.assertIn("last_source_text", gui_source)
         self.assertIn("simpledialog.askstring", gui_source)
         self.assertIn("add_glossary_term", gui_source)
@@ -2075,13 +2075,13 @@ class CoreTests(unittest.TestCase):
         notes = Path("docs/RELEASE_NOTES.md").read_text(encoding="utf-8")
 
         for text in (readme, notes):
-            self.assertIn("Check updates", text)
+            self.assertIn("檢查更新", text)
             self.assertIn("GitHub Releases", text)
 
     def test_readme_mentions_open_logs(self):
         readme = Path("README.md").read_text(encoding="utf-8")
 
-        self.assertIn("Open logs", readme)
+        self.assertIn("開啟紀錄", readme)
         self.assertIn("app.log", readme)
         self.assertIn("開啟紀錄資料夾", readme)
 
@@ -2090,14 +2090,14 @@ class CoreTests(unittest.TestCase):
         notes = Path("docs/RELEASE_NOTES.md").read_text(encoding="utf-8")
 
         for text in (readme, notes):
-            self.assertIn("Clear cache", text)
-            self.assertIn("Clear logs", text)
+            self.assertIn("清除快取", text)
+            self.assertIn("清除紀錄", text)
             self.assertIn("翻譯快取", text)
 
     def test_readme_mentions_open_app_folder(self):
         readme = Path("README.md").read_text(encoding="utf-8")
 
-        self.assertIn("Open app folder", readme)
+        self.assertIn("開啟程式資料夾", readme)
         self.assertIn("%USERPROFILE%\\.realtime-audio", readme)
         self.assertIn("settings.json", readme)
         self.assertIn("audio_devices.json", readme)
@@ -2111,7 +2111,7 @@ class CoreTests(unittest.TestCase):
         notes = Path("docs/RELEASE_NOTES.md").read_text(encoding="utf-8")
 
         for text in (readme, notes):
-            self.assertIn("Export subtitles", text)
+            self.assertIn("匯出字幕", text)
             self.assertIn("%USERPROFILE%\\.realtime-audio\\exports\\subtitles", text)
 
     def test_readme_and_release_notes_mention_add_glossary_term(self):
@@ -2119,18 +2119,18 @@ class CoreTests(unittest.TestCase):
         notes = Path("docs/RELEASE_NOTES.md").read_text(encoding="utf-8")
 
         for text in (readme, notes):
-            self.assertIn("Add glossary term", text)
-            self.assertIn("Fix last translation", text)
+            self.assertIn("新增術語", text)
+            self.assertIn("修正上次翻譯", text)
             self.assertIn("術語", text)
 
     def test_readme_mentions_tts_test_provider(self):
         readme = Path("README.md").read_text(encoding="utf-8")
 
-        self.assertIn("TTS test", readme)
+        self.assertIn("測試 TTS", readme)
         self.assertIn("測試虛擬麥克風", readme)
-        self.assertIn("TTS provider", readme)
-        self.assertIn("OpenAI model", readme)
-        self.assertIn("OpenAI TTS voice", readme)
+        self.assertIn("TTS 服務", readme)
+        self.assertIn("OpenAI 模型", readme)
+        self.assertIn("OpenAI TTS 聲音", readme)
 
     def test_readme_mentions_overlay_language_and_topmost(self):
         readme = Path("README.md").read_text(encoding="utf-8")
@@ -2225,7 +2225,7 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(language_lock_value("zh", "en"), "zh")
         self.assertEqual(language_lock_value("auto", ""), "auto")
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
-        self.assertIn('("Lock language", self._lock_language)', gui_source)
+        self.assertIn('("鎖定語言", self._lock_language)', gui_source)
 
     def test_language_choices_cover_mvp_languages(self):
         self.assertEqual(LANGUAGE_CHOICES, ("auto", "zh", "en", "ja", "ko"))

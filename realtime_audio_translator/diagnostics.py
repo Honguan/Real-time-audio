@@ -140,7 +140,7 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
             "info",
             "翻譯信心偏低",
             f"最近一次翻譯信心約 {round(translation_confidence * 100)}%",
-            "可按 Fix last translation 加入術語，或設定「本機翻譯 URL」",
+            "可按「修正上次翻譯」加入術語，或設定「本機翻譯 URL」",
             "local_translation",
         ))
     if config.get("last_tts_failed"):
@@ -149,7 +149,7 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
             "warning",
             "TTS 沒有聲音",
             "最近一次翻譯語音播放失敗",
-            "檢查「TTS 輸出」、VB-CABLE 與 TTS provider 設定",
+            "檢查「TTS 輸出」、VB-CABLE 與 TTS 服務設定",
             "audio_settings",
         ))
     try:
