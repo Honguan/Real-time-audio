@@ -40,11 +40,11 @@ Whisper 模型可放在 `models\whisper-small`；翻譯模型放在 `models\tran
 1. 安裝 VB-Audio Virtual Cable。
 2. 開啟 `RealtimeAudioTranslator.exe`。
 3. 選擇喇叭、麥克風、`TTS output`、來源語言與目標語言；若要聽對方語音的翻譯，開 `Speak opponent` 並選 `Speaker TTS output`。
-4. 選擇 `Scenario` 後按 `Apply scenario` 套用常用場景。
-5. 按 `Run diagnostics` 檢查 runtime、模型、音訊與 API 設定。
-6. 按 `Subtitle test` 確認字幕 bar 會出現。
-7. 按 `Speaker test`、`Mic test`、`TTS test`、`Virtual mic test` 確認聲音路由。
-8. 按 `Start` 開始翻譯。
+4. 選擇 `Scenario` 後按「套用場景」套用常用場景。
+5. 按「一鍵診斷」檢查 runtime、模型、音訊與 API 設定。
+6. 按「測試字幕」確認字幕 bar 會出現。
+7. 按「測試喇叭」、「測試麥克風」、`TTS test`、「測試虛擬麥克風」確認聲音路由。
+8. 按「開始」開始翻譯。
 
 ## VB-CABLE 路由
 
@@ -59,7 +59,7 @@ Whisper 模型可放在 `models\whisper-small`；翻譯模型放在 `models\tran
 - `Overlay topmost`：讓字幕 bar 保持最上層。
 - `Show original` / `Show translation`：切換原文與譯文。
 - `Speak translations`：開關翻譯語音輸出。
-- `Start muted`：啟動後先靜音，搭配 `Push to talk` 變成按住才送出我方翻譯語音；不勾選時就是自動發話模式。
+- `Start muted`：啟動後先靜音，搭配「按住說話」變成按住才送出我方翻譯語音；不勾選時就是自動發話模式。
 - `Virtual mic output`：開啟後才會把我方翻譯語音送到 `TTS output`。
 - `Speak opponent`：開啟後才會把對方語音翻譯播放到 `Speaker TTS output`；留空則使用系統預設喇叭。
 - `Record logs`：儲存對話紀錄。
@@ -69,15 +69,15 @@ Whisper 模型可放在 `models\whisper-small`；翻譯模型放在 `models\tran
 - `Open app folder`：開啟 `%USERPROFILE%\.realtime-audio`，設定鏡像在 `config\settings.json`，術語表在 `config\glossary.json`，音訊裝置快照在 `config\audio_devices.json`。
 - `Add glossary term`：加入固定術語翻譯，例如 `cooldown` → `冷卻`。
 - `Show language`：在字幕前顯示語言代碼。
-- `Apply scenario`：套用遊戲、Discord、會議、客服、字幕-only、自己說話翻譯或雙向翻譯預設。
+- 「套用場景」：套用遊戲、Discord、會議、客服、字幕-only、自己說話翻譯或雙向翻譯預設。
 - `Performance mode`：可選 `low_latency`、`balanced`、`quality` 或離線省資源 `offline_light`。
-- `Optimize settings`：使用 AI 決策中樞依場景、硬體、延遲與診斷結果切換模型、裝置與低延遲設定。
-- `Run diagnostics`：顯示目前缺少的 runtime、模型、音訊或 API 設定。
+- 「自動優化」：使用 AI 決策中樞依場景、硬體、延遲與診斷結果切換模型、裝置與低延遲設定。
+- 「一鍵診斷」：顯示目前缺少的 runtime、模型、音訊或 API 設定。
 - `Check updates`：檢查 GitHub Releases 是否有新版本。
 - 狀態列會顯示信心提示、延遲、provider、本機/雲端模式與是否可能產生費用。
 - 若語言判斷信心偏低，診斷會提示把 `Source language` 從 `auto` 改成固定語言。
 
-`Push to talk` 是按住才暫時取消靜音；勾選 `Start muted` 時按住才輸出我方翻譯語音，未勾選時翻譯語音會自動輸出。
+「按住說話」（Push to talk）是按住才暫時取消靜音；勾選 `Start muted` 時按住才輸出我方翻譯語音，未勾選時翻譯語音會自動輸出。
 
 ## 翻譯與 TTS
 
@@ -97,8 +97,8 @@ http://127.0.0.1:5000/translate
 
 ## 常見問題
 
-- 沒有字幕：確認 `Show overlay` 已開啟，並按 `Subtitle test`。
-- 聽不到對方聲音：確認喇叭來源選的是 Discord 或遊戲正在播放的裝置，再按 `Speaker test`。
+- 沒有字幕：確認 `Show overlay` 已開啟，並按「測試字幕」。
+- 聽不到對方聲音：確認喇叭來源選的是 Discord 或遊戲正在播放的裝置，再按「測試喇叭」。
 - 找不到 runtime：確認 `RealtimeAudioTranslator-runtime-cuda12-<tag>.zip` 已解壓到 `%USERPROFILE%\.realtime-audio\runtime\cuda12`。
 - 找不到模型：在工具內下載模型，或解壓模型 zip 到 `%USERPROFILE%\.realtime-audio\models`。
 - 對方聽不到翻譯語音：確認 `Speak translations` 與 `Virtual mic output` 已開啟，且 `TTS output` 選 `CABLE Input`。

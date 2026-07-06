@@ -4,13 +4,13 @@
 
 1. 到 GitHub Releases 下載 `RealtimeAudioTranslator-<tag>-win-x64.zip`。
 2. 解壓後執行 `RealtimeAudioTranslator.exe`。
-3. 第一次開啟會提示 runtime / model 診斷；可用 `Scenario` 選遊戲、Discord、會議、客服、字幕-only、自己說話翻譯或雙向翻譯場景，按 `Apply scenario` 套用預設，也可按 `Optimize settings` 讓 AI 決策中樞依場景、硬體、延遲與診斷結果調整設定，再按 `Run diagnostics` 檢查設定。
+3. 第一次開啟會提示 runtime / model 診斷；可用 `Scenario` 選遊戲、Discord、會議、客服、字幕-only、自己說話翻譯或雙向翻譯場景，按「套用場景」套用預設，也可按「自動優化」讓 AI 決策中樞依場景、硬體、延遲與診斷結果調整設定，再按「一鍵診斷」檢查設定。
 4. 低階電腦可把 `Performance mode` 改成離線省資源 `offline_light`。
 5. 狀態列會顯示信心提示、延遲、provider、本機/雲端模式與是否可能產生費用。
 6. 若語言判斷信心偏低，診斷會提示把 `Source language` 從 `auto` 改成固定語言。
 7. 可按 `Check updates` 檢查 GitHub Releases 是否有新版本。
 8. 可按 `Export subtitles` 把最新 JSONL 對話紀錄匯出成 SRT 與 TXT，檔案放在 `%USERPROFILE%\.realtime-audio\exports\subtitles`。
-9. 預設是自動發話；勾選 `Start muted` 後可用 `Push to talk` 按住才送出我方翻譯語音。
+9. 預設是自動發話；勾選 `Start muted` 後可用「按住說話」（Push to talk）按住才送出我方翻譯語音。
 10. 切換到 Google 或 OpenAI 時，工具會先提示語音或文字可能傳送到第三方服務並可能產生費用。
 11. 若提示缺 runtime，下載並解壓 runtime zip：
 
@@ -57,8 +57,8 @@ RealtimeAudioTranslator-runtime-cuda12-<tag>.zip
 
 ## 常見問題
 
-- 沒有字幕：確認 `Show overlay` 已開啟，並按 `Subtitle test`。
-- 聽不到對方聲音：確認喇叭來源選的是 Discord 或遊戲正在播放的裝置，再按 `Speaker test`。
+- 沒有字幕：確認 `Show overlay` 已開啟，並按「測試字幕」。
+- 聽不到對方聲音：確認喇叭來源選的是 Discord 或遊戲正在播放的裝置，再按「測試喇叭」。
 - 找不到 runtime：確認 `RealtimeAudioTranslator-runtime-cuda12-<tag>.zip` 已解壓到 `%USERPROFILE%\.realtime-audio\runtime\cuda12`。
 - 找不到模型：在工具內下載模型，或解壓模型 zip 到 `%USERPROFILE%\.realtime-audio\models`。
 - 對方聽不到翻譯語音：確認 `Speak translations` 與 `Virtual mic output` 已開啟，且 `TTS output` 選 `CABLE Input`。

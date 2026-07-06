@@ -1975,7 +1975,7 @@ class CoreTests(unittest.TestCase):
         self.assertIn("%USERPROFILE%\\.realtime-audio\\runtime\\cuda12", quick_start)
         self.assertIn("%USERPROFILE%\\.realtime-audio\\models", quick_start)
         self.assertIn("Scenario", quick_start)
-        self.assertIn("Run diagnostics", quick_start)
+        self.assertIn("一鍵診斷", quick_start)
         self.assertIn("CABLE Output", quick_start)
         self.assertIn("CABLE Input", quick_start)
         self.assertIn("Local translate URL", quick_start)
@@ -2005,10 +2005,12 @@ class CoreTests(unittest.TestCase):
 
         self.assertIn("Start muted", readme)
         self.assertIn("Push to talk", readme)
+        self.assertIn("按住說話", readme)
         self.assertIn("按住才暫時取消靜音", readme)
         self.assertNotIn("hold it to unmute TTS output", readme)
         self.assertIn("Start muted", notes)
         self.assertIn("Push to talk", notes)
+        self.assertIn("按住說話", notes)
 
     def test_readme_and_release_notes_mention_virtual_mic_output_switch(self):
         readme = Path("README.md").read_text(encoding="utf-8")
@@ -2032,7 +2034,7 @@ class CoreTests(unittest.TestCase):
 
         for text in (readme, notes):
             self.assertIn("AI 決策中樞", text)
-            self.assertIn("Optimize settings", text)
+            self.assertIn("自動優化", text)
 
     def test_readme_and_release_notes_mention_all_scenarios(self):
         readme = Path("README.md").read_text(encoding="utf-8")
@@ -2123,7 +2125,7 @@ class CoreTests(unittest.TestCase):
         readme = Path("README.md").read_text(encoding="utf-8")
 
         self.assertIn("TTS test", readme)
-        self.assertIn("Virtual mic test", readme)
+        self.assertIn("測試虛擬麥克風", readme)
         self.assertIn("TTS provider", readme)
         self.assertIn("OpenAI model", readme)
         self.assertIn("OpenAI TTS voice", readme)
