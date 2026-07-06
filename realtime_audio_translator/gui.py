@@ -703,6 +703,10 @@ class TranslatorApp(tk.Tk):
         self.vars["runtime_dir"].set(str(target))
         self._save()
         self._refresh_runtime_status()
+        status = runtime_status(target)
+        if not status["ready"]:
+            messagebox.showerror("runtime 不完整", "缺少：" + ", ".join(status["missing"]))
+            return
         try:
             refresh_commands(whisper_exe(target), APP_DIR / "commands.json")
         except Exception as exc:
