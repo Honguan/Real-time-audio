@@ -1051,6 +1051,12 @@ class TranslatorApp(tk.Tk):
     def _start(self) -> None:
         self._save()
         self._auto_optimize_before_start()
+        status = runtime_status(runtime_dir(self.config))
+        if not status["ready"]:
+            append_app_log(APP_DIR, "runtime_missing", missing=status["missing"])
+            messagebox.showerror("找不到 runtime", runtime_install_message(runtime_dir(self.config)))
+            self.status.set("找不到 runtime：" + ", ".join(status["missing"]))
+            return
         app_models = models_dir(self.config)
         if not model_available(self.config["model"], self.repo_root / "_models", app_models):
             append_app_log(APP_DIR, "model_missing", model=self.config["model"])

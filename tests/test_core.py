@@ -2039,6 +2039,10 @@ class CoreTests(unittest.TestCase):
     def test_start_checks_model_before_engine(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
 
+        self.assertIn("status = runtime_status(runtime_dir(self.config))", gui_source)
+        self.assertIn('if not status["ready"]:', gui_source)
+        self.assertIn('append_app_log(APP_DIR, "runtime_missing", missing=status["missing"])', gui_source)
+        self.assertIn('messagebox.showerror("找不到 runtime", runtime_install_message(runtime_dir(self.config)))', gui_source)
         self.assertIn("app_models = models_dir(self.config)", gui_source)
         self.assertIn('if not model_available(self.config["model"], self.repo_root / "_models", app_models):', gui_source)
         self.assertIn('messagebox.showerror("找不到模型", model_install_message(self.config["model"], app_models))', gui_source)
