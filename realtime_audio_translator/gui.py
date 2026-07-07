@@ -411,10 +411,12 @@ class TranslatorApp(tk.Tk):
         ttk.Checkbutton(frame, text="進階設定", variable=self.advanced_mode, command=self._apply_mode).grid(row=next_row + 5, column=2, sticky="w")
         record_logs_widget = ttk.Checkbutton(frame, text="儲存對話紀錄", variable=self.record_logs, command=self._save)
         record_logs_widget.grid(row=next_row + 6, column=0, sticky="w")
-        self.advanced_mode_widgets = [record_logs_widget]
+        speaker_tts_widget = ttk.Checkbutton(frame, text="播放對方翻譯", variable=self.speaker_tts_enabled, command=self._save)
+        speaker_tts_widget.grid(row=next_row + 6, column=2, sticky="w")
+        start_muted_widget = ttk.Checkbutton(frame, text="啟動時先靜音", variable=self.start_muted, command=self._save)
+        start_muted_widget.grid(row=next_row + 7, column=0, sticky="w")
+        self.advanced_mode_widgets = [record_logs_widget, speaker_tts_widget, start_muted_widget]
         ttk.Checkbutton(frame, text="輸出到虛擬麥克風", variable=self.virtual_mic_enabled, command=self._save).grid(row=next_row + 6, column=1, sticky="w")
-        ttk.Checkbutton(frame, text="播放對方翻譯", variable=self.speaker_tts_enabled, command=self._save).grid(row=next_row + 6, column=2, sticky="w")
-        ttk.Checkbutton(frame, text="啟動時先靜音", variable=self.start_muted, command=self._save).grid(row=next_row + 7, column=0, sticky="w")
 
         buttons = ttk.Frame(frame)
         buttons.grid(row=next_row + 8, column=0, columnspan=3, sticky="ew", pady=12)

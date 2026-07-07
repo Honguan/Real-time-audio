@@ -241,7 +241,9 @@ class CoreTests(unittest.TestCase):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
 
         self.assertIn('record_logs_widget = ttk.Checkbutton(frame, text="儲存對話紀錄", variable=self.record_logs, command=self._save)', gui_source)
-        self.assertIn("self.advanced_mode_widgets = [record_logs_widget]", gui_source)
+        self.assertIn('speaker_tts_widget = ttk.Checkbutton(frame, text="播放對方翻譯", variable=self.speaker_tts_enabled, command=self._save)', gui_source)
+        self.assertIn('start_muted_widget = ttk.Checkbutton(frame, text="啟動時先靜音", variable=self.start_muted, command=self._save)', gui_source)
+        self.assertIn("self.advanced_mode_widgets = [record_logs_widget, speaker_tts_widget, start_muted_widget]", gui_source)
         self.assertIn("for widget in self.advanced_mode_widgets:", gui_source)
         self.assertIn('ttk.Checkbutton(frame, text="顯示譯文", variable=self.show_translated_text, command=self._save)', gui_source)
 
