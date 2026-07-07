@@ -245,7 +245,7 @@ class CoreTests(unittest.TestCase):
         self.assertIn('start_muted_widget = ttk.Checkbutton(frame, text="啟動時先靜音", variable=self.start_muted, command=self._save)', gui_source)
         self.assertIn('language_labels_widget = ttk.Checkbutton(frame, text="顯示語言", variable=self.show_language_labels, command=self._save)', gui_source)
         self.assertIn('speaker_capture_widget = ttk.Checkbutton(frame, text="擷取喇叭", variable=self.speaker_enabled, command=self._save)', gui_source)
-        self.assertIn("self.advanced_mode_widgets = [language_labels_widget, original_text_widget, translated_text_widget, speaker_capture_widget, microphone_capture_widget, record_logs_widget, speaker_tts_widget, start_muted_widget]", gui_source)
+        self.assertIn("self.advanced_mode_widgets = [runtime_buttons_widget, language_labels_widget, original_text_widget, translated_text_widget, speaker_capture_widget, microphone_capture_widget, record_logs_widget, speaker_tts_widget, start_muted_widget]", gui_source)
         self.assertIn("for widget in self.advanced_mode_widgets:", gui_source)
         self.assertIn('translated_text_widget = ttk.Checkbutton(frame, text="顯示譯文", variable=self.show_translated_text, command=self._save)', gui_source)
 
@@ -372,7 +372,8 @@ class CoreTests(unittest.TestCase):
 
         self.assertIn('("設定精靈", self._show_setup_guide)', gui_source)
         self.assertIn('def _show_setup_guide(self) -> None:', gui_source)
-        self.assertIn("匯入 runtime", gui_source)
+        self.assertIn("一鍵診斷", gui_source)
+        self.assertIn("手動匯入 runtime", gui_source)
         self.assertIn("下載模型", gui_source)
         self.assertIn("喇叭來源", gui_source)
         self.assertIn("麥克風來源", gui_source)

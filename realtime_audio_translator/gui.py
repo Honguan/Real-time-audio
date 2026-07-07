@@ -393,12 +393,12 @@ class TranslatorApp(tk.Tk):
         ttk.Label(frame, textvariable=self.runtime_text, foreground="#a94442").grid(row=next_row, column=0, columnspan=3, sticky="ew", pady=4)
         ttk.Label(frame, textvariable=self.mode_text, foreground="#7a4b00").grid(row=next_row + 1, column=0, columnspan=3, sticky="ew", pady=4)
 
-        runtime_buttons = ttk.Frame(frame)
-        runtime_buttons.grid(row=next_row + 2, column=0, columnspan=3, sticky="ew", pady=4)
-        ttk.Button(runtime_buttons, text="開啟 runtime 資料夾", command=self._open_runtime_dir).pack(side="left", padx=3)
-        ttk.Button(runtime_buttons, text="匯入已解壓 runtime", command=self._import_runtime).pack(side="left", padx=3)
-        ttk.Button(runtime_buttons, text="下載 runtime 檔案", command=lambda: webbrowser.open(RUNTIME_RELEASE_URL)).pack(side="left", padx=3)
-        ttk.Button(runtime_buttons, text="備用 runtime 來源", command=lambda: webbrowser.open(UPSTREAM_RUNTIME_RELEASE_URL)).pack(side="left", padx=3)
+        runtime_buttons_widget = ttk.Frame(frame)
+        runtime_buttons_widget.grid(row=next_row + 2, column=0, columnspan=3, sticky="ew", pady=4)
+        ttk.Button(runtime_buttons_widget, text="開啟 runtime 資料夾", command=self._open_runtime_dir).pack(side="left", padx=3)
+        ttk.Button(runtime_buttons_widget, text="匯入已解壓 runtime", command=self._import_runtime).pack(side="left", padx=3)
+        ttk.Button(runtime_buttons_widget, text="下載 runtime 檔案", command=lambda: webbrowser.open(RUNTIME_RELEASE_URL)).pack(side="left", padx=3)
+        ttk.Button(runtime_buttons_widget, text="備用 runtime 來源", command=lambda: webbrowser.open(UPSTREAM_RUNTIME_RELEASE_URL)).pack(side="left", padx=3)
 
         ttk.Checkbutton(frame, text="顯示字幕", variable=self.overlay_visible, command=self._apply_overlay).grid(row=next_row + 3, column=0, sticky="w")
         ttk.Checkbutton(frame, text="字幕最上層", variable=self.overlay_topmost, command=self._apply_overlay).grid(row=next_row + 3, column=1, sticky="w")
@@ -420,7 +420,7 @@ class TranslatorApp(tk.Tk):
         speaker_tts_widget.grid(row=next_row + 6, column=2, sticky="w")
         start_muted_widget = ttk.Checkbutton(frame, text="啟動時先靜音", variable=self.start_muted, command=self._save)
         start_muted_widget.grid(row=next_row + 7, column=0, sticky="w")
-        self.advanced_mode_widgets = [language_labels_widget, original_text_widget, translated_text_widget, speaker_capture_widget, microphone_capture_widget, record_logs_widget, speaker_tts_widget, start_muted_widget]
+        self.advanced_mode_widgets = [runtime_buttons_widget, language_labels_widget, original_text_widget, translated_text_widget, speaker_capture_widget, microphone_capture_widget, record_logs_widget, speaker_tts_widget, start_muted_widget]
         ttk.Checkbutton(frame, text="輸出到虛擬麥克風", variable=self.virtual_mic_enabled, command=self._save).grid(row=next_row + 6, column=1, sticky="w")
 
         buttons = ttk.Frame(frame)
@@ -820,7 +820,7 @@ class TranslatorApp(tk.Tk):
     def _show_setup_guide(self) -> None:
         messagebox.showinfo(
             "設定指南",
-            "1. 匯入 runtime，或開啟 runtime 資料夾放入解壓後檔案。\n"
+            "1. 按「一鍵診斷」處理 runtime，進階模式也可手動匯入 runtime。\n"
             "2. 按「一鍵診斷」下載模型，或把模型 zip 解壓到 models 資料夾。\n"
             "3. 選擇「喇叭來源」、「麥克風來源」與「TTS 輸出」。\n"
             "4. Discord 麥克風選 CABLE Output，本工具「TTS 輸出」選 CABLE Input。\n"
