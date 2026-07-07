@@ -818,7 +818,7 @@ class TranslatorApp(tk.Tk):
             "3. 選擇「喇叭來源」、「麥克風來源」與「TTS 輸出」。\n"
             "4. Discord 麥克風選 CABLE Output，本工具「TTS 輸出」選 CABLE Input。\n"
             "5. 選場景會自動套用；進階模式可調模型、runtime 路徑與自動優化。\n"
-            "6. 開始前先跑「測試字幕」、「測試喇叭」、「測試麥克風」與「測試虛擬麥克風」。",
+            "6. 開始前先跑「測試麥克風」與「測試虛擬麥克風」；進階模式可再測字幕、喇叭與 TTS。",
         )
 
     def _recommend(self) -> None:

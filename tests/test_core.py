@@ -374,9 +374,10 @@ class CoreTests(unittest.TestCase):
         self.assertIn("麥克風來源", gui_source)
         self.assertIn("TTS 輸出", gui_source)
         self.assertIn("CABLE Output", gui_source)
-        self.assertIn("套用場景", gui_source)
+        self.assertIn("選場景會自動套用", gui_source)
         self.assertIn("自動優化", gui_source)
-        self.assertIn("測試字幕", gui_source)
+        self.assertIn("測試麥克風", gui_source)
+        self.assertIn("測試虛擬麥克風", gui_source)
 
     def test_first_run_wizard_opens_for_audio_setup_issues(self):
         issues = [DiagnosticIssue("microphone_device_missing", "warning", "找不到麥克風", "", "", "audio_settings")]
