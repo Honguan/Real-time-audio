@@ -19,7 +19,7 @@ def recommend_tuning(config: dict, cuda_devices: int, vram_gb: int, latency_seco
             "未偵測到 CUDA GPU，使用 CUDA 設定可能無法啟動或延遲很高",
             {"device": "cpu", "model": "medium", "compute_type": "int8"},
         ))
-    if cuda_devices >= 1 and vram_gb < 4 and model != "medium":
+    if cuda_devices >= 1 and vram_gb < 4 and str(model).startswith("large"):
         recommendations.append(TuningRecommendation(
             "low_vram_medium",
             "低 VRAM 使用 medium 模型",

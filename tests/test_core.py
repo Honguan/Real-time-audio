@@ -929,9 +929,12 @@ class CoreTests(unittest.TestCase):
             config["last_cuda_devices"] = 1
             config["last_vram_gb"] = 3
             low_vram = collect_diagnostics(config, root)
+            config["model"] = "small"
+            small_model = collect_diagnostics(config, root)
 
         self.assertIn("gpu_unavailable", [item.code for item in no_gpu])
         self.assertIn("gpu_low_vram", [item.code for item in low_vram])
+        self.assertNotIn("gpu_low_vram", [item.code for item in small_model])
         no_gpu_auto = next(item for item in no_gpu if item.code == "auto_tune_recommended")
         self.assertIn("切換 CPU 與 medium 模型", no_gpu_auto.detail)
         low_vram_auto = next(item for item in low_vram if item.code == "auto_tune_recommended")
@@ -1144,6 +1147,8 @@ class CoreTests(unittest.TestCase):
 
         self.assertIn("low_vram_medium", [item.code for item in recommendations])
         self.assertEqual(tuned["model"], "medium")
+        config["model"] = "small"
+        self.assertNotIn("low_vram_medium", [item.code for item in recommend_tuning(config, cuda_devices=1, vram_gb=3)])
 
     def test_auto_tuner_uses_local_tts_when_cloud_tts_is_slow(self):
         config = DEFAULT_CONFIG.copy()

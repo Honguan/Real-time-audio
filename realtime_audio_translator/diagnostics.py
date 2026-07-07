@@ -292,7 +292,7 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
                 "按「自動優化」切換 CPU 與較小模型，或確認 CUDA12 runtime 已解壓",
                 "optimize_settings",
             ))
-        if cuda_devices >= 1 and vram_gb < 4 and config.get("model") != "medium":
+        if cuda_devices >= 1 and vram_gb < 4 and str(config.get("model", "")).startswith("large"):
             issues.append(DiagnosticIssue(
                 "gpu_low_vram",
                 "warning",
