@@ -27,11 +27,14 @@ def recommend_tuning(config: dict, cuda_devices: int, vram_gb: int, latency_seco
             {"model": "medium"},
         ))
     if latency_seconds is not None and latency_seconds > 3.0:
+        changes = {"performance_mode": "low_latency", "segment_seconds": 1.5, "speech_threshold": 0.02}
+        if str(model).startswith("large"):
+            changes["model"] = "medium"
         recommendations.append(TuningRecommendation(
             "reduce_latency",
             "降低字幕延遲",
             f"目前延遲約 {latency_seconds:.1f} 秒，建議使用低延遲分段",
-            {"performance_mode": "low_latency", "segment_seconds": 1.5, "speech_threshold": 0.02},
+            changes,
         ))
     try:
         speech_units = float(config.get("last_speech_units_per_second") or 0)

@@ -1118,6 +1118,11 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(tuned["segment_seconds"], 1.5)
         self.assertEqual(tuned["speech_threshold"], 0.02)
 
+        config["model"] = "large-v3-turbo"
+        tuned = apply_tuning(config, recommend_tuning(config, cuda_devices=1, vram_gb=6, latency_seconds=4.2))
+
+        self.assertEqual(tuned["model"], "medium")
+
     def test_auto_tuner_shortens_segments_for_fast_speech(self):
         config = DEFAULT_CONFIG.copy()
         config["segment_seconds"] = 3.0
