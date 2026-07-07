@@ -516,6 +516,18 @@ class CoreTests(unittest.TestCase):
         self.assertTrue(all(isinstance(issue.title, str) for issue in issues))
         self.assertTrue(all(issue.action for issue in issues))
 
+    def test_diagnostics_report_recent_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = DEFAULT_CONFIG.copy()
+            config["runtime_dir"] = str(Path(tmp) / "runtime")
+            config["last_error"] = "對方：翻譯失敗：timeout"
+
+            issues = collect_diagnostics(config, Path(tmp))
+
+        issue = next(item for item in issues if item.code == "recent_error")
+        self.assertEqual(issue.detail, "對方：翻譯失敗：timeout")
+        self.assertEqual(issue.action, "open_logs")
+
     def test_diagnostics_warn_when_speaker_tts_output_matches_speaker_source(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = DEFAULT_CONFIG.copy()
@@ -1298,6 +1310,7 @@ class CoreTests(unittest.TestCase):
     def test_diagnostic_action_label_shows_user_button_names(self):
         self.assertEqual(diagnostic_action_label("open_runtime"), "開啟 runtime 資料夾 / 下載 runtime")
         self.assertEqual(diagnostic_action_label("download_model"), "下載模型")
+        self.assertEqual(diagnostic_action_label("open_logs"), "開啟紀錄")
         self.assertEqual(diagnostic_action_label("unknown"), "unknown")
 
     def test_performance_mode_controls_segment_seconds(self):

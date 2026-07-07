@@ -114,7 +114,7 @@ def first_run_setup_action(issues, setup_guide_shown: bool) -> str:
 
 
 def first_diagnostic_action(issues) -> str:
-    actions = ("open_runtime", "download_model", "audio_settings", "optimize_settings", "language_settings", "local_translation", "api_settings")
+    actions = ("open_runtime", "download_model", "audio_settings", "optimize_settings", "language_settings", "local_translation", "api_settings", "open_logs")
     for action in actions:
         if any(issue.action == action for issue in issues):
             return action
@@ -218,6 +218,7 @@ def diagnostic_action_label(action: str) -> str:
         "local_translation": "修復本機翻譯",
         "optimize_settings": "自動優化",
         "language_settings": "來源語言",
+        "open_logs": "開啟紀錄",
     }.get(action, action)
 
 
@@ -813,6 +814,8 @@ class TranslatorApp(tk.Tk):
             self._troubleshoot("local_translation")
         elif action == "api_settings":
             self._test_api()
+        elif action == "open_logs":
+            self._open_logs()
 
     def _lock_language(self) -> None:
         locked = language_lock_value(self.vars["source_language"].get(), self.config.get("last_detected_language", ""))

@@ -317,4 +317,14 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
                 "按「自動優化」套用建議設定",
                 "optimize_settings",
             ))
+    last_error = str(config.get("last_error") or "").strip()
+    if last_error:
+        issues.append(DiagnosticIssue(
+            "recent_error",
+            "warning",
+            "最近錯誤提示",
+            last_error,
+            "先依上方診斷項目處理；需要細節時開啟 app.log 查看最近事件",
+            "open_logs",
+        ))
     return issues
