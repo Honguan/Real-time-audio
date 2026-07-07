@@ -401,7 +401,8 @@ class TranslatorApp(tk.Tk):
         ttk.Button(runtime_buttons_widget, text="備用 runtime 來源", command=lambda: webbrowser.open(UPSTREAM_RUNTIME_RELEASE_URL)).pack(side="left", padx=3)
 
         ttk.Checkbutton(frame, text="顯示字幕", variable=self.overlay_visible, command=self._apply_overlay).grid(row=next_row + 3, column=0, sticky="w")
-        ttk.Checkbutton(frame, text="字幕最上層", variable=self.overlay_topmost, command=self._apply_overlay).grid(row=next_row + 3, column=1, sticky="w")
+        overlay_topmost_widget = ttk.Checkbutton(frame, text="字幕最上層", variable=self.overlay_topmost, command=self._apply_overlay)
+        overlay_topmost_widget.grid(row=next_row + 3, column=1, sticky="w")
         language_labels_widget = ttk.Checkbutton(frame, text="顯示語言", variable=self.show_language_labels, command=self._save)
         language_labels_widget.grid(row=next_row + 3, column=2, sticky="w")
         original_text_widget = ttk.Checkbutton(frame, text="顯示原文", variable=self.show_original_text, command=self._save)
@@ -420,7 +421,7 @@ class TranslatorApp(tk.Tk):
         speaker_tts_widget.grid(row=next_row + 6, column=2, sticky="w")
         start_muted_widget = ttk.Checkbutton(frame, text="啟動時先靜音", variable=self.start_muted, command=self._save)
         start_muted_widget.grid(row=next_row + 7, column=0, sticky="w")
-        self.advanced_mode_widgets = [runtime_buttons_widget, language_labels_widget, original_text_widget, translated_text_widget, speaker_capture_widget, microphone_capture_widget, record_logs_widget, speaker_tts_widget, start_muted_widget]
+        self.advanced_mode_widgets = [runtime_buttons_widget, overlay_topmost_widget, language_labels_widget, original_text_widget, translated_text_widget, speaker_capture_widget, microphone_capture_widget, record_logs_widget, speaker_tts_widget, start_muted_widget]
         ttk.Checkbutton(frame, text="輸出到虛擬麥克風", variable=self.virtual_mic_enabled, command=self._save).grid(row=next_row + 6, column=1, sticky="w")
 
         buttons = ttk.Frame(frame)
