@@ -2646,6 +2646,7 @@ class CoreTests(unittest.TestCase):
 
         cloud_notice = mode_notice("google", "openai")
         self.assertIn("目前模式：雲端 API 模式", cloud_notice)
+        self.assertIn("目前供應商：Google, OpenAI", cloud_notice)
         self.assertIn("可能傳送到第三方服務", cloud_notice)
         self.assertIn("可能依 API 供應商產生費用", cloud_notice)
 

@@ -227,7 +227,8 @@ def mode_notice(provider: str, tts_provider: str, record_logs: bool = False, loc
     logs = "對話紀錄：開啟" if record_logs else "對話紀錄：關閉"
     setup = "；本機翻譯 URL 未設定" if provider == "local" and not local_translate_url.strip() else ""
     if cloud:
-        return f"目前模式：雲端 API 模式（{', '.join(cloud)}）；語音或文字可能傳送到第三方服務；可能依 API 供應商產生費用；{logs}{setup}"
+        labels = {"google": "Google", "openai": "OpenAI"}
+        return f"目前模式：雲端 API 模式；目前供應商：{', '.join(labels.get(name, name) for name in cloud)}；語音或文字可能傳送到第三方服務；可能依 API 供應商產生費用；{logs}{setup}"
     return f"目前模式：本機免費模式；語音是否上傳：否；是否可能產生 API 費用：否；{logs}{setup}"
 
 
