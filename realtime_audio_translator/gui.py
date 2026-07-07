@@ -582,6 +582,13 @@ class TranslatorApp(tk.Tk):
         if self.engine:
             self.engine.config = self.config
 
+    def _set_last_error(self, message: str) -> None:
+        self.config["last_error"] = message
+        if "last_error" in self.vars:
+            self.vars["last_error"].set(message)
+        self.mode_text.set(self._mode_text())
+        save_config(APP_DIR, self.config)
+
     def _mode_text(self) -> str:
         return f"{mode_notice(self.config['provider'], self.config['tts_provider'], bool(self.config['record_logs']), self.config.get('local_translate_url', ''))}\n{main_status_summary(self.config)}"
 
@@ -1077,14 +1084,19 @@ class TranslatorApp(tk.Tk):
         if not status["ready"]:
             append_app_log(APP_DIR, "runtime_missing", missing=status["missing"])
             messagebox.showerror("找不到 runtime", runtime_install_message(runtime_dir(self.config)))
-            self.status.set("找不到 runtime：" + ", ".join(status["missing"]))
+            error = "找不到 runtime：" + ", ".join(status["missing"])
+            self._set_last_error(error)
+            self.status.set(error)
             return
         app_models = models_dir(self.config)
         if not model_available(self.config["model"], self.repo_root / "_models", app_models):
             append_app_log(APP_DIR, "model_missing", model=self.config["model"])
             messagebox.showerror("找不到模型", model_install_message(self.config["model"], app_models))
-            self.status.set(f"找不到模型：{self.config['model']}")
+            error = f"找不到模型：{self.config['model']}"
+            self._set_last_error(error)
+            self.status.set(error)
             return
+        self._set_last_error("")
         append_app_log(APP_DIR, "start", model=self.config["model"], provider=self.config["provider"])
         self.engine = RealtimeEngine(self.repo_root, self.config, self._overlay_update, self.status.set)
         threading.Thread(target=self.engine.start, daemon=True).start()
