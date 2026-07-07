@@ -132,6 +132,10 @@ def latency_seconds_value(value) -> float | None:
         return None
 
 
+def status_message_is_error(message: str) -> bool:
+    return any(marker in message for marker in ("找不到", "失敗", "沒有可用音訊裝置"))
+
+
 def format_overlay_line(text: str, language: str, show_language: bool) -> str:
     return f"{language}: {text}" if show_language and text else text
 
@@ -588,6 +592,11 @@ class TranslatorApp(tk.Tk):
             self.vars["last_error"].set(message)
         self.mode_text.set(self._mode_text())
         save_config(APP_DIR, self.config)
+
+    def _engine_status(self, message: str) -> None:
+        self.status.set(message)
+        if status_message_is_error(message):
+            self._set_last_error(message)
 
     def _mode_text(self) -> str:
         return f"{mode_notice(self.config['provider'], self.config['tts_provider'], bool(self.config['record_logs']), self.config.get('local_translate_url', ''))}\n{main_status_summary(self.config)}"
@@ -1098,7 +1107,7 @@ class TranslatorApp(tk.Tk):
             return
         self._set_last_error("")
         append_app_log(APP_DIR, "start", model=self.config["model"], provider=self.config["provider"])
-        self.engine = RealtimeEngine(self.repo_root, self.config, self._overlay_update, self.status.set)
+        self.engine = RealtimeEngine(self.repo_root, self.config, self._overlay_update, self._engine_status)
         threading.Thread(target=self.engine.start, daemon=True).start()
 
     def _stop(self) -> None:

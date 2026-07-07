@@ -21,7 +21,7 @@ from realtime_audio_translator.ai_memory import add_glossary_term, cache_transla
 from realtime_audio_translator.app_log import append_app_log
 from realtime_audio_translator.diagnostics import DiagnosticIssue, collect_diagnostics
 from realtime_audio_translator.engine import RealtimeEngine, audio_devices_overlap, direction_label, drain_queue, overlay_text_from_config, safe_target_language
-from realtime_audio_translator.gui import LANGUAGE_CHOICES, PERFORMANCE_CHOICES, PROVIDER_CHOICES, TARGET_LANGUAGE_CHOICES, TTS_PROVIDER_CHOICES, TranslatorApp, diagnostic_action_label, first_diagnostic_action, first_run_setup_action, first_run_wizard_needed, format_overlay_line, language_lock_value, latency_seconds_value, main_status_summary, mode_notice, overlay_clipboard_text, overlay_font_size_value, overlay_hold_seconds_value, overlay_opacity_value, overlay_visibility_action, performance_segment_seconds, record_logs_requires_confirmation, subtitle_updates_allowed, swap_language_values, troubleshooting_action, visible_button_texts, visible_setting_keys
+from realtime_audio_translator.gui import LANGUAGE_CHOICES, PERFORMANCE_CHOICES, PROVIDER_CHOICES, TARGET_LANGUAGE_CHOICES, TTS_PROVIDER_CHOICES, TranslatorApp, diagnostic_action_label, first_diagnostic_action, first_run_setup_action, first_run_wizard_needed, format_overlay_line, language_lock_value, latency_seconds_value, main_status_summary, mode_notice, overlay_clipboard_text, overlay_font_size_value, overlay_hold_seconds_value, overlay_opacity_value, overlay_visibility_action, performance_segment_seconds, record_logs_requires_confirmation, status_message_is_error, subtitle_updates_allowed, swap_language_values, troubleshooting_action, visible_button_texts, visible_setting_keys
 from realtime_audio_translator.logbook import ConversationLog
 from realtime_audio_translator.models import cuda_hardware_from_check_output, list_models, model_available, model_download_command, model_install_message, models_dir, recommend_model
 from realtime_audio_translator.providers import TextToSpeech, Translator, build_google_translate_request, build_openai_translation_request, google_access_token
@@ -1287,6 +1287,12 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(latency_seconds_value("4.2"), 4.2)
         self.assertIsNone(latency_seconds_value(""))
 
+    def test_status_message_error_detection(self):
+        self.assertTrue(status_message_is_error("找不到 runtime：faster-whisper-xxl.exe"))
+        self.assertTrue(status_message_is_error("對方：翻譯失敗：timeout"))
+        self.assertTrue(status_message_is_error("沒有可用音訊裝置"))
+        self.assertFalse(status_message_is_error("執行中"))
+
     def test_diagnostic_action_label_shows_user_button_names(self):
         self.assertEqual(diagnostic_action_label("open_runtime"), "開啟 runtime 資料夾 / 下載 runtime")
         self.assertEqual(diagnostic_action_label("download_model"), "下載模型")
@@ -2103,6 +2109,7 @@ class CoreTests(unittest.TestCase):
         self.assertIn('if not model_available(self.config["model"], self.repo_root / "_models", app_models):', gui_source)
         self.assertIn('messagebox.showerror("找不到模型", model_install_message(self.config["model"], app_models))', gui_source)
         self.assertIn('self._set_last_error("")', gui_source)
+        self.assertIn("self._overlay_update, self._engine_status", gui_source)
 
     def test_runtime_status_uses_configured_model_folder(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
