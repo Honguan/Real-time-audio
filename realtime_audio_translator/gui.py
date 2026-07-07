@@ -231,6 +231,7 @@ def main_status_summary(config: dict) -> str:
     microphone = str(config.get("microphone_device") or "未選擇")
     latency = latency_seconds_value(config.get("last_latency_seconds"))
     latency_text = f"{latency:.2f}s" if latency is not None else "尚未測試"
+    error_text = str(config.get("last_error") or "無")
     return (
         f"目前場景：{scenario_label(str(config.get('scenario', '')))}；"
         f"輸入音源：{speaker} / {microphone}；"
@@ -241,7 +242,8 @@ def main_status_summary(config: dict) -> str:
         f"字幕：{'開啟' if config.get('overlay_visible', True) else '關閉'}；"
         f"TTS：{'開啟' if config.get('tts_enabled', True) else '關閉'}；"
         f"虛擬麥克風：{'開啟' if config.get('virtual_mic_enabled', False) else '關閉'}；"
-        f"延遲：{latency_text}"
+        f"延遲：{latency_text}；"
+        f"錯誤提示：{error_text}"
     )
 
 

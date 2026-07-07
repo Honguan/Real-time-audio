@@ -2636,10 +2636,11 @@ class CoreTests(unittest.TestCase):
         config["tts_enabled"] = True
         config["virtual_mic_enabled"] = False
         config["last_latency_seconds"] = "1.75"
+        config["last_error"] = "找不到模型"
 
         summary = main_status_summary(config)
 
-        for text in ("目前場景：Discord 聊天", "輸入音源：Speakers / Microphone", "輸出音源：CABLE Input", "來源語言：en", "目標語言：zh", "字幕：開啟", "TTS：開啟", "虛擬麥克風：關閉", "延遲：1.75s"):
+        for text in ("目前場景：Discord 聊天", "輸入音源：Speakers / Microphone", "輸出音源：CABLE Input", "來源語言：en", "目標語言：zh", "字幕：開啟", "TTS：開啟", "虛擬麥克風：關閉", "延遲：1.75s", "錯誤提示：找不到模型"):
             self.assertIn(text, summary)
 
     def test_readme_and_release_notes_mention_cloud_api_confirmation(self):

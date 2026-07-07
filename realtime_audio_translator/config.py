@@ -63,6 +63,7 @@ DEFAULT_CONFIG = {
     "last_language_confidence": "",
     "last_asr_confidence": "",
     "last_translation_confidence": "",
+    "last_error": "",
     "last_tts_latency_seconds": "",
     "last_speech_units_per_second": "",
     "last_source_text": "",
