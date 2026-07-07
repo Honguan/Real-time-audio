@@ -1165,6 +1165,8 @@ class CoreTests(unittest.TestCase):
         self.assertIn("show_original_on_low_confidence", [item.code for item in recommendations])
         self.assertIn("翻譯信心低時顯示原文", [item.title for item in recommendations])
         self.assertTrue(tuned["show_original_text"])
+        self.assertIn("formal_style_on_low_confidence", [item.code for item in recommendations])
+        self.assertEqual(tuned["translation_style"], "formal")
 
     def test_auto_tuner_locks_high_confidence_detected_language(self):
         config = DEFAULT_CONFIG.copy()

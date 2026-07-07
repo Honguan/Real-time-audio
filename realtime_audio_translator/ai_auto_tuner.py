@@ -81,6 +81,13 @@ def recommend_tuning(config: dict, cuda_devices: int, vram_gb: int, latency_seco
             f"最近翻譯信心約 {round(translation_confidence * 100)}%",
             {"show_original_text": True},
         ))
+    if translation_confidence < 0.5 and config.get("translation_style", "plain") == "plain":
+        recommendations.append(TuningRecommendation(
+            "formal_style_on_low_confidence",
+            "翻譯信心低時改用正式風格",
+            f"最近翻譯信心約 {round(translation_confidence * 100)}%",
+            {"translation_style": "formal"},
+        ))
     try:
         language_confidence = float(config.get("last_language_confidence") or 0)
     except Exception:
