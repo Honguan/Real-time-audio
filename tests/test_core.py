@@ -2336,6 +2336,15 @@ class CoreTests(unittest.TestCase):
             self.assertIn("清除本機資料", text)
             self.assertIn("翻譯快取", text)
 
+    def test_readme_and_release_notes_mention_record_log_consent(self):
+        readme = Path("README.md").read_text(encoding="utf-8")
+        notes = Path("docs/RELEASE_NOTES.md").read_text(encoding="utf-8")
+
+        for text in (readme, notes):
+            self.assertIn("對話紀錄預設關閉", text)
+            self.assertIn("開啟前會詢問", text)
+            self.assertIn("存在本機", text)
+
     def test_readme_mentions_open_app_folder(self):
         readme = Path("README.md").read_text(encoding="utf-8")
 
