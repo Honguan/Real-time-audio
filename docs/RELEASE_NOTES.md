@@ -5,7 +5,7 @@
 1. 到 GitHub Releases 下載 `RealtimeAudioTranslator-<tag>-win-x64.zip`。
 2. 解壓後執行 `RealtimeAudioTranslator.exe`。
 3. 第一次開啟會提示 runtime / model 診斷；可用「場景」選遊戲、Discord、會議、客服、字幕-only、自己說話翻譯或雙向翻譯場景，選擇後會自動套用預設；進階模式可按「自動優化」讓 AI 決策中樞依場景、硬體、延遲與診斷結果調整設定，再按「一鍵診斷」檢查設定。
-4. 低階電腦可把「效能模式」改成離線省資源 `offline_light`。
+4. 低階電腦可在進階模式把「效能模式」改成離線省資源 `offline_light`。
 5. 狀態列會顯示信心提示、延遲、翻譯服務、本機/雲端模式與是否可能產生費用。
 6. 若語言判斷信心偏低，診斷會提示把「來源語言」從 `auto` 改成固定語言。
 7. 可按「檢查更新」檢查 GitHub Releases 是否有新版本。
@@ -41,7 +41,7 @@ RealtimeAudioTranslator-runtime-cuda12-<tag>.zip
 
 主程式不需要安裝 Python。
 
-若 Release 沒有 runtime 檔案，可到 https://github.com/Purfview/whisper-standalone-win/releases 下載 Faster-Whisper-XXL Windows runtime 和 `cuBLAS.and.cuDNN_CUDA12_win_v3.7z`。本機翻譯會優先使用已安裝的 Argos Translate 離線模型，也可在「本機翻譯 URL」填入 LibreTranslate 端點。
+若 Release 沒有 runtime 檔案，可到 https://github.com/Purfview/whisper-standalone-win/releases 下載 Faster-Whisper-XXL Windows runtime 和 `cuBLAS.and.cuDNN_CUDA12_win_v3.7z`。本機翻譯會優先使用已安裝的 Argos Translate 離線模型，也可在進階模式的「本機翻譯 URL」填入 LibreTranslate 端點。
 
 翻譯快取會保存在 `%USERPROFILE%\.realtime-audio\cache\translation_cache.db`，術語可用「新增術語」加入，也可用「修正上次翻譯」修正最近一句，確認後加入術語，或用「開啟術語表」編輯。
 
@@ -63,5 +63,5 @@ RealtimeAudioTranslator-runtime-cuda12-<tag>.zip
 - 找不到模型：在工具內下載模型，或解壓模型 zip 到 `%USERPROFILE%\.realtime-audio\models`。
 - 對方聽不到翻譯語音：確認「播放翻譯語音」與「輸出到虛擬麥克風」已開啟，且「TTS 輸出」選 `CABLE Input`。
 - Discord 沒有收到虛擬麥克風聲音：Discord 麥克風請選 `CABLE Output (VB-Audio Virtual Cable)`。
-- 字幕延遲太高：把「效能模式」改成 `low_latency`，並先用較小模型測試。
+- 字幕延遲太高：在進階模式把「效能模式」改成 `low_latency`，並先用較小模型測試。
 - GPU 無法使用：把「ASR 裝置」改成 CPU，或確認 CUDA12 runtime 已正確解壓。

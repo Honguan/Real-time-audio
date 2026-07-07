@@ -39,7 +39,7 @@ Whisper 模型可放在 `models\whisper-small`；翻譯模型放在 `models\tran
 
 1. 安裝 VB-Audio Virtual Cable。
 2. 開啟 `RealtimeAudioTranslator.exe`。
-3. 選擇「喇叭來源」、「麥克風來源」、「TTS 輸出」、來源語言與目標語言；若要聽對方語音的翻譯，開「播放對方翻譯」並選「對方翻譯播放輸出」。
+3. 選擇「喇叭來源」、「麥克風來源」、「TTS 輸出」、來源語言與目標語言；若要聽對方語音的翻譯，可在進階模式調整「播放對方翻譯」。
 4. 選擇「場景」後會自動套用常用場景。
 5. 按「一鍵診斷」檢查 runtime、模型、音訊與 API 設定。
 6. 按「測試麥克風」與「測試虛擬麥克風」確認主要聲音路由。
@@ -81,7 +81,7 @@ Whisper 模型可放在 `models\whisper-small`；翻譯模型放在 `models\tran
 
 ## 翻譯與 TTS
 
-預設本機翻譯不會上傳雲端。若要使用真正翻譯，請先啟動 LibreTranslate，並把「本機翻譯 URL」填成例如：
+預設本機翻譯不會上傳雲端。若要使用真正翻譯，請先啟動 LibreTranslate，並在進階模式把「本機翻譯 URL」填成例如：
 
 切換到 Google 或 OpenAI 時，工具會先提示語音或文字可能傳送到第三方服務並可能產生費用。
 
@@ -103,7 +103,7 @@ http://127.0.0.1:5000/translate
 - 找不到模型：在工具內下載模型，或解壓模型 zip 到 `%USERPROFILE%\.realtime-audio\models`。
 - 對方聽不到翻譯語音：確認「播放翻譯語音」與「輸出到虛擬麥克風」已開啟，且「TTS 輸出」選 `CABLE Input`。
 - Discord 沒有收到虛擬麥克風聲音：Discord 麥克風請選 `CABLE Output (VB-Audio Virtual Cable)`。
-- 字幕延遲太高：把「效能模式」改成 `low_latency`，並先用較小模型測試。
+- 字幕延遲太高：在進階模式把「效能模式」改成 `low_latency`，並先用較小模型測試。
 - GPU 無法使用：把「ASR 裝置」改成 CPU，或確認 CUDA12 runtime 已正確解壓。
 
 ## 限制

@@ -70,14 +70,9 @@ BASIC_SETTING_KEYS = {
     "source_language",
     "target_language",
     "scenario",
-    "performance_mode",
-    "local_translate_url",
-    "model",
     "speaker_device",
     "microphone_device",
     "tts_output_device",
-    "speaker_tts_output_device",
-    "runtime_dir",
 }
 ADVANCED_SETTING_KEYS = {key for _label, key in SETTING_ROWS} - BASIC_SETTING_KEYS
 BASIC_BUTTON_TEXTS = {
@@ -819,10 +814,10 @@ class TranslatorApp(tk.Tk):
         messagebox.showinfo(
             "設定指南",
             "1. 匯入 runtime，或開啟 runtime 資料夾放入解壓後檔案。\n"
-            "2. 按「下載模型」，或把模型 zip 解壓到 models 資料夾。\n"
+            "2. 按「一鍵診斷」下載模型，或把模型 zip 解壓到 models 資料夾。\n"
             "3. 選擇「喇叭來源」、「麥克風來源」與「TTS 輸出」。\n"
             "4. Discord 麥克風選 CABLE Output，本工具「TTS 輸出」選 CABLE Input。\n"
-            "5. 選場景會自動套用；進階模式也可按「套用場景」與「自動優化」。\n"
+            "5. 選場景會自動套用；進階模式可調模型、runtime 路徑與自動優化。\n"
             "6. 開始前先跑「測試字幕」、「測試喇叭」、「測試麥克風」與「測試虛擬麥克風」。",
         )
 
