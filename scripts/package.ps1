@@ -5,7 +5,11 @@ param(
   [string]$RuntimeSource = "",
   [string]$ModelsSource = "",
   [string]$ModelName = "",
-  [switch]$SkipBuild
+  [switch]$SkipBuild,
+  [switch]$SkipApp,
+  [switch]$SkipRuntime,
+  [switch]$SkipModels,
+  [switch]$AppendOutput
 )
 
 $ErrorActionPreference = "Stop"
@@ -31,10 +35,12 @@ if (-not $SkipBuild) {
 }
 
 $Out = $OutputDir
-if (Test-Path -LiteralPath $Out) {
+if ((-not $AppendOutput) -and (Test-Path -LiteralPath $Out)) {
   Remove-Item -LiteralPath $Out -Recurse -Force
 }
-New-Item -ItemType Directory -Path $Out | Out-Null
+if (-not (Test-Path -LiteralPath $Out)) {
+  New-Item -ItemType Directory -Path $Out | Out-Null
+}
 
 function New-UnicodeString([int[]]$Codes) {
   -join ($Codes | ForEach-Object { [char]$_ })
@@ -49,12 +55,13 @@ $RuntimeMissingLabel = "runtime " + (New-UnicodeString @(0x8CC7, 0x6599, 0x593E,
 $ModelsMissingLabel = "ModelsSource " + (New-UnicodeString @(0x4E0D, 0x5B58, 0x5728, 0xFF1A))
 $RuntimeSkippedWarning = (New-UnicodeString @(0x5DF2, 0x7565, 0x904E)) + " runtime zip" + (New-UnicodeString @(0xFF1B, 0x9700, 0x8981, 0x767C, 0x5E03)) + " runtime " + (New-UnicodeString @(0x8207)) + " CUDA DLL " + (New-UnicodeString @(0x6642, 0x8ACB, 0x52A0, 0x4E0A)) + " -RuntimeSource" + (New-UnicodeString @(0x3002))
 
-$AppExe = Join-Path $DistDir "RealtimeAudioTranslator.exe"
-if (-not (Test-Path -LiteralPath $AppExe)) {
-  throw "$MissingAppBuildLabel$AppExe"
-}
+$CreateApp = -not $SkipApp
+$CreateRuntime = (-not $SkipRuntime) -and (-not [string]::IsNullOrWhiteSpace($RuntimeSource))
+$CreateModels = (-not $SkipModels) -and (-not [string]::IsNullOrWhiteSpace($ModelsSource))
 
-$Created = @()
+if (-not ($CreateApp -or $CreateRuntime -or $CreateModels)) {
+  throw "Nothing selected to package."
+}
 
 function Compress-FolderContents($SourceDir, $DestinationZip) {
   $Items = Get-ChildItem -LiteralPath $SourceDir -Force
@@ -64,22 +71,27 @@ function Compress-FolderContents($SourceDir, $DestinationZip) {
   Compress-Archive -LiteralPath $Items.FullName -DestinationPath $DestinationZip -CompressionLevel Optimal
 }
 
-$AppStage = Join-Path $Out "_stage_app"
-New-Item -ItemType Directory -Path $AppStage | Out-Null
-Copy-Item -Path (Join-Path $DistDir "*") -Destination $AppStage -Recurse -Force
-if (Test-Path -LiteralPath (Join-Path $Root "assets")) {
-  Copy-Item -LiteralPath (Join-Path $Root "assets") -Destination (Join-Path $AppStage "assets") -Recurse -Force
+if ($CreateApp) {
+  $AppExe = Join-Path $DistDir "RealtimeAudioTranslator.exe"
+  if (-not (Test-Path -LiteralPath $AppExe)) {
+    throw "$MissingAppBuildLabel$AppExe"
+  }
+  $AppStage = Join-Path $Out "_stage_app"
+  New-Item -ItemType Directory -Path $AppStage | Out-Null
+  Copy-Item -Path (Join-Path $DistDir "*") -Destination $AppStage -Recurse -Force
+  if (Test-Path -LiteralPath (Join-Path $Root "assets")) {
+    Copy-Item -LiteralPath (Join-Path $Root "assets") -Destination (Join-Path $AppStage "assets") -Recurse -Force
+  }
+  Copy-Item -LiteralPath (Join-Path $Root "README.md") -Destination (Join-Path $AppStage "README.md") -Force
+  Copy-Item -LiteralPath (Join-Path $Root "docs\RELEASE_NOTES.md") -Destination (Join-Path $AppStage "RELEASE_NOTES.md") -Force
+  Copy-Item -LiteralPath (Join-Path $Root "docs\README_QUICK_START_zh-TW.txt") -Destination (Join-Path $AppStage "README_QUICK_START_zh-TW.txt") -Force
+  Set-Content -LiteralPath (Join-Path $AppStage "release_version.txt") -Value "$Version" -Encoding UTF8
+
+  $AppZip = Join-Path $Out "RealtimeAudioTranslator-$Version-win-x64.zip"
+  Compress-FolderContents $AppStage $AppZip
 }
-Copy-Item -LiteralPath (Join-Path $Root "README.md") -Destination (Join-Path $AppStage "README.md") -Force
-Copy-Item -LiteralPath (Join-Path $Root "docs\RELEASE_NOTES.md") -Destination (Join-Path $AppStage "RELEASE_NOTES.md") -Force
-Copy-Item -LiteralPath (Join-Path $Root "docs\README_QUICK_START_zh-TW.txt") -Destination (Join-Path $AppStage "README_QUICK_START_zh-TW.txt") -Force
-Set-Content -LiteralPath (Join-Path $AppStage "release_version.txt") -Value "$Version" -Encoding UTF8
 
-$AppZip = Join-Path $Out "RealtimeAudioTranslator-$Version-win-x64.zip"
-Compress-FolderContents $AppStage $AppZip
-$Created += $AppZip
-
-if (-not [string]::IsNullOrWhiteSpace($RuntimeSource)) {
+if ($CreateRuntime) {
   $CudaDlls = @("cublas64_12.dll", "cublasLt64_12.dll", "cudnn64_9.dll")
   if (-not (Test-Path -LiteralPath (Join-Path $RuntimeSource "faster-whisper-xxl.exe"))) {
     throw "$RuntimeMissingLabel faster-whisper-xxl.exe ($RuntimeSource)"
@@ -115,12 +127,11 @@ if (-not [string]::IsNullOrWhiteSpace($RuntimeSource)) {
   ) | Set-Content -LiteralPath (Join-Path $RuntimeStage "runtime_manifest.json") -Encoding UTF8
   $RuntimeZip = Join-Path $Out "RealtimeAudioTranslator-runtime-cuda12-$Version.zip"
   Compress-FolderContents $RuntimeStage $RuntimeZip
-  $Created += $RuntimeZip
-} else {
+} elseif ((-not $SkipRuntime) -and (-not $AppendOutput)) {
   Write-Warning $RuntimeSkippedWarning
 }
 
-if (-not [string]::IsNullOrWhiteSpace($ModelsSource)) {
+if ($CreateModels) {
   if (-not (Test-Path -LiteralPath $ModelsSource)) {
     throw "$ModelsMissingLabel$ModelsSource"
   }
@@ -139,15 +150,14 @@ if (-not [string]::IsNullOrWhiteSpace($ModelsSource)) {
   ) | Set-Content -LiteralPath (Join-Path $ModelsStage "MODEL_README.txt") -Encoding UTF8
   $ModelsZip = Join-Path $Out "RealtimeAudioTranslator-models-$ModelName-$Version.zip"
   Compress-FolderContents $ModelsStage $ModelsZip
-  $Created += $ModelsZip
 }
 
 $Checksums = Join-Path $Out "SHA256SUMS.txt"
 $Sha256 = [System.Security.Cryptography.SHA256]::Create()
 try {
-  $Created |
+  Get-ChildItem -LiteralPath $Out -Filter *.zip |
     ForEach-Object {
-      $Path = $_
+      $Path = $_.FullName
       $Stream = [System.IO.File]::OpenRead((Resolve-Path -LiteralPath $Path))
       try {
         $HashBytes = $Sha256.ComputeHash($Stream)
@@ -162,7 +172,9 @@ try {
   $Sha256.Dispose()
 }
 
-Remove-Item -LiteralPath $AppStage -Recurse -Force
+if (Test-Path -LiteralPath (Join-Path $Out "_stage_app")) {
+  Remove-Item -LiteralPath (Join-Path $Out "_stage_app") -Recurse -Force
+}
 if (Test-Path -LiteralPath (Join-Path $Out "_stage_runtime")) {
   Remove-Item -LiteralPath (Join-Path $Out "_stage_runtime") -Recurse -Force
 }

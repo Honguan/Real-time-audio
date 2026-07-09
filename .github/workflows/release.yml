@@ -109,11 +109,11 @@ jobs:
           if ($version -notlike "v*") {
             throw "Release version must start with v, for example v0.1.1."
           }
+          & ./scripts/package_app_zip.ps1 -Version $version
           if (Test-Path "runtime-download\runtime.pkg") {
-            & ./scripts/package.ps1 -Version $version -RuntimeSource "downloaded-runtime"
-          } else {
-            & ./scripts/package.ps1 -Version $version
+            & ./scripts/package_runtime_zip.ps1 -Version $version -RuntimeSource "downloaded-runtime"
           }
+          & ./scripts/make_checksums.ps1
 
       - name: Upload GitHub Release
         uses: softprops/action-gh-release@v2

@@ -128,6 +128,24 @@ class RuntimeTests(unittest.TestCase):
         self.assertNotIn("RuntimeSource must contain", script)
         self.assertNotIn("ModelsSource not found", script)
         self.assertIn("$RuntimeSkippedWarning", script)
+        self.assertIn("[switch]$SkipApp", script)
+        self.assertIn("[switch]$AppendOutput", script)
+
+    def test_release_wrapper_scripts_exist(self):
+        root = Path(__file__).parents[1]
+        app_script = (root / "scripts" / "package_app_zip.ps1").read_text(encoding="utf-8")
+        runtime_script = (root / "scripts" / "package_runtime_zip.ps1").read_text(encoding="utf-8")
+        models_script = (root / "scripts" / "package_models_zip.ps1").read_text(encoding="utf-8")
+        checksums_script = (root / "scripts" / "make_checksums.ps1").read_text(encoding="utf-8")
+
+        self.assertIn("package.ps1", app_script)
+        self.assertIn("-SkipRuntime", app_script)
+        self.assertIn("-SkipModels", app_script)
+        self.assertIn("-SkipApp", runtime_script)
+        self.assertIn("-AppendOutput", runtime_script)
+        self.assertIn("-SkipApp", models_script)
+        self.assertIn("-AppendOutput", models_script)
+        self.assertIn("SHA256SUMS.txt", checksums_script)
 
     def test_package_script_creates_app_runtime_zips_and_checksums(self):
         root = Path(__file__).parents[1]
@@ -351,6 +369,82 @@ class RuntimeTests(unittest.TestCase):
                 model_readme = archive.read("MODEL_README.txt").decode("utf-8-sig")
                 self.assertIn("解壓縮到", model_readme)
                 self.assertIn("%USERPROFILE%\\.realtime-audio\\models\\whisper-small", model_readme)
+
+    def test_wrapper_scripts_append_runtime_and_refresh_checksums(self):
+        root = Path(__file__).parents[1]
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp)
+            dist = work / "RealtimeAudioTranslator"
+            runtime = work / "runtime"
+            out = work / "release"
+            (dist / "_internal").mkdir(parents=True)
+            (dist / "RealtimeAudioTranslator.exe").write_text("app", encoding="utf-8")
+            (dist / "_internal" / "lib.txt").write_text("lib", encoding="utf-8")
+            (runtime / "_xxl_data").mkdir(parents=True)
+            (runtime / "faster-whisper-xxl.exe").write_text("fw", encoding="utf-8")
+            (runtime / "ffmpeg.exe").write_text("ff", encoding="utf-8")
+            (runtime / "_xxl_data" / "data.txt").write_text("data", encoding="utf-8")
+            (runtime / "cublas64_12.dll").write_text("cuda", encoding="utf-8")
+            (runtime / "cublasLt64_12.dll").write_text("cuda", encoding="utf-8")
+            (runtime / "cudnn64_9.dll").write_text("cuda", encoding="utf-8")
+
+            subprocess.run(
+                [
+                    "powershell",
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(root / "scripts" / "package_app_zip.ps1"),
+                    "-SkipBuild",
+                    "-Version",
+                    "v0.0.0-test",
+                    "-OutputDir",
+                    str(out),
+                    "-DistDir",
+                    str(dist),
+                ],
+                cwd=root,
+                check=True,
+            )
+            subprocess.run(
+                [
+                    "powershell",
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(root / "scripts" / "package_runtime_zip.ps1"),
+                    "-Version",
+                    "v0.0.0-test",
+                    "-OutputDir",
+                    str(out),
+                    "-RuntimeSource",
+                    str(runtime),
+                ],
+                cwd=root,
+                check=True,
+            )
+            subprocess.run(
+                [
+                    "powershell",
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(root / "scripts" / "make_checksums.ps1"),
+                    "-OutputDir",
+                    str(out),
+                ],
+                cwd=root,
+                check=True,
+            )
+
+            self.assertTrue((out / "RealtimeAudioTranslator-v0.0.0-test-win-x64.zip").exists())
+            self.assertTrue((out / "RealtimeAudioTranslator-runtime-cuda12-v0.0.0-test.zip").exists())
+            checksums = (out / "SHA256SUMS.txt").read_text(encoding="utf-8")
+            self.assertIn("RealtimeAudioTranslator-v0.0.0-test-win-x64.zip", checksums)
+            self.assertIn("RealtimeAudioTranslator-runtime-cuda12-v0.0.0-test.zip", checksums)
 
 
 if __name__ == "__main__":
