@@ -121,5 +121,5 @@ jobs:
           tag_name: ${{ inputs.version || github.ref_name }}
           body_path: docs/RELEASE_NOTES.md
           files: |
-            release-output/*.zip
-            release-output/SHA256SUMS.txt
+            dist-release/*.zip
+            dist-release/SHA256SUMS.txt

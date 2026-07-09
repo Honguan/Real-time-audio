@@ -2211,9 +2211,9 @@ class CoreTests(unittest.TestCase):
         self.assertIn("softprops/action-gh-release", workflow)
         self.assertIn("tag_name:", workflow)
         self.assertIn("inputs.version || github.ref_name", workflow)
-        self.assertIn("release-output/*.zip", workflow)
-        self.assertNotIn("release-output/*.7z", workflow)
-        self.assertIn("release-output/SHA256SUMS.txt", workflow)
+        self.assertIn("dist-release/*.zip", workflow)
+        self.assertNotIn("dist-release/*.7z", workflow)
+        self.assertIn("dist-release/SHA256SUMS.txt", workflow)
 
     def test_release_notes_include_public_download_instructions(self):
         notes = Path("docs/RELEASE_NOTES.md").read_text(encoding="utf-8")

@@ -20,7 +20,7 @@ if ([string]::IsNullOrWhiteSpace($Version)) {
 }
 
 if ([string]::IsNullOrWhiteSpace($OutputDir)) {
-  $OutputDir = Join-Path $Root "release-output"
+  $OutputDir = Join-Path $Root "dist-release"
 }
 if ([string]::IsNullOrWhiteSpace($DistDir)) {
   $DistDir = Join-Path $Root "dist\RealtimeAudioTranslator"
