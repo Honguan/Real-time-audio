@@ -21,7 +21,7 @@ from realtime_audio_translator.ai_memory import add_glossary_term, cache_transla
 from realtime_audio_translator.app_log import append_app_log
 from realtime_audio_translator.diagnostics import DiagnosticIssue, collect_diagnostics
 from realtime_audio_translator.engine import RealtimeEngine, audio_devices_overlap, direction_label, drain_queue, overlay_text_from_config, safe_target_language
-from realtime_audio_translator.gui import LANGUAGE_CHOICES, PERFORMANCE_CHOICES, PROVIDER_CHOICES, TARGET_LANGUAGE_CHOICES, TTS_PROVIDER_CHOICES, TranslatorApp, diagnostic_action_label, first_diagnostic_action, first_run_setup_action, first_run_wizard_needed, format_overlay_line, language_lock_value, latency_seconds_value, main_status_summary, mode_notice, overlay_clipboard_text, overlay_font_size_value, overlay_hold_seconds_value, overlay_opacity_value, overlay_visibility_action, performance_segment_seconds, record_logs_requires_confirmation, status_message_is_error, subtitle_updates_allowed, swap_language_values, troubleshooting_action, visible_button_texts, visible_setting_keys
+from realtime_audio_translator.gui import LANGUAGE_CHOICES, PERFORMANCE_CHOICES, PROVIDER_CHOICES, TARGET_LANGUAGE_CHOICES, TTS_PROVIDER_CHOICES, TranslatorApp, diagnostic_action_label, diagnostic_actions, first_diagnostic_action, first_run_setup_action, first_run_wizard_needed, format_overlay_line, language_lock_value, latency_seconds_value, main_status_summary, mode_notice, overlay_clipboard_text, overlay_font_size_value, overlay_hold_seconds_value, overlay_opacity_value, overlay_visibility_action, performance_segment_seconds, record_logs_requires_confirmation, status_message_is_error, subtitle_updates_allowed, swap_language_values, troubleshooting_action, visible_button_texts, visible_setting_keys
 from realtime_audio_translator.logbook import ConversationLog
 from realtime_audio_translator.models import cuda_hardware_from_check_output, list_models, model_available, model_download_command, model_install_message, models_dir, recommend_model
 from realtime_audio_translator.providers import TextToSpeech, Translator, build_google_translate_request, build_openai_translation_request, google_access_token
@@ -412,6 +412,16 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(first_diagnostic_action(issues), "open_runtime")
         self.assertEqual(first_diagnostic_action(issues[:2]), "download_model")
         self.assertEqual(first_diagnostic_action([]), "")
+
+    def test_diagnostic_actions_keep_priority_and_skip_duplicates(self):
+        issues = [
+            DiagnosticIssue("custom_problem", "warning", "自訂問題", "", "", "custom_fix"),
+            DiagnosticIssue("model_missing", "error", "找不到模型", "", "", "download_model"),
+            DiagnosticIssue("runtime_missing", "error", "找不到 runtime", "", "", "open_runtime"),
+            DiagnosticIssue("runtime_missing_2", "error", "找不到 runtime 2", "", "", "open_runtime"),
+        ]
+
+        self.assertEqual(diagnostic_actions(issues), ["open_runtime", "download_model", "custom_fix"])
 
     def test_push_to_talk_restores_previous_mute_state(self):
         app = TranslatorApp.__new__(TranslatorApp)
@@ -1259,6 +1269,9 @@ class CoreTests(unittest.TestCase):
         self.assertIn('name == "scenario" else self._save()', gui_source)
         self.assertIn('self.vars["setup_guide_shown"].set("True")', gui_source)
         self.assertIn("def _show_diagnostics", gui_source)
+        self.assertIn("def _show_text_dialog", gui_source)
+        self.assertIn("ttk.Scrollbar", gui_source)
+        self.assertIn('text="關閉"', gui_source)
         self.assertIn("def _run_diagnostic_action", gui_source)
         self.assertIn("webbrowser.open(RUNTIME_RELEASE_URL)", gui_source)
         self.assertIn("collect_diagnostics", gui_source)

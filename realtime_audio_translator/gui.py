@@ -114,11 +114,24 @@ def first_run_setup_action(issues, setup_guide_shown: bool) -> str:
 
 
 def first_diagnostic_action(issues) -> str:
+    actions = diagnostic_actions(issues)
+    return actions[0] if actions else ""
+
+
+def diagnostic_actions(issues) -> list[str]:
     actions = ("open_runtime", "download_model", "audio_settings", "optimize_settings", "language_settings", "local_translation", "api_settings", "open_logs")
+    ordered: list[str] = []
+    seen: set[str] = set()
     for action in actions:
-        if any(issue.action == action for issue in issues):
-            return action
-    return ""
+        if any(issue.action == action for issue in issues) and action not in seen:
+            ordered.append(action)
+            seen.add(action)
+    for issue in issues:
+        action = str(getattr(issue, "action", "") or "")
+        if action and action not in seen:
+            ordered.append(action)
+            seen.add(action)
+    return ordered
 
 
 def performance_segment_seconds(mode: str) -> float:
@@ -220,6 +233,17 @@ def diagnostic_action_label(action: str) -> str:
         "language_settings": "來源語言",
         "open_logs": "開啟紀錄",
     }.get(action, action)
+
+
+def setup_guide_message() -> str:
+    return (
+        "1. 按「一鍵診斷」處理 runtime，進階模式也可手動匯入 runtime。\n"
+        "2. 按「一鍵診斷」下載模型，或把模型 zip 解壓到 models 資料夾。\n"
+        "3. 選擇「喇叭來源」、「麥克風來源」與「TTS 輸出」。\n"
+        "4. Discord 麥克風選 CABLE Output，本工具「TTS 輸出」選 CABLE Input。\n"
+        "5. 選場景會自動套用；進階模式可調模型、runtime 路徑與自動優化。\n"
+        "6. 開始前先跑「測試麥克風」與「測試虛擬麥克風」；進階模式可再測字幕、喇叭與 TTS。"
+    )
 
 
 def mode_notice(provider: str, tts_provider: str, record_logs: bool = False, local_translate_url: str = "") -> str:
@@ -791,13 +815,42 @@ class TranslatorApp(tk.Tk):
         self._show_diagnostics("診斷結果", collect_diagnostics(self._config_from_vars(), self.repo_root))
 
     def _show_diagnostics(self, title: str, issues) -> None:
-        action = first_diagnostic_action(issues)
         message = self._diagnostic_message(issues)
-        if action and messagebox.askyesno(title, f"{message}\n\n現在執行第一個修復動作：{diagnostic_action_label(action)}？"):
-            self._run_diagnostic_action(action)
-            return
-        if not action:
-            messagebox.showinfo(title, message)
+        actions = [(diagnostic_action_label(action), lambda name=action: self._run_diagnostic_action(name)) for action in diagnostic_actions(issues)]
+        if not any(label == "設定指南" for label, _callback in actions):
+            actions.append(("設定指南", self._show_setup_guide))
+        self._show_text_dialog(title, message, actions)
+
+    def _show_text_dialog(self, title: str, message: str, actions: list[tuple[str, object]]) -> None:
+        window = tk.Toplevel(self)
+        window.title(title)
+        window.geometry("760x520")
+        window.transient(self)
+        window.grab_set()
+
+        frame = ttk.Frame(window, padding=12)
+        frame.pack(fill="both", expand=True)
+        ttk.Label(frame, text=title).pack(anchor="w")
+
+        body = ttk.Frame(frame)
+        body.pack(fill="both", expand=True, pady=(8, 0))
+        scrollbar = ttk.Scrollbar(body)
+        scrollbar.pack(side="right", fill="y")
+        text = tk.Text(body, wrap="word", yscrollcommand=scrollbar.set, height=20)
+        text.pack(side="left", fill="both", expand=True)
+        scrollbar.configure(command=text.yview)
+        text.insert("1.0", message)
+        text.configure(state="disabled")
+
+        buttons = ttk.Frame(frame)
+        buttons.pack(fill="x", pady=(12, 0))
+        for label, callback in actions:
+            ttk.Button(buttons, text=label, command=lambda cb=callback, dialog=window: self._run_dialog_action(dialog, cb)).pack(side="left", padx=3, pady=3)
+        ttk.Button(buttons, text="關閉", command=window.destroy).pack(side="right", padx=3, pady=3)
+
+    def _run_dialog_action(self, window: tk.Toplevel, callback) -> None:
+        window.destroy()
+        callback()
 
     def _run_diagnostic_action(self, action: str) -> None:
         if action == "open_runtime":
@@ -841,15 +894,15 @@ class TranslatorApp(tk.Tk):
         threading.Thread(target=run, daemon=True).start()
 
     def _show_setup_guide(self) -> None:
-        messagebox.showinfo(
-            "設定指南",
-            "1. 按「一鍵診斷」處理 runtime，進階模式也可手動匯入 runtime。\n"
-            "2. 按「一鍵診斷」下載模型，或把模型 zip 解壓到 models 資料夾。\n"
-            "3. 選擇「喇叭來源」、「麥克風來源」與「TTS 輸出」。\n"
-            "4. Discord 麥克風選 CABLE Output，本工具「TTS 輸出」選 CABLE Input。\n"
-            "5. 選場景會自動套用；進階模式可調模型、runtime 路徑與自動優化。\n"
-            "6. 開始前先跑「測試麥克風」與「測試虛擬麥克風」；進階模式可再測字幕、喇叭與 TTS。",
-        )
+        actions = [
+            ("一鍵診斷", self._run_diagnostics),
+            ("測試麥克風", self._test_mic),
+            ("測試虛擬麥克風", self._test_virtual_mic),
+        ]
+        if self.advanced_mode.get():
+            actions.insert(2, ("測試喇叭", self._test_speaker))
+            actions.append(("測試 TTS", self._test_tts))
+        self._show_text_dialog("設定指南", setup_guide_message(), actions)
 
     def _recommend(self) -> None:
         config = self._config_from_vars()
