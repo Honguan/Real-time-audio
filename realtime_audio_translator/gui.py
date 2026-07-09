@@ -246,6 +246,10 @@ def setup_guide_message() -> str:
     )
 
 
+def setup_guide_actions() -> tuple[str, ...]:
+    return ("一鍵診斷", "套用場景", "自動優化", "測試喇叭", "測試麥克風", "測試虛擬麥克風", "測試 TTS")
+
+
 def mode_notice(provider: str, tts_provider: str, record_logs: bool = False, local_translate_url: str = "") -> str:
     cloud = [name for name in dict.fromkeys((provider, tts_provider)) if name in CLOUD_PROVIDERS]
     logs = "對話紀錄：開啟" if record_logs else "對話紀錄：關閉"
@@ -844,9 +848,12 @@ class TranslatorApp(tk.Tk):
 
         buttons = ttk.Frame(frame)
         buttons.pack(fill="x", pady=(12, 0))
-        for label, callback in actions:
-            ttk.Button(buttons, text=label, command=lambda cb=callback, dialog=window: self._run_dialog_action(dialog, cb)).pack(side="left", padx=3, pady=3)
-        ttk.Button(buttons, text="關閉", command=window.destroy).pack(side="right", padx=3, pady=3)
+        for column in range(3):
+            buttons.grid_columnconfigure(column, weight=1)
+        for index, (label, callback) in enumerate(actions):
+            ttk.Button(buttons, text=label, command=lambda cb=callback, dialog=window: self._run_dialog_action(dialog, cb)).grid(row=index // 3, column=index % 3, sticky="ew", padx=3, pady=3)
+        close_index = len(actions)
+        ttk.Button(buttons, text="關閉", command=window.destroy).grid(row=close_index // 3, column=close_index % 3, sticky="ew", padx=3, pady=3)
 
     def _run_dialog_action(self, window: tk.Toplevel, callback) -> None:
         window.destroy()
@@ -894,14 +901,16 @@ class TranslatorApp(tk.Tk):
         threading.Thread(target=run, daemon=True).start()
 
     def _show_setup_guide(self) -> None:
-        actions = [
-            ("一鍵診斷", self._run_diagnostics),
-            ("測試麥克風", self._test_mic),
-            ("測試虛擬麥克風", self._test_virtual_mic),
-        ]
-        if self.advanced_mode.get():
-            actions.insert(2, ("測試喇叭", self._test_speaker))
-            actions.append(("測試 TTS", self._test_tts))
+        action_map = {
+            "一鍵診斷": self._run_diagnostics,
+            "套用場景": self._apply_scenario,
+            "自動優化": self._optimize_settings,
+            "測試喇叭": self._test_speaker,
+            "測試麥克風": self._test_mic,
+            "測試虛擬麥克風": self._test_virtual_mic,
+            "測試 TTS": self._test_tts,
+        }
+        actions = [(label, action_map[label]) for label in setup_guide_actions()]
         self._show_text_dialog("設定指南", setup_guide_message(), actions)
 
     def _recommend(self) -> None:

@@ -21,7 +21,7 @@ from realtime_audio_translator.ai_memory import add_glossary_term, cache_transla
 from realtime_audio_translator.app_log import append_app_log
 from realtime_audio_translator.diagnostics import DiagnosticIssue, collect_diagnostics
 from realtime_audio_translator.engine import RealtimeEngine, audio_devices_overlap, direction_label, drain_queue, overlay_text_from_config, safe_target_language
-from realtime_audio_translator.gui import LANGUAGE_CHOICES, PERFORMANCE_CHOICES, PROVIDER_CHOICES, TARGET_LANGUAGE_CHOICES, TTS_PROVIDER_CHOICES, TranslatorApp, diagnostic_action_label, diagnostic_actions, first_diagnostic_action, first_run_setup_action, first_run_wizard_needed, format_overlay_line, language_lock_value, latency_seconds_value, main_status_summary, mode_notice, overlay_clipboard_text, overlay_font_size_value, overlay_hold_seconds_value, overlay_opacity_value, overlay_visibility_action, performance_segment_seconds, record_logs_requires_confirmation, status_message_is_error, subtitle_updates_allowed, swap_language_values, troubleshooting_action, visible_button_texts, visible_setting_keys
+from realtime_audio_translator.gui import LANGUAGE_CHOICES, PERFORMANCE_CHOICES, PROVIDER_CHOICES, TARGET_LANGUAGE_CHOICES, TTS_PROVIDER_CHOICES, TranslatorApp, diagnostic_action_label, diagnostic_actions, first_diagnostic_action, first_run_setup_action, first_run_wizard_needed, format_overlay_line, language_lock_value, latency_seconds_value, main_status_summary, mode_notice, overlay_clipboard_text, overlay_font_size_value, overlay_hold_seconds_value, overlay_opacity_value, overlay_visibility_action, performance_segment_seconds, record_logs_requires_confirmation, setup_guide_actions, status_message_is_error, subtitle_updates_allowed, swap_language_values, troubleshooting_action, visible_button_texts, visible_setting_keys
 from realtime_audio_translator.logbook import ConversationLog
 from realtime_audio_translator.models import cuda_hardware_from_check_output, list_models, model_available, model_download_command, model_install_message, models_dir, recommend_model
 from realtime_audio_translator.providers import TextToSpeech, Translator, build_google_translate_request, build_openai_translation_request, google_access_token
@@ -376,6 +376,8 @@ class CoreTests(unittest.TestCase):
         self.assertIn("一鍵診斷", gui_source)
         self.assertIn("手動匯入 runtime", gui_source)
         self.assertIn("下載模型", gui_source)
+        self.assertIn("套用場景", gui_source)
+        self.assertIn("自動優化", gui_source)
         self.assertIn("喇叭來源", gui_source)
         self.assertIn("麥克風來源", gui_source)
         self.assertIn("TTS 輸出", gui_source)
@@ -422,6 +424,12 @@ class CoreTests(unittest.TestCase):
         ]
 
         self.assertEqual(diagnostic_actions(issues), ["open_runtime", "download_model", "custom_fix"])
+
+    def test_setup_guide_actions_cover_first_run_flow(self):
+        self.assertEqual(
+            setup_guide_actions(),
+            ("一鍵診斷", "套用場景", "自動優化", "測試喇叭", "測試麥克風", "測試虛擬麥克風", "測試 TTS"),
+        )
 
     def test_push_to_talk_restores_previous_mute_state(self):
         app = TranslatorApp.__new__(TranslatorApp)
