@@ -1107,6 +1107,10 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(tuned["device"], "cpu")
         self.assertEqual(tuned["model"], "medium")
         self.assertEqual(config["device"], "cuda")
+        config["model"] = "small"
+        tuned = apply_tuning(config, recommend_tuning(config, cuda_devices=0, vram_gb=0))
+        self.assertEqual(tuned["device"], "cpu")
+        self.assertEqual(tuned["model"], "small")
 
     def test_auto_tuner_reduces_latency_settings(self):
         config = DEFAULT_CONFIG.copy()

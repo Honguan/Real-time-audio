@@ -13,11 +13,16 @@ def recommend_tuning(config: dict, cuda_devices: int, vram_gb: int, latency_seco
     recommendations: list[TuningRecommendation] = []
     model = config.get("model", "")
     if cuda_devices < 1 and config.get("device") != "cpu":
+        changes = {"device": "cpu", "compute_type": "int8"}
+        title = "切換 CPU 模式"
+        if str(model).startswith("large"):
+            changes["model"] = "medium"
+            title = "切換 CPU 與 medium 模型"
         recommendations.append(TuningRecommendation(
             "use_cpu_medium",
-            "切換 CPU 與 medium 模型",
+            title,
             "未偵測到 CUDA GPU，使用 CUDA 設定可能無法啟動或延遲很高",
-            {"device": "cpu", "model": "medium", "compute_type": "int8"},
+            changes,
         ))
     if cuda_devices >= 1 and vram_gb < 4 and str(model).startswith("large"):
         recommendations.append(TuningRecommendation(
