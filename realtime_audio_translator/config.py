@@ -140,6 +140,8 @@ def load_config(root: Path = APP_DIR) -> dict:
         loaded = json.load(handle)
     config = DEFAULT_CONFIG.copy()
     config.update(loaded)
+    if "runtime_dir" not in loaded and loaded.get("runtime_path"):
+        config["runtime_dir"] = loaded["runtime_path"]
     if "model" not in loaded and "asr_model" in loaded:
         config["model"] = loaded["asr_model"]
     if "provider" not in loaded and loaded.get("translation_engine") in ("local", "google", "openai"):

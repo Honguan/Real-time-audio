@@ -155,6 +155,17 @@ class CoreTests(unittest.TestCase):
             self.assertEqual(config["provider"], "openai")
             self.assertEqual(config["tts_provider"], "local")
 
+    def test_load_config_uses_public_runtime_path_when_runtime_dir_is_absent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ensure_app_dirs(root)
+            runtime = root / "custom-runtime"
+            (root / "config" / "settings.json").write_text(
+                json.dumps({"runtime_path": str(runtime)}), encoding="utf-8"
+            )
+
+            self.assertEqual(load_config(root)["runtime_dir"], str(runtime))
+
     def test_load_config_blocks_cloud_without_public_confirmation_flag(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

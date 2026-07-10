@@ -1,5 +1,9 @@
 # Realtime Audio Translator 發布說明
 
+## v0.1.26
+
+- 修正只設定 `runtime_path` 時，App 未使用指定 runtime 的相容性問題。
+
 ## 最快使用
 
 1. 到 GitHub Releases 下載 `RealtimeAudioTranslator-<tag>-win-x64.zip`。
