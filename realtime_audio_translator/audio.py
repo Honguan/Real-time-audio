@@ -41,6 +41,13 @@ def virtual_mic_recaptures_tts(microphone_device: str, tts_output_device: str) -
     return "cable output" in microphone and "cable input" in output
 
 
+def loopback_device_for_output(loopback_devices, output_name: str):
+    output = device_name_from_label(output_name).lower().strip()
+    if not output:
+        return None
+    return next((device for device in loopback_devices if output in str(device.get("name", "")).lower()), None)
+
+
 def audio_segment_active(path: Path, threshold: float) -> bool:
     threshold = min(1.0, max(0.0, float(threshold)))
     if threshold == 0:
@@ -71,17 +78,53 @@ def capture_wav(path: Path, device_index: int, seconds: float, loopback: bool = 
 
     sd = _sd()
     device = sd.query_devices(device_index)
-    samplerate = int(device.get("default_samplerate") or 48000)
-    channels = int(device["max_output_channels"] if loopback else device["max_input_channels"])
-    channels = max(1, min(channels, 2))
-    extra = None
     if loopback:
-        extra = sd.WasapiSettings(loopback=True)
+        return _capture_loopback_wav(path, device, seconds)
+    samplerate = int(device.get("default_samplerate") or 48000)
+    channels = int(device["max_input_channels"])
+    channels = max(1, min(channels, 2))
     frames = int(samplerate * seconds)
-    data = sd.rec(frames, samplerate=samplerate, channels=channels, dtype="int16", device=device_index, extra_settings=extra)
+    data = sd.rec(frames, samplerate=samplerate, channels=channels, dtype="int16", device=device_index)
     sd.wait()
     if channels > 1:
         data = data.mean(axis=1).astype(np.int16)
+        channels = 1
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with wave.open(str(path), "wb") as handle:
+        handle.setnchannels(channels)
+        handle.setsampwidth(2)
+        handle.setframerate(samplerate)
+        handle.writeframes(data.tobytes())
+    return path
+
+
+def _capture_loopback_wav(path: Path, output_device: dict, seconds: float) -> Path:
+    import numpy as np
+    import pyaudiowpatch as pyaudio
+
+    with pyaudio.PyAudio() as audio:
+        loopback = loopback_device_for_output(audio.get_loopback_device_info_generator(), output_device["name"])
+        if loopback is None:
+            raise RuntimeError(f"找不到喇叭的 WASAPI loopback 裝置：{output_device['name']}")
+        samplerate = int(loopback["defaultSampleRate"])
+        channels = max(1, int(loopback["maxInputChannels"]))
+        frames = int(samplerate * seconds)
+        chunks = []
+        with audio.open(
+            format=pyaudio.paInt16,
+            channels=channels,
+            rate=samplerate,
+            input=True,
+            input_device_index=loopback["index"],
+            frames_per_buffer=min(1024, max(1, frames)),
+        ) as stream:
+            while frames > 0:
+                count = min(1024, frames)
+                chunks.append(stream.read(count, exception_on_overflow=False))
+                frames -= count
+    data = np.frombuffer(b"".join(chunks), dtype=np.int16)
+    if channels > 1:
+        data = data.reshape(-1, channels).mean(axis=1).astype(np.int16)
         channels = 1
     path.parent.mkdir(parents=True, exist_ok=True)
     with wave.open(str(path), "wb") as handle:

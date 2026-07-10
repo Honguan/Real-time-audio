@@ -1,5 +1,9 @@
 # Realtime Audio Translator 發布說明
 
+## v0.1.27
+
+- 修正 Windows WASAPI loopback，喇叭／系統聲音現在可正常擷取。
+
 ## v0.1.26
 
 - 修正只設定 `runtime_path` 時，App 未使用指定 runtime 的相容性問題。

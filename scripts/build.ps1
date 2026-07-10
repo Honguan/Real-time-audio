@@ -13,6 +13,8 @@ py -3.10 -m PyInstaller `
   --icon assets\icon.ico `
   --hidden-import numpy `
   --hidden-import sounddevice `
+  --hidden-import pyaudiowpatch `
+  --hidden-import _portaudiowpatch `
   --hidden-import cffi `
   --hidden-import ctranslate2 `
   --hidden-import sentencepiece `

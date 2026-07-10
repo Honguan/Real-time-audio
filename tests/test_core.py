@@ -11,7 +11,7 @@ from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
 
-from realtime_audio_translator.audio import audio_segment_active, device_name_from_label, find_device, virtual_mic_recaptures_tts
+from realtime_audio_translator.audio import audio_segment_active, device_name_from_label, find_device, loopback_device_for_output, virtual_mic_recaptures_tts
 from realtime_audio_translator.asr import AudioTranscriber, add_runtime_dll_directory, add_xxl_data
 from realtime_audio_translator.commands import command_choices, parse_help_options
 from realtime_audio_translator.config import DEFAULT_CONFIG, clear_cache, clear_logs, ensure_app_dirs, ensure_glossary_file, load_config, save_audio_devices, save_config
@@ -2497,6 +2497,15 @@ class CoreTests(unittest.TestCase):
         with patch("realtime_audio_translator.audio.list_audio_devices", return_value=devices):
             self.assertIsNone(find_device("", want_output=True))
             self.assertEqual(find_device("Speakers", want_output=True), 7)
+
+    def test_loopback_device_matches_selected_output_name(self):
+        loopbacks = [
+            {"index": 7, "name": "Headphones [Loopback]"},
+            {"index": 9, "name": "Speakers (USB Audio) [Loopback]"},
+        ]
+
+        self.assertEqual(loopback_device_for_output(loopbacks, "Speakers (USB Audio) [Windows WASAPI]")["index"], 9)
+        self.assertIsNone(loopback_device_for_output(loopbacks, "Missing speakers"))
 
     def test_audio_devices_overlap_matches_short_and_full_names(self):
         self.assertTrue(audio_devices_overlap("CABLE Input", "CABLE Input (VB-Audio Virtual Cable) [Windows WASAPI]"))
