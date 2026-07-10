@@ -1,5 +1,9 @@
 # Realtime Audio Translator 發布說明
 
+## v0.1.29
+
+- 修正 Release exe 無法啟動的入口匯入錯誤。
+
 ## v0.1.28
 
 - 「測試虛擬麥克風」現在會確認 `CABLE Output` 是否實際收到 TTS 音訊。

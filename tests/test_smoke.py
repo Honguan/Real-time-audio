@@ -2,6 +2,13 @@ import unittest
 
 
 class SmokeTests(unittest.TestCase):
+    def test_packaged_entrypoint_uses_absolute_import(self):
+        from pathlib import Path
+
+        entrypoint = (Path(__file__).parents[1] / "realtime_audio_translator" / "__main__.py").read_text(encoding="utf-8")
+
+        self.assertIn("from realtime_audio_translator.gui import main", entrypoint)
+
     def test_runtime_modules_import(self):
         from realtime_audio_translator import ai_diagnostics, asr, audio, engine, gui, paths, runtime, scenario_manager, tts
 
