@@ -133,7 +133,7 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
     if "google" in cloud and (not config.get("google_project_id") or not config.get("google_service_account_json")):
         issues.append(DiagnosticIssue("cloud_credentials_missing", "error", "Google 憑證未設定", "Google 翻譯服務需要專案 ID 與服務帳戶 JSON", "填入 Google 專案 ID 與 JSON 路徑，或改回本機翻譯服務", "api_settings"))
     if config.get("provider") == "local" and not str(config.get("local_translate_url", "")).strip():
-        if not translation_model_available(config):
+        if not translation_model_available(config, config.get("source_language", ""), config.get("target_language", "")):
             issues.append(DiagnosticIssue(
                 "offline_translation_model_missing",
                 "warning",

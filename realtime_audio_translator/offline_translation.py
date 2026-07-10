@@ -39,13 +39,30 @@ def _installed_packages(config: dict) -> list[tuple[dict, Path]]:
 def translation_model_available(config: dict, source_language: str = "", target_language: str = "") -> bool:
     source_code = language_code(source_language)
     target_code = language_code(target_language)
-    for metadata, _path in _installed_packages(config):
-        if source_code and source_code != "auto" and metadata.get("from_code") != source_code:
-            continue
-        if target_code and metadata.get("to_code") != target_code:
-            continue
-        return True
-    return False
+    packages = _installed_packages(config)
+    if source_code in ("", "auto"):
+        return any(not target_code or metadata.get("to_code") == target_code for metadata, _path in packages)
+    return bool(_translation_path(packages, source_code, target_code))
+
+
+def _translation_path(packages: list[tuple[dict, Path]], source_code: str, target_code: str) -> list[tuple[dict, Path]]:
+    if not source_code or not target_code or source_code == target_code:
+        return []
+    pending = [(source_code, [])]
+    visited = {source_code}
+    while pending:
+        current, path = pending.pop(0)
+        for metadata, package_path in packages:
+            if metadata.get("from_code") != current:
+                continue
+            next_code = str(metadata.get("to_code") or "")
+            next_path = path + [(metadata, package_path)]
+            if next_code == target_code:
+                return next_path
+            if next_code and next_code not in visited:
+                visited.add(next_code)
+                pending.append((next_code, next_path))
+    return []
 
 
 def install_translation_models(config: dict) -> int:
@@ -72,6 +89,8 @@ def translation_model_pairs(source_language: str, target_language: str) -> tuple
     target_code = language_code(target_language)
     if source_code in ("", "auto") or target_code in ("", "auto") or source_code == target_code:
         return ()
+    if source_code != "en" and target_code != "en":
+        return ((source_code, "en"), ("en", target_code), (target_code, "en"), ("en", source_code))
     return ((source_code, target_code), (target_code, source_code))
 
 
@@ -120,41 +139,36 @@ def translate_offline(config: dict, text: str, source_language: str, target_lang
     if source_code in ("", "auto") or not target_code or source_code == target_code:
         return ""
     install_translation_models(config)
-    package = next(
-        (
-            (metadata, path)
-            for metadata, path in _installed_packages(config)
-            if metadata.get("from_code") == source_code and metadata.get("to_code") == target_code
-        ),
-        None,
-    )
-    if not package:
+    packages = _translation_path(_installed_packages(config), source_code, target_code)
+    if not packages:
         return ""
     try:
         import ctranslate2
         import sentencepiece as sentencepiece
     except ImportError:
         return ""
-    metadata, package_path = package
-    tokenizer = _TOKENIZERS.get(package_path)
-    if tokenizer is None:
-        tokenizer = sentencepiece.SentencePieceProcessor(model_file=str(package_path / "sentencepiece.model"))
-        _TOKENIZERS[package_path] = tokenizer
-    translator = _TRANSLATORS.get(package_path)
-    if translator is None:
-        translator = ctranslate2.Translator(str(package_path / "model"), device="cpu")
-        _TRANSLATORS[package_path] = translator
-    target_prefix = str(metadata.get("target_prefix") or "")
-    results = translator.translate_batch(
-        [tokenizer.encode(text, out_type=str)],
-        target_prefix=[[target_prefix]] if target_prefix else None,
-        replace_unknowns=True,
-        beam_size=4,
-        num_hypotheses=1,
-        length_penalty=0.2,
-        return_scores=True,
-    )
-    translated = tokenizer.decode(results[0].hypotheses[0])
-    if target_prefix and translated.startswith(target_prefix):
-        translated = translated[len(target_prefix):]
-    return translated.lstrip()
+    translated = text
+    for metadata, package_path in packages:
+        tokenizer = _TOKENIZERS.get(package_path)
+        if tokenizer is None:
+            tokenizer = sentencepiece.SentencePieceProcessor(model_file=str(package_path / "sentencepiece.model"))
+            _TOKENIZERS[package_path] = tokenizer
+        translator = _TRANSLATORS.get(package_path)
+        if translator is None:
+            translator = ctranslate2.Translator(str(package_path / "model"), device="cpu")
+            _TRANSLATORS[package_path] = translator
+        target_prefix = str(metadata.get("target_prefix") or "")
+        results = translator.translate_batch(
+            [tokenizer.encode(translated, out_type=str)],
+            target_prefix=[[target_prefix]] if target_prefix else None,
+            replace_unknowns=True,
+            beam_size=4,
+            num_hypotheses=1,
+            length_penalty=0.2,
+            return_scores=True,
+        )
+        translated = tokenizer.decode(results[0].hypotheses[0])
+        if target_prefix and translated.startswith(target_prefix):
+            translated = translated[len(target_prefix):]
+        translated = translated.lstrip()
+    return translated

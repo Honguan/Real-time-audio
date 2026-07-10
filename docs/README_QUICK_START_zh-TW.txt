@@ -13,8 +13,8 @@ RealtimeAudioTranslator 快速開始
 7. Discord 或遊戲語音的麥克風選 `CABLE Output`；App 的「TTS 輸出」選 `CABLE Input`。
 8. 進階模式按「下載離線翻譯模型」可下載目前語言的雙向 Argos Translate 模型；模型放在：
    `%USERPROFILE%\.realtime-audio\models\translation`
-   無法下載時，下載中英雙向 `RealtimeAudioTranslator-models-translation-<tag>.zip`，解壓到
-   `%USERPROFILE%\.realtime-audio\models`，保留 `translation` 資料夾；日文、韓文請切換語言後下載。
+   無法下載時，下載透過英文中繼支援中文、英文、日文、韓文的 `RealtimeAudioTranslator-models-translation-<tag>.zip`，解壓到
+   `%USERPROFILE%\.realtime-audio\models`，保留 `translation` 資料夾；其他語言配對請切換語言後下載。
 9. 若使用 LibreTranslate，請在進階模式的「本機翻譯 URL」填入端點，例如：
    `http://127.0.0.1:5000/translate`
 10. 簡單模式先按「測試麥克風」與「測試虛擬麥克風」；進階模式可再按「測試字幕」/「測試喇叭」/「測試 TTS」。

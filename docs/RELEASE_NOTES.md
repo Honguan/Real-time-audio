@@ -52,7 +52,7 @@ RealtimeAudioTranslator-runtime-cuda12-dlls-<tag>.zip
 %USERPROFILE%\.realtime-audio\models\translation
 ```
 
-若無法在 App 內下載，下載 `RealtimeAudioTranslator-models-translation-<tag>.zip`（中英雙向），解壓到 `%USERPROFILE%\.realtime-audio\models`，保留內含的 `translation` 資料夾。日文、韓文請在 App 內切換語言後下載。也可在進階模式的「本機翻譯 URL」填入 LibreTranslate 端點。
+若無法在 App 內下載，下載 `RealtimeAudioTranslator-models-translation-<tag>.zip`（透過英文中繼支援中文、英文、日文、韓文），解壓到 `%USERPROFILE%\.realtime-audio\models`，保留內含的 `translation` 資料夾。其他語言配對請在 App 內切換語言後下載。也可在進階模式的「本機翻譯 URL」填入 LibreTranslate 端點。
 
 翻譯快取會保存在 `%USERPROFILE%\.realtime-audio\cache\translation_cache.db`，術語可用「新增術語」加入，也可用「修正上次翻譯」修正最近一句，確認後加入術語，或用「開啟術語表」編輯。
 

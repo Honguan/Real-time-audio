@@ -25,7 +25,7 @@ from realtime_audio_translator.engine import RealtimeEngine, audio_devices_overl
 from realtime_audio_translator.gui import LANGUAGE_CHOICES, PERFORMANCE_CHOICES, PROVIDER_CHOICES, TARGET_LANGUAGE_CHOICES, TTS_PROVIDER_CHOICES, TranslatorApp, diagnostic_action_label, diagnostic_actions, first_diagnostic_action, first_run_setup_action, first_run_wizard_needed, format_overlay_line, language_lock_value, latency_seconds_value, main_status_summary, mode_notice, overlay_clipboard_text, overlay_font_size_value, overlay_hold_seconds_value, overlay_opacity_value, overlay_visibility_action, performance_segment_seconds, record_logs_requires_confirmation, setup_guide_actions, status_message_is_error, subtitle_updates_allowed, swap_language_values, troubleshooting_action, visible_button_texts, visible_setting_keys
 from realtime_audio_translator.logbook import ConversationLog
 from realtime_audio_translator.models import cuda_hardware_from_check_output, list_models, model_available, model_download_command, model_install_message, models_dir, recommend_model
-from realtime_audio_translator.offline_translation import install_translation_models, translation_models_dir
+from realtime_audio_translator.offline_translation import install_translation_models, translation_model_available, translation_model_pairs, translation_models_dir
 from realtime_audio_translator.providers import TextToSpeech, Translator, build_google_translate_request, build_openai_translation_request, google_access_token
 from realtime_audio_translator.release_updater import RELEASES_URL, current_version, is_newer_version, latest_release_tag_from_json, release_update_message
 from realtime_audio_translator.scenarios import SCENARIO_CHOICES, apply_scenario, scenario_label
@@ -1763,6 +1763,27 @@ class CoreTests(unittest.TestCase):
 
             self.assertTrue((translation_models_dir(config) / "packages" / "translate-en_zh" / "metadata.json").is_file())
 
+    def test_offline_translation_uses_english_pivot_for_basic_languages(self):
+        self.assertEqual(
+            translation_model_pairs("zh", "ja"),
+            (("zh", "en"), ("en", "ja"), ("ja", "en"), ("en", "zh")),
+        )
+
+    def test_offline_translation_model_available_through_english_pivot(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = DEFAULT_CONFIG.copy()
+            config["models_path"] = str(Path(tmp) / "models")
+            packages = translation_models_dir(config) / "packages"
+            for source, target in (("zh", "en"), ("en", "ja")):
+                package = packages / f"translate-{source}_{target}"
+                (package / "model").mkdir(parents=True)
+                (package / "sentencepiece.model").write_bytes(b"test")
+                (package / "metadata.json").write_text(
+                    json.dumps({"from_code": source, "to_code": target}), encoding="utf-8"
+                )
+
+            self.assertTrue(translation_model_available(config, "zh", "ja"))
+
     def test_local_argos_translation_persists_cache_without_url(self):
         class Translation:
             def translate(self, text):
@@ -2239,6 +2260,12 @@ class CoreTests(unittest.TestCase):
         self.assertIn("dist-release/*.zip", workflow)
         self.assertIn("dist-release/*.7z", workflow)
         self.assertIn("dist-release/SHA256SUMS.txt", workflow)
+
+    def test_release_workflow_packages_basic_offline_languages(self):
+        workflow = Path(".github/workflows/release.yml").read_text(encoding="utf-8")
+
+        for pair in ('@("zh", "en")', '@("en", "zh")', '@("ja", "en")', '@("en", "ja")', '@("ko", "en")', '@("en", "ko")'):
+            self.assertIn(pair, workflow)
 
     def test_release_notes_include_public_download_instructions(self):
         notes = Path("docs/RELEASE_NOTES.md").read_text(encoding="utf-8")

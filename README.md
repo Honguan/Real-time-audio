@@ -84,13 +84,13 @@ Whisper 模型可放在 `models\whisper-small`；翻譯模型放在 `models\tran
 
 ## 翻譯與 TTS
 
-預設本機翻譯不會上傳雲端。進階模式可按「下載離線翻譯模型」，工具會下載目前來源語言與目標語言的雙向 Argos Translate 模型。下載後模型放在：
+預設本機翻譯不會上傳雲端。進階模式可按「下載離線翻譯模型」，工具會下載目前來源語言與目標語言的雙向 Argos Translate 模型。Release 的 `RealtimeAudioTranslator-models-translation-<tag>.zip` 透過英文中繼支援中文、英文、日文、韓文互譯。下載後模型放在：
 
 ```text
 %USERPROFILE%\.realtime-audio\models\translation
 ```
 
-若無法在工具內下載，可從 GitHub Releases 下載 `RealtimeAudioTranslator-models-translation-<tag>.zip`（中英雙向），解壓到 `%USERPROFILE%\.realtime-audio\models`；資料夾內應保留 `translation`。日文、韓文請在工具內切換語言後下載。若要改用 LibreTranslate，請在進階模式把「本機翻譯 URL」填成例如：
+若無法在工具內下載，可從 GitHub Releases 下載 `RealtimeAudioTranslator-models-translation-<tag>.zip`（透過英文中繼支援中文、英文、日文、韓文），解壓到 `%USERPROFILE%\.realtime-audio\models`；資料夾內應保留 `translation`。其他語言配對請在工具內切換語言後下載。若要改用 LibreTranslate，請在進階模式把「本機翻譯 URL」填成例如：
 
 切換到 Google 或 OpenAI 時，工具會先提示語音或文字可能傳送到第三方服務並可能產生費用。
 

@@ -106,7 +106,7 @@ jobs:
           $index = Invoke-RestMethod "https://raw.githubusercontent.com/argosopentech/argospm-index/main/index.json"
           $modelsDir = "translation-models\translation"
           New-Item -ItemType Directory -Path $modelsDir | Out-Null
-          foreach ($pair in @(@("zh", "en"), @("en", "zh"))) {
+          foreach ($pair in @(@("zh", "en"), @("en", "zh"), @("ja", "en"), @("en", "ja"), @("ko", "en"), @("en", "ko"))) {
             $package = $index | Where-Object { $_.from_code -eq $pair[0] -and $_.to_code -eq $pair[1] -and $_.links } | Select-Object -First 1
             if (-not $package) {
               throw "Cannot find offline translation model: $($pair[0]) -> $($pair[1])"
