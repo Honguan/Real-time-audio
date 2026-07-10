@@ -90,6 +90,10 @@ def scenario_label(scenario_key: str) -> str:
     return SCENARIO_LABELS.get(scenario_key, scenario_key)
 
 
+def scenario_key(label_or_key: str) -> str:
+    return next((key for key, label in SCENARIO_LABELS.items() if label == label_or_key), label_or_key)
+
+
 def apply_scenario(config: dict, scenario_key: str) -> dict:
     updated = config.copy()
     selected = scenario_key if scenario_key in SCENARIO_PRESETS else "discord_chat"

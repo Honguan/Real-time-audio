@@ -21,7 +21,7 @@ from .paths import resource_root
 from .providers import TextToSpeech, Translator, google_access_token
 from .release_updater import RELEASES_URL, current_version, latest_release_tag, release_update_message
 from .runtime import DEFAULT_RUNTIME_DIR, UPSTREAM_RUNTIME_RELEASE_URL, download_runtime, install_runtime_from, runtime_dir, runtime_install_message, runtime_status, whisper_exe
-from .scenarios import SCENARIO_CHOICES, apply_scenario, scenario_label
+from .scenarios import SCENARIO_CHOICES, apply_scenario, scenario_key, scenario_label
 from .subtitle_export import export_jsonl_to_srt, export_jsonl_to_txt
 from .tts import list_windows_sapi_voices, play_linear16
 
@@ -366,6 +366,7 @@ class TranslatorApp(tk.Tk):
         frame = ttk.Frame(self, padding=12)
         frame.pack(fill="both", expand=True)
         self.vars = {key: tk.StringVar(value=str(value)) for key, value in self.config.items()}
+        self.vars["scenario"].set(scenario_label(self.config["scenario"]))
         self.overlay_visible = tk.BooleanVar(value=bool(self.config["overlay_visible"]))
         self.overlay_topmost = tk.BooleanVar(value=bool(self.config["overlay_topmost"]))
         self.show_language_labels = tk.BooleanVar(value=bool(self.config["show_language_labels"]))
@@ -392,7 +393,7 @@ class TranslatorApp(tk.Tk):
                 widget = ttk.Combobox(frame, textvariable=self.vars[key], values=values)
                 widget.bind("<<ComboboxSelected>>", lambda _event: self._save())
             elif key in ("provider", "tts_provider", "performance_mode", "scenario"):
-                values = SCENARIO_CHOICES if key == "scenario" else PERFORMANCE_CHOICES if key == "performance_mode" else TTS_PROVIDER_CHOICES if key == "tts_provider" else PROVIDER_CHOICES
+                values = tuple(scenario_label(key) for key in SCENARIO_CHOICES) if key == "scenario" else PERFORMANCE_CHOICES if key == "performance_mode" else TTS_PROVIDER_CHOICES if key == "tts_provider" else PROVIDER_CHOICES
                 widget = ttk.Combobox(frame, textvariable=self.vars[key], values=values, state="readonly")
                 widget.bind("<<ComboboxSelected>>", lambda _event, name=key: self._apply_performance_mode() if name == "performance_mode" else self._apply_scenario() if name == "scenario" else self._save())
             elif key in AUDIO_DEVICE_KEYS or key in ("model", "device", "compute_type", "tts_voice_name"):
@@ -569,6 +570,7 @@ class TranslatorApp(tk.Tk):
         config = self.config.copy()
         for key, variable in self.vars.items():
             config[key] = variable.get()
+        config["scenario"] = scenario_key(config["scenario"])
         config["overlay_visible"] = self.overlay_visible.get()
         config["overlay_topmost"] = self.overlay_topmost.get()
         config["show_language_labels"] = self.show_language_labels.get()
@@ -974,7 +976,8 @@ class TranslatorApp(tk.Tk):
         self._apply_performance_mode()
 
     def _apply_scenario(self) -> None:
-        updated = apply_scenario(self._config_from_vars(), self.vars["scenario"].get())
+        config = self._config_from_vars()
+        updated = apply_scenario(config, config["scenario"])
         if record_logs_requires_confirmation(bool(self.config.get("record_logs", False)), bool(updated.get("record_logs", False))):
             if not messagebox.askyesno("啟用對話紀錄？", "這個場景會開啟對話紀錄。\n是否允許本機保存本次對話紀錄？"):
                 updated["record_logs"] = False
@@ -985,7 +988,7 @@ class TranslatorApp(tk.Tk):
     def _load_config_into_widgets(self, updated: dict) -> None:
         for key, variable in self.vars.items():
             if key in updated:
-                variable.set(str(updated[key]))
+                variable.set(scenario_label(str(updated[key])) if key == "scenario" else str(updated[key]))
         self.overlay_visible.set(bool(updated.get("overlay_visible", self.overlay_visible.get())))
         self.overlay_topmost.set(bool(updated.get("overlay_topmost", self.overlay_topmost.get())))
         self.show_language_labels.set(bool(updated.get("show_language_labels", self.show_language_labels.get())))

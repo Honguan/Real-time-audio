@@ -28,7 +28,7 @@ from realtime_audio_translator.models import cuda_hardware_from_check_output, li
 from realtime_audio_translator.offline_translation import install_translation_models, translation_model_available, translation_model_pairs, translation_models_dir
 from realtime_audio_translator.providers import TextToSpeech, Translator, build_google_translate_request, build_openai_translation_request, google_access_token
 from realtime_audio_translator.release_updater import RELEASES_URL, current_version, is_newer_version, latest_release_tag_from_json, release_update_message
-from realtime_audio_translator.scenarios import SCENARIO_CHOICES, apply_scenario, scenario_label
+from realtime_audio_translator.scenarios import SCENARIO_CHOICES, apply_scenario, scenario_key, scenario_label
 from realtime_audio_translator.subtitle_export import export_jsonl_to_srt, export_jsonl_to_txt, srt_timestamp
 
 
@@ -1096,6 +1096,8 @@ class CoreTests(unittest.TestCase):
         self.assertTrue(two_way["virtual_mic_enabled"])
         self.assertEqual(base["performance_mode"], DEFAULT_CONFIG["performance_mode"])
         self.assertEqual(scenario_label("discord_chat"), "Discord 聊天")
+        self.assertEqual(scenario_key("Discord 聊天"), "discord_chat")
+        self.assertEqual(scenario_key("discord_chat"), "discord_chat")
         self.assertEqual(scenario_label("custom"), "custom")
 
     def test_ai_orchestrator_combines_scenario_tuning_and_diagnostics_without_enabling_cloud(self):
@@ -1286,6 +1288,8 @@ class CoreTests(unittest.TestCase):
 
         self.assertIn('("場景", "scenario")', gui_source)
         self.assertIn("SCENARIO_CHOICES", gui_source)
+        self.assertIn("tuple(scenario_label(key) for key in SCENARIO_CHOICES)", gui_source)
+        self.assertIn('config["scenario"] = scenario_key(config["scenario"])', gui_source)
         self.assertIn('("套用場景", self._apply_scenario)', gui_source)
         self.assertIn('("自動優化", self._optimize_settings)', gui_source)
         self.assertIn('("一鍵診斷", self._run_diagnostics)', gui_source)
