@@ -1,5 +1,9 @@
 # Realtime Audio Translator 發布說明
 
+## v0.1.30
+
+- 新增「一鍵安裝 runtime」，會下載最新版 CUDA12 runtime、驗證 SHA-256 並用 Windows 內建工具解壓。
+
 ## v0.1.29
 
 - 修正 Release exe 無法啟動的入口匯入錯誤。

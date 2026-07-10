@@ -1,5 +1,10 @@
+import hashlib
+import json
 import os
 import shutil
+import subprocess
+import tempfile
+import urllib.request
 from pathlib import Path
 
 from .config import APP_DIR
@@ -12,6 +17,7 @@ CUDA_HINTS = ("cublas64_12.dll", "cublasLt64_12.dll", "cudnn64_9.dll")
 RUNTIME_RELEASE_URL = "https://github.com/Honguan/Real-time-audio/releases"
 UPSTREAM_RUNTIME_RELEASE_URL = "https://github.com/Purfview/whisper-standalone-win/releases"
 CUDA_PACKAGE_NAME = "cuBLAS.and.cuDNN_CUDA12_win_v3.7z"
+LATEST_RELEASE_API = "https://api.github.com/repos/Honguan/Real-time-audio/releases/latest"
 
 
 def runtime_dir(config: dict | None = None) -> Path:
@@ -56,6 +62,48 @@ def runtime_install_message(root: Path = DEFAULT_RUNTIME_DIR) -> str:
         f"資料夾需要直接包含：{', '.join(REQUIRED_RUNTIME_ITEMS)}。\n"
         f"CUDA12 建議包含：{', '.join(CUDA_HINTS)}。"
     )
+
+
+def runtime_assets_from_json(data: bytes) -> list[tuple[str, str, str]]:
+    assets = json.loads(data.decode("utf-8"))["assets"]
+    selected = [
+        (asset["name"], asset["browser_download_url"], str(asset.get("digest", "")).removeprefix("sha256:"))
+        for asset in assets
+        if "runtime-cuda12-core-" in asset["name"] or "runtime-cuda12-dlls-" in asset["name"]
+    ]
+    if len(selected) != 2 or any(not digest for _name, _url, digest in selected):
+        raise RuntimeError("最新版 Release 找不到完整的 CUDA12 runtime 檔案")
+    return sorted(selected)
+
+
+def download_runtime(target: Path = DEFAULT_RUNTIME_DIR, progress=None) -> Path:
+    target.mkdir(parents=True, exist_ok=True)
+    if shutil.disk_usage(target).free < 10 * 1024**3:
+        raise RuntimeError("runtime 安裝需要至少 10GB 可用磁碟空間")
+    request = urllib.request.Request(LATEST_RELEASE_API, headers={"User-Agent": "RealtimeAudioTranslator"})
+    with urllib.request.urlopen(request, timeout=30) as response:
+        assets = runtime_assets_from_json(response.read())
+    with tempfile.TemporaryDirectory(dir=target.parent) as temp:
+        for name, url, expected_digest in assets:
+            if progress:
+                progress(f"正在下載 {name}")
+            archive = Path(temp) / name
+            request = urllib.request.Request(url, headers={"User-Agent": "RealtimeAudioTranslator"})
+            with urllib.request.urlopen(request, timeout=30) as response, archive.open("wb") as output:
+                shutil.copyfileobj(response, output)
+            digest = hashlib.sha256()
+            with archive.open("rb") as downloaded:
+                for block in iter(lambda: downloaded.read(1024 * 1024), b""):
+                    digest.update(block)
+            if digest.hexdigest().lower() != expected_digest.lower():
+                raise RuntimeError(f"{name} SHA-256 驗證失敗")
+            if progress:
+                progress(f"正在解壓 {name}")
+            subprocess.run(["tar", "-xf", str(archive), "-C", str(target)], check=True)
+    status = runtime_status(target)
+    if not status["ready"]:
+        raise RuntimeError("runtime 安裝不完整，缺少：" + ", ".join(status["missing"]))
+    return target
 
 
 def install_runtime_from(source: Path, target: Path = DEFAULT_RUNTIME_DIR) -> Path:

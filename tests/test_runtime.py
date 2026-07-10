@@ -5,10 +5,15 @@ import subprocess
 import zipfile
 from pathlib import Path
 
-from realtime_audio_translator.runtime import DEFAULT_RUNTIME_DIR, install_runtime_from, runtime_dir, runtime_install_message, runtime_status, whisper_exe
+from realtime_audio_translator.runtime import DEFAULT_RUNTIME_DIR, install_runtime_from, runtime_assets_from_json, runtime_dir, runtime_install_message, runtime_status, whisper_exe
 
 
 class RuntimeTests(unittest.TestCase):
+    def test_runtime_assets_select_latest_core_and_dll_packages(self):
+        data = b'{"assets":[{"name":"RealtimeAudioTranslator-v0.1.29-win-x64.zip","browser_download_url":"app"},{"name":"RealtimeAudioTranslator-runtime-cuda12-core-v0.1.29.7z","browser_download_url":"core","digest":"sha256:corehash"},{"name":"RealtimeAudioTranslator-runtime-cuda12-dlls-v0.1.29.zip","browser_download_url":"dlls","digest":"sha256:dllhash"}]}'
+
+        self.assertEqual(runtime_assets_from_json(data), [("RealtimeAudioTranslator-runtime-cuda12-core-v0.1.29.7z", "core", "corehash"), ("RealtimeAudioTranslator-runtime-cuda12-dlls-v0.1.29.zip", "dlls", "dllhash")])
+
     def test_runtime_status_reports_missing_files(self):
         with tempfile.TemporaryDirectory() as tmp:
             status = runtime_status(Path(tmp))

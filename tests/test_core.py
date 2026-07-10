@@ -1293,8 +1293,9 @@ class CoreTests(unittest.TestCase):
         self.assertIn("ttk.Scrollbar", gui_source)
         self.assertIn('text="關閉"', gui_source)
         self.assertIn("def _run_diagnostic_action", gui_source)
-        self.assertIn("webbrowser.open(RUNTIME_RELEASE_URL)", gui_source)
+        self.assertIn("self._download_runtime()", gui_source)
         self.assertIn("collect_diagnostics", gui_source)
+
         self.assertIn("問題名稱", gui_source)
         self.assertIn("可能原因", gui_source)
         self.assertIn("自動檢查結果", gui_source)
@@ -1311,6 +1312,12 @@ class CoreTests(unittest.TestCase):
         self.assertIn("self._auto_optimize_before_start()", gui_source)
         self.assertIn('("檢查更新", self._check_updates)', gui_source)
         self.assertIn("latest_release_tag", gui_source)
+
+    def test_gui_can_download_and_install_runtime(self):
+        gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
+
+        self.assertIn('text="一鍵安裝 runtime", command=self._download_runtime', gui_source)
+        self.assertIn("download_runtime", gui_source)
 
     def test_auto_optimize_before_start_applies_recommended_config_only_when_enabled(self):
         app = TranslatorApp.__new__(TranslatorApp)
@@ -2710,9 +2717,8 @@ class CoreTests(unittest.TestCase):
     def test_runtime_controls_link_cuda12_dependency(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
 
-        self.assertIn('text="下載 runtime 檔案"', gui_source)
+        self.assertIn('text="一鍵安裝 runtime"', gui_source)
         self.assertIn('text="備用 runtime 來源"', gui_source)
-        self.assertIn("RUNTIME_RELEASE_URL", gui_source)
         self.assertIn("UPSTREAM_RUNTIME_RELEASE_URL", gui_source)
         self.assertIn('subprocess.run([str(runtime_dir(config) / "ffmpeg.exe"), "-version"]', gui_source)
         self.assertIn('config["last_ffmpeg_failed"]', gui_source)
