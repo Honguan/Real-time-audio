@@ -8,6 +8,7 @@ from pathlib import Path
 import requests
 
 from .ai_memory import cache_translation, cached_translation
+from .offline_translation import translate_offline
 from .tts import speak_windows_sapi
 
 
@@ -132,7 +133,7 @@ class Translator:
     def _local_translate(self, text: str, source_language: str, target_language: str) -> str:
         url = self.config.get("local_translate_url", "").strip()
         if not url:
-            return self._argos_translate(text, source_language, target_language) or text
+            return translate_offline(self.config, text, source_language, target_language) or self._argos_translate(text, source_language, target_language) or text
         response = requests.post(
             url,
             json={"q": text, "source": source_language, "target": target_language, "format": "text"},

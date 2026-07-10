@@ -6,6 +6,7 @@ import sys
 import tempfile
 import unittest
 import wave
+import zipfile
 from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
@@ -24,6 +25,7 @@ from realtime_audio_translator.engine import RealtimeEngine, audio_devices_overl
 from realtime_audio_translator.gui import LANGUAGE_CHOICES, PERFORMANCE_CHOICES, PROVIDER_CHOICES, TARGET_LANGUAGE_CHOICES, TTS_PROVIDER_CHOICES, TranslatorApp, diagnostic_action_label, diagnostic_actions, first_diagnostic_action, first_run_setup_action, first_run_wizard_needed, format_overlay_line, language_lock_value, latency_seconds_value, main_status_summary, mode_notice, overlay_clipboard_text, overlay_font_size_value, overlay_hold_seconds_value, overlay_opacity_value, overlay_visibility_action, performance_segment_seconds, record_logs_requires_confirmation, setup_guide_actions, status_message_is_error, subtitle_updates_allowed, swap_language_values, troubleshooting_action, visible_button_texts, visible_setting_keys
 from realtime_audio_translator.logbook import ConversationLog
 from realtime_audio_translator.models import cuda_hardware_from_check_output, list_models, model_available, model_download_command, model_install_message, models_dir, recommend_model
+from realtime_audio_translator.offline_translation import install_translation_models, translation_models_dir
 from realtime_audio_translator.providers import TextToSpeech, Translator, build_google_translate_request, build_openai_translation_request, google_access_token
 from realtime_audio_translator.release_updater import RELEASES_URL, current_version, is_newer_version, latest_release_tag_from_json, release_update_message
 from realtime_audio_translator.scenarios import SCENARIO_CHOICES, apply_scenario, scenario_label
@@ -742,12 +744,15 @@ class CoreTests(unittest.TestCase):
             config["model"] = "medium"
             config["provider"] = "local"
             config["local_translate_url"] = ""
+            config["models_path"] = str(root / "translation-models")
             (model / "model.bin").write_text("model", encoding="utf-8")
 
             issues = collect_diagnostics(config, root)
 
         local_issue = next(issue for issue in issues if issue.code == "local_translate_url_missing")
+        offline_issue = next(issue for issue in issues if issue.code == "offline_translation_model_missing")
         self.assertEqual(local_issue.severity, "info")
+        self.assertEqual(offline_issue.action, "download_translation_models")
         self.assertNotIn("runtime_missing", [issue.code for issue in issues])
         self.assertNotIn("model_missing", [issue.code for issue in issues])
 
@@ -1262,6 +1267,8 @@ class CoreTests(unittest.TestCase):
         self.assertIn('("套用場景", self._apply_scenario)', gui_source)
         self.assertIn('("自動優化", self._optimize_settings)', gui_source)
         self.assertIn('("一鍵診斷", self._run_diagnostics)', gui_source)
+        self.assertIn('("下載離線翻譯模型", self._download_translation_models)', gui_source)
+        self.assertIn("download_translation_models", gui_source)
         self.assertIn("def _show_first_run_wizard", gui_source)
         self.assertIn("first_run_setup_action", gui_source)
         self.assertIn("self._optimize_settings()", gui_source)
@@ -1731,6 +1738,30 @@ class CoreTests(unittest.TestCase):
                 sys.modules.pop("argostranslate.translate", None)
             else:
                 sys.modules["argostranslate.translate"] = original_module
+
+    def test_local_provider_uses_project_offline_translation_models_first(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = DEFAULT_CONFIG.copy()
+            config["provider"] = "local"
+            config["translation_cache_path"] = str(Path(tmp) / "translation_cache.db")
+            with patch("realtime_audio_translator.providers.translate_offline", return_value="離線:hello"):
+                translator = Translator(config)
+
+                self.assertEqual(translator.translate("hello", "en", "zh"), "離線:hello")
+                self.assertEqual(translator.last_confidence, 0.8)
+
+    def test_local_translation_model_assets_import_from_configured_directory(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = DEFAULT_CONFIG.copy()
+            config["models_path"] = str(Path(tmp) / "models")
+            model_file = translation_models_dir(config) / "en_zh.argosmodel"
+            model_file.parent.mkdir(parents=True)
+            with zipfile.ZipFile(model_file, "w") as archive:
+                archive.writestr("translate-en_zh/metadata.json", '{"from_code":"en","to_code":"zh"}')
+
+            self.assertEqual(install_translation_models(config), 1)
+
+            self.assertTrue((translation_models_dir(config) / "packages" / "translate-en_zh" / "metadata.json").is_file())
 
     def test_local_argos_translation_persists_cache_without_url(self):
         class Translation:

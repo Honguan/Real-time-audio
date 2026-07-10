@@ -84,7 +84,13 @@ Whisper 模型可放在 `models\whisper-small`；翻譯模型放在 `models\tran
 
 ## 翻譯與 TTS
 
-預設本機翻譯不會上傳雲端。若要使用真正翻譯，請先啟動 LibreTranslate，並在進階模式把「本機翻譯 URL」填成例如：
+預設本機翻譯不會上傳雲端。進階模式可按「下載離線翻譯模型」，工具會下載目前來源語言與目標語言的雙向 Argos Translate 模型。下載後模型放在：
+
+```text
+%USERPROFILE%\.realtime-audio\models\translation
+```
+
+若無法在工具內下載，可從 GitHub Releases 下載 `RealtimeAudioTranslator-models-translation-<tag>.zip`（中英雙向），解壓到 `%USERPROFILE%\.realtime-audio\models`；資料夾內應保留 `translation`。日文、韓文請在工具內切換語言後下載。若要改用 LibreTranslate，請在進階模式把「本機翻譯 URL」填成例如：
 
 切換到 Google 或 OpenAI 時，工具會先提示語音或文字可能傳送到第三方服務並可能產生費用。
 
@@ -92,7 +98,7 @@ Whisper 模型可放在 `models\whisper-small`；翻譯模型放在 `models\tran
 http://127.0.0.1:5000/translate
 ```
 
-沒有「本機翻譯 URL」時會嘗試使用已安裝的 Argos Translate 離線模型；也可改用 OpenAI 或 Google 翻譯服務。OpenAI 使用 `OPENAI_API_KEY` 環境變數，Google 使用 service account JSON 路徑。
+沒有「本機翻譯 URL」時會優先使用下載到程式資料夾的 Argos Translate 離線模型；也保留已安裝 Argos Translate 的相容支援。可改用 OpenAI 或 Google 翻譯服務。OpenAI 使用 `OPENAI_API_KEY` 環境變數，Google 使用 service account JSON 路徑。
 
 「TTS 服務」可選本機、OpenAI 或 Google。進階設定可調「OpenAI 模型」、「OpenAI TTS 聲音」、「OpenAI TTS 模型」與「Google TTS 聲音」。
 
@@ -104,6 +110,7 @@ http://127.0.0.1:5000/translate
 - 聽不到對方聲音：確認喇叭來源選的是 Discord 或遊戲正在播放的裝置，再按「測試喇叭」。
 - 找不到 runtime：確認 core `.7z` 與 DLL `.zip` 都已解壓到 `%USERPROFILE%\.realtime-audio\runtime\cuda12`。
 - 找不到模型：在工具內下載模型，或解壓模型 zip 到 `%USERPROFILE%\.realtime-audio\models`。
+- 找不到離線翻譯模型：在進階模式按「下載離線翻譯模型」，或把翻譯模型 zip 解壓到 `%USERPROFILE%\.realtime-audio\models`。
 - 對方聽不到翻譯語音：確認「播放翻譯語音」與「輸出到虛擬麥克風」已開啟，且「TTS 輸出」選 `CABLE Input`。
 - Discord 沒有收到虛擬麥克風聲音：Discord 麥克風請選 `CABLE Output (VB-Audio Virtual Cable)`。
 - 字幕延遲太高：在進階模式把「效能模式」改成 `low_latency`，並先用較小模型測試。

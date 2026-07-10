@@ -44,7 +44,15 @@ RealtimeAudioTranslator-runtime-cuda12-dlls-<tag>.zip
 
 主程式不需要安裝 Python。
 
-若 Release 沒有 runtime 檔案，可到 https://github.com/Purfview/whisper-standalone-win/releases 下載 Faster-Whisper-XXL Windows runtime 和 `cuBLAS.and.cuDNN_CUDA12_win_v3.7z`。本機翻譯會優先使用已安裝的 Argos Translate 離線模型，也可在進階模式的「本機翻譯 URL」填入 LibreTranslate 端點。
+若 Release 沒有 runtime 檔案，可到 https://github.com/Purfview/whisper-standalone-win/releases 下載 Faster-Whisper-XXL Windows runtime 和 `cuBLAS.and.cuDNN_CUDA12_win_v3.7z`。
+
+本機翻譯預設使用 Argos Translate 離線模型。進階模式按「下載離線翻譯模型」會下載目前語言的雙向模型並放到：
+
+```text
+%USERPROFILE%\.realtime-audio\models\translation
+```
+
+若無法在 App 內下載，下載 `RealtimeAudioTranslator-models-translation-<tag>.zip`（中英雙向），解壓到 `%USERPROFILE%\.realtime-audio\models`，保留內含的 `translation` 資料夾。日文、韓文請在 App 內切換語言後下載。也可在進階模式的「本機翻譯 URL」填入 LibreTranslate 端點。
 
 翻譯快取會保存在 `%USERPROFILE%\.realtime-audio\cache\translation_cache.db`，術語可用「新增術語」加入，也可用「修正上次翻譯」修正最近一句，確認後加入術語，或用「開啟術語表」編輯。
 
@@ -64,6 +72,7 @@ RealtimeAudioTranslator-runtime-cuda12-dlls-<tag>.zip
 - 聽不到對方聲音：確認喇叭來源選的是 Discord 或遊戲正在播放的裝置，再按「測試喇叭」。
 - 找不到 runtime：確認 core `.7z` 與 DLL `.zip` 都已解壓到 `%USERPROFILE%\.realtime-audio\runtime\cuda12`。
 - 找不到模型：在工具內下載模型，或解壓模型 zip 到 `%USERPROFILE%\.realtime-audio\models`。
+- 找不到離線翻譯模型：按「下載離線翻譯模型」，或解壓 `RealtimeAudioTranslator-models-translation-<tag>.zip` 到 `%USERPROFILE%\.realtime-audio\models`。
 - 對方聽不到翻譯語音：確認「播放翻譯語音」與「輸出到虛擬麥克風」已開啟，且「TTS 輸出」選 `CABLE Input`。
 - Discord 沒有收到虛擬麥克風聲音：Discord 麥克風請選 `CABLE Output (VB-Audio Virtual Cable)`。
 - 字幕延遲太高：在進階模式把「效能模式」改成 `low_latency`，並先用較小模型測試。

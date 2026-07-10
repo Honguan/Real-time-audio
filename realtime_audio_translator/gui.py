@@ -15,6 +15,7 @@ from .config import APP_DIR, clear_cache, clear_logs, ensure_glossary_file, load
 from .diagnostics import collect_diagnostics
 from .engine import RealtimeEngine
 from .models import cuda_hardware_from_check_output, download_model, list_models, model_available, model_install_message, models_dir, recommend_model
+from .offline_translation import download_translation_models as download_offline_translation_models
 from .paths import resource_root
 from .providers import TextToSpeech, Translator, google_access_token
 from .release_updater import RELEASES_URL, current_version, latest_release_tag, release_update_message
@@ -86,6 +87,7 @@ BASIC_BUTTON_TEXTS = {
 FIRST_RUN_ISSUE_CODES = {
     "runtime_missing",
     "model_missing",
+    "offline_translation_model_missing",
     "speaker_device_missing",
     "microphone_device_missing",
     "virtual_mic_route",
@@ -119,7 +121,7 @@ def first_diagnostic_action(issues) -> str:
 
 
 def diagnostic_actions(issues) -> list[str]:
-    actions = ("open_runtime", "download_model", "audio_settings", "optimize_settings", "language_settings", "local_translation", "api_settings", "open_logs")
+    actions = ("open_runtime", "download_model", "download_translation_models", "audio_settings", "optimize_settings", "language_settings", "local_translation", "api_settings", "open_logs")
     ordered: list[str] = []
     seen: set[str] = set()
     for action in actions:
@@ -226,6 +228,7 @@ def diagnostic_action_label(action: str) -> str:
     return {
         "open_runtime": "開啟 runtime 資料夾 / 下載 runtime",
         "download_model": "下載模型",
+        "download_translation_models": "下載離線翻譯模型",
         "audio_settings": "測試喇叭 / 測試麥克風 / 測試虛擬麥克風",
         "api_settings": "測試 API",
         "local_translation": "修復本機翻譯",
@@ -480,6 +483,7 @@ class TranslatorApp(tk.Tk):
             ("自動優化", self._optimize_settings),
             ("推薦模型", self._recommend),
             ("下載模型", self._download_model),
+            ("下載離線翻譯模型", self._download_translation_models),
             ("一鍵診斷", self._run_diagnostics),
             ("鎖定語言", self._lock_language),
             ("檢查更新", self._check_updates),
@@ -865,6 +869,8 @@ class TranslatorApp(tk.Tk):
             webbrowser.open(RUNTIME_RELEASE_URL)
         elif action == "download_model":
             self._download_model()
+        elif action == "download_translation_models":
+            self._download_translation_models()
         elif action == "audio_settings":
             self._show_setup_guide()
         elif action == "optimize_settings":
@@ -1021,6 +1027,31 @@ class TranslatorApp(tk.Tk):
                 message = f"模型下載失敗：{exc}"
             self.after(0, self.status.set, message)
             self.after(0, self._refresh_lists)
+
+        threading.Thread(target=run, daemon=True).start()
+
+    def _download_translation_models(self) -> None:
+        self._save()
+        source_language = self.config["source_language"]
+        target_language = self.config["target_language"]
+        if source_language == "auto":
+            messagebox.showinfo("請先選擇來源語言", "下載離線翻譯模型前，請把「來源語言」改成固定語言。")
+            return
+        if not messagebox.askyesno(
+            "下載離線翻譯模型",
+            f"將下載 {source_language} 與 {target_language} 的雙向 Argos Translate 模型。\n"
+            "模型會儲存在程式資料夾的 models\\translation。",
+        ):
+            return
+        self.status.set("正在下載離線翻譯模型")
+
+        def run() -> None:
+            try:
+                downloaded = download_offline_translation_models(self.config, source_language, target_language)
+                message = f"離線翻譯模型下載完成：{len(downloaded)} 個"
+            except Exception as exc:
+                message = f"離線翻譯模型下載失敗：{exc}"
+            self.after(0, self.status.set, message)
 
         threading.Thread(target=run, daemon=True).start()
 

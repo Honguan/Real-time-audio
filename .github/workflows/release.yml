@@ -99,6 +99,21 @@ jobs:
             Copy-Item -LiteralPath $dll.FullName -Destination downloaded-runtime -Force
           }
 
+      - name: Download offline translation models
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $index = Invoke-RestMethod "https://raw.githubusercontent.com/argosopentech/argospm-index/main/index.json"
+          $modelsDir = "translation-models\translation"
+          New-Item -ItemType Directory -Path $modelsDir | Out-Null
+          foreach ($pair in @(@("zh", "en"), @("en", "zh"))) {
+            $package = $index | Where-Object { $_.from_code -eq $pair[0] -and $_.to_code -eq $pair[1] -and $_.links } | Select-Object -First 1
+            if (-not $package) {
+              throw "Cannot find offline translation model: $($pair[0]) -> $($pair[1])"
+            }
+            Invoke-WebRequest $package.links[0] -OutFile (Join-Path $modelsDir ([IO.Path]::GetFileName($package.links[0])))
+          }
+
       - name: Build release zips
         shell: pwsh
         run: |
@@ -113,6 +128,7 @@ jobs:
           if (Test-Path "runtime-download\runtime.pkg") {
             & ./scripts/package_runtime_zip.ps1 -Version $version -RuntimeSource "downloaded-runtime" -SplitRuntime -RuntimeCoreFormat 7z
           }
+          & ./scripts/package_models_zip.ps1 -Version $version -ModelsSource "translation-models\translation" -ModelName "translation"
           & ./scripts/make_checksums.ps1
 
       - name: Upload GitHub Release

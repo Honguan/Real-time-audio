@@ -1,6 +1,8 @@
+ctranslate2>=4.0,<5
 google-auth>=2.0
 numpy>=1.24
 Pillow>=10.0
 requests>=2.31
+sentencepiece>=0.2,<0.3
 sounddevice>=0.5
 pyinstaller>=6.0

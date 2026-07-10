@@ -14,6 +14,13 @@ py -3.10 -m PyInstaller `
   --hidden-import numpy `
   --hidden-import sounddevice `
   --hidden-import cffi `
+  --hidden-import ctranslate2 `
+  --hidden-import sentencepiece `
+  --exclude-module faster_whisper `
+  --exclude-module torch `
+  --exclude-module torchvision `
+  --exclude-module onnxruntime `
+  --exclude-module scipy `
   --hidden-import google.auth `
   --hidden-import google.oauth2.service_account `
   --hidden-import google.auth.transport.requests `

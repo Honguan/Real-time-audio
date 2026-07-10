@@ -6,6 +6,7 @@ from .ai_auto_tuner import recommend_tuning
 from .audio import device_name_from_label, find_device, virtual_mic_recaptures_tts
 from .config import APP_DIR
 from .models import model_available, models_dir
+from .offline_translation import translation_model_available, translation_models_dir
 from .runtime import runtime_dir, runtime_status
 
 
@@ -132,12 +133,21 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
     if "google" in cloud and (not config.get("google_project_id") or not config.get("google_service_account_json")):
         issues.append(DiagnosticIssue("cloud_credentials_missing", "error", "Google 憑證未設定", "Google 翻譯服務需要專案 ID 與服務帳戶 JSON", "填入 Google 專案 ID 與 JSON 路徑，或改回本機翻譯服務", "api_settings"))
     if config.get("provider") == "local" and not str(config.get("local_translate_url", "")).strip():
+        if not translation_model_available(config):
+            issues.append(DiagnosticIssue(
+                "offline_translation_model_missing",
+                "warning",
+                "找不到離線翻譯模型",
+                f"尚未在 {translation_models_dir(config)} 找到可用的 Argos 離線模型",
+                "按「下載離線翻譯模型」下載目前語言的雙向模型，或把 Release 模型 zip 解壓到 translation 資料夾",
+                "download_translation_models",
+            ))
         issues.append(DiagnosticIssue(
             "local_translate_url_missing",
             "info",
             "本機翻譯 URL 未設定",
-            "若未安裝 Argos Translate，本機翻譯服務只會套用術語表並保留原文",
-            "安裝 Argos Translate 離線模型，或啟動 LibreTranslate 後填入 http://127.0.0.1:5000/translate",
+            "未設定 URL 時會優先使用專案資料夾內的 Argos Translate 離線模型",
+            "下載離線翻譯模型，或啟動 LibreTranslate 後填入 http://127.0.0.1:5000/translate",
             "local_translation",
         ))
     if config.get("last_translation_empty"):
