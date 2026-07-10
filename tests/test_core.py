@@ -1065,13 +1065,15 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(issue.action, "language_settings")
 
     def test_scenarios_apply_expected_existing_settings(self):
-        self.assertEqual(SCENARIO_CHOICES, ("game_voice", "discord_chat", "meeting", "subtitle_only", "two_way"))
+        self.assertEqual(SCENARIO_CHOICES, ("game_voice", "discord_chat", "meeting", "customer_service", "subtitle_only", "speak_translate", "two_way"))
         base = DEFAULT_CONFIG.copy()
 
         game = apply_scenario(base, "game_voice")
         meeting = apply_scenario(base, "meeting")
         discord = apply_scenario(base, "discord_chat")
         subtitle = apply_scenario(base, "subtitle_only")
+        customer = apply_scenario(base, "customer_service")
+        speak = apply_scenario(base, "speak_translate")
         two_way = apply_scenario(base, "two_way")
 
         self.assertEqual(game["performance_mode"], "low_latency")
@@ -1083,9 +1085,15 @@ class CoreTests(unittest.TestCase):
         self.assertTrue(discord["tts_enabled"])
         self.assertFalse(subtitle["tts_enabled"])
         self.assertFalse(subtitle["microphone_enabled"])
+        self.assertEqual(customer["performance_mode"], "quality")
+        self.assertTrue(customer["record_logs"])
+        self.assertFalse(speak["speaker_enabled"])
+        self.assertTrue(speak["microphone_enabled"])
+        self.assertTrue(speak["virtual_mic_enabled"])
         self.assertTrue(two_way["speaker_enabled"])
         self.assertTrue(two_way["microphone_enabled"])
         self.assertTrue(two_way["tts_enabled"])
+        self.assertTrue(two_way["virtual_mic_enabled"])
         self.assertEqual(base["performance_mode"], DEFAULT_CONFIG["performance_mode"])
         self.assertEqual(scenario_label("discord_chat"), "Discord 聊天")
         self.assertEqual(scenario_label("custom"), "custom")
@@ -2385,8 +2393,8 @@ class CoreTests(unittest.TestCase):
         for text in (readme, notes):
             self.assertIn("字幕-only", text)
             self.assertIn("雙向翻譯", text)
-            self.assertNotIn("客服", text)
-            self.assertNotIn("自己說話翻譯", text)
+            self.assertIn("客服對話", text)
+            self.assertIn("自己說話翻譯", text)
 
     def test_readme_and_release_notes_mention_offline_light_mode(self):
         readme = Path("README.md").read_text(encoding="utf-8")

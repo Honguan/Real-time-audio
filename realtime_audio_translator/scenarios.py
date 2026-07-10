@@ -1,10 +1,12 @@
-SCENARIO_CHOICES = ("game_voice", "discord_chat", "meeting", "subtitle_only", "two_way")
+SCENARIO_CHOICES = ("game_voice", "discord_chat", "meeting", "customer_service", "subtitle_only", "speak_translate", "two_way")
 
 SCENARIO_LABELS = {
     "game_voice": "遊戲語音",
     "discord_chat": "Discord 聊天",
     "meeting": "遠端會議",
+    "customer_service": "客服對話",
     "subtitle_only": "字幕顯示",
+    "speak_translate": "自己說話翻譯",
     "two_way": "雙向翻譯",
 }
 
@@ -39,6 +41,16 @@ SCENARIO_PRESETS = {
         "show_translated_text": True,
         "record_logs": True,
     },
+    "customer_service": {
+        "performance_mode": "quality",
+        "segment_seconds": 3.0,
+        "tts_enabled": True,
+        "speaker_enabled": True,
+        "microphone_enabled": True,
+        "show_original_text": True,
+        "show_translated_text": True,
+        "record_logs": True,
+    },
     "subtitle_only": {
         "performance_mode": "balanced",
         "segment_seconds": 2.0,
@@ -49,12 +61,24 @@ SCENARIO_PRESETS = {
         "show_translated_text": True,
         "record_logs": False,
     },
+    "speak_translate": {
+        "performance_mode": "low_latency",
+        "segment_seconds": 1.5,
+        "tts_enabled": True,
+        "speaker_enabled": False,
+        "microphone_enabled": True,
+        "virtual_mic_enabled": True,
+        "show_original_text": True,
+        "show_translated_text": True,
+        "record_logs": False,
+    },
     "two_way": {
         "performance_mode": "balanced",
         "segment_seconds": 2.0,
         "tts_enabled": True,
         "speaker_enabled": True,
         "microphone_enabled": True,
+        "virtual_mic_enabled": True,
         "show_original_text": True,
         "show_translated_text": True,
         "record_logs": False,

@@ -74,7 +74,7 @@ Whisper 模型可放在 `models\whisper-small`；翻譯模型放在 `models\tran
 - 「開啟程式資料夾」：開啟 `%USERPROFILE%\.realtime-audio`，設定鏡像在 `config\settings.json`，術語表在 `config\glossary.json`，音訊裝置快照在 `config\audio_devices.json`。
 - 「新增術語」：加入固定術語翻譯，例如 `cooldown` → `冷卻`。
 - 「顯示語言」：在字幕前顯示語言代碼。
-- 「場景」：選擇遊戲、Discord、會議、字幕-only 或雙向翻譯預設後會自動套用；進階模式也可按「套用場景」。
+- 「場景」：選擇遊戲、Discord、會議、客服對話、字幕-only、自己說話翻譯或雙向翻譯預設後會自動套用；進階模式也可按「套用場景」。
 - 「效能模式」：可選 `low_latency`、`balanced`、`quality` 或離線省資源 `offline_light`。
 - 「自動優化」：使用 AI 決策中樞依場景、硬體、延遲與診斷結果切換模型、裝置與低延遲設定。
 - 「一鍵診斷」：顯示目前缺少的 runtime、模型、音訊或 API 設定。
