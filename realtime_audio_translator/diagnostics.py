@@ -47,7 +47,7 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
             "error",
             "找不到語音辨識 runtime",
             f"缺少：{', '.join(status['missing'])}",
-            "下載 RealtimeAudioTranslator-runtime-cuda12-core-<version>.zip 與 "
+            "下載 RealtimeAudioTranslator-runtime-cuda12-core-<version>.7z 與 "
             f"RealtimeAudioTranslator-runtime-cuda12-dlls-<version>.zip，兩個都解壓到 {status['path']}",
             "open_runtime",
         ))

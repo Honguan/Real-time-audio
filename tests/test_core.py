@@ -528,7 +528,7 @@ class CoreTests(unittest.TestCase):
         self.assertIn("cloud_credentials_missing", codes)
         runtime_issue = next(issue for issue in issues if issue.code == "runtime_missing")
         cloud_issue = next(issue for issue in issues if issue.code == "cloud_credentials_missing")
-        self.assertIn("RealtimeAudioTranslator-runtime-cuda12-core-<version>.zip", runtime_issue.fix)
+        self.assertIn("RealtimeAudioTranslator-runtime-cuda12-core-<version>.7z", runtime_issue.fix)
         self.assertIn("RealtimeAudioTranslator-runtime-cuda12-dlls-<version>.zip", runtime_issue.fix)
         self.assertIn("專案 ID", cloud_issue.detail)
         self.assertIn("兩個都", runtime_issue.fix)
@@ -2161,8 +2161,9 @@ class CoreTests(unittest.TestCase):
         script = Path("scripts/package.ps1").read_text(encoding="utf-8")
         self.assertIn("RealtimeAudioTranslator-$Version-win-x64.zip", script)
         self.assertIn("RealtimeAudioTranslator-runtime-cuda12-$Version.zip", script)
-        self.assertIn("RealtimeAudioTranslator-runtime-cuda12-core-$Version.zip", script)
+        self.assertIn("RealtimeAudioTranslator-runtime-cuda12-core-$Version.7z", script)
         self.assertIn("RealtimeAudioTranslator-runtime-cuda12-dlls-$Version.zip", script)
+        self.assertIn("RuntimeCoreFormat", script)
         self.assertIn("README.md", script)
         self.assertIn("RELEASE_NOTES.md", script)
 
@@ -2196,7 +2197,7 @@ class CoreTests(unittest.TestCase):
         self.assertIn("cudnn64_9.dll", workflow)
         self.assertNotIn("-Filter *.dll", workflow)
         self.assertIn("& ./scripts/package_app_zip.ps1 -Version $version", workflow)
-        self.assertIn("& ./scripts/package_runtime_zip.ps1 -Version $version -RuntimeSource \"downloaded-runtime\" -SplitRuntime", workflow)
+        self.assertIn("& ./scripts/package_runtime_zip.ps1 -Version $version -RuntimeSource \"downloaded-runtime\" -SplitRuntime -RuntimeCoreFormat 7z", workflow)
         self.assertIn("& ./scripts/make_checksums.ps1", workflow)
         self.assertNotIn("@args", workflow)
         self.assertNotIn("@packageArgs", workflow)
@@ -2204,7 +2205,7 @@ class CoreTests(unittest.TestCase):
         self.assertIn("tag_name:", workflow)
         self.assertIn("inputs.version || github.ref_name", workflow)
         self.assertIn("dist-release/*.zip", workflow)
-        self.assertNotIn("dist-release/*.7z", workflow)
+        self.assertIn("dist-release/*.7z", workflow)
         self.assertIn("dist-release/SHA256SUMS.txt", workflow)
 
     def test_release_notes_include_public_download_instructions(self):
@@ -2212,7 +2213,7 @@ class CoreTests(unittest.TestCase):
 
         self.assertIn("最快使用", notes)
         self.assertIn("RealtimeAudioTranslator.exe", notes)
-        self.assertIn("RealtimeAudioTranslator-runtime-cuda12-core-<tag>.zip", notes)
+        self.assertIn("RealtimeAudioTranslator-runtime-cuda12-core-<tag>.7z", notes)
         self.assertIn("RealtimeAudioTranslator-runtime-cuda12-dlls-<tag>.zip", notes)
         self.assertIn("%USERPROFILE%\\.realtime-audio\\runtime\\cuda12", notes)
         self.assertIn("%USERPROFILE%\\.realtime-audio\\models", notes)
@@ -2221,13 +2222,13 @@ class CoreTests(unittest.TestCase):
         self.assertIn("https://github.com/Purfview/whisper-standalone-win/releases", notes)
         self.assertIn("cuBLAS.and.cuDNN_CUDA12_win_v3.7z", notes)
         self.assertIn("本機翻譯 URL", notes)
-        self.assertIn("兩個 ZIP", notes)
+        self.assertIn("兩個 runtime 壓縮檔", notes)
 
     def test_quick_start_doc_exists_for_app_zip(self):
         quick_start = Path("docs/README_QUICK_START_zh-TW.txt").read_text(encoding="utf-8")
 
         self.assertIn("RealtimeAudioTranslator.exe", quick_start)
-        self.assertIn("RealtimeAudioTranslator-runtime-cuda12-core-<tag>.zip", quick_start)
+        self.assertIn("RealtimeAudioTranslator-runtime-cuda12-core-<tag>.7z", quick_start)
         self.assertIn("RealtimeAudioTranslator-runtime-cuda12-dlls-<tag>.zip", quick_start)
         self.assertIn("%USERPROFILE%\\.realtime-audio\\runtime\\cuda12", quick_start)
         self.assertIn("%USERPROFILE%\\.realtime-audio\\models", quick_start)
@@ -2253,8 +2254,8 @@ class CoreTests(unittest.TestCase):
 
         for path in (Path("README.md"), Path("docs/RELEASE_NOTES.md")):
             text = path.read_text(encoding="utf-8")
-            self.assertIn("兩個 runtime ZIP", text)
-            self.assertIn("兩個 ZIP 都解壓到", text)
+            self.assertIn("兩個 runtime 壓縮檔", text)
+            self.assertIn("兩個壓縮檔都解壓到", text)
             self.assertNotIn("`Device`", text)
             self.assertIn("ASR 裝置", text)
             for item in required:

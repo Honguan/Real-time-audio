@@ -10,6 +10,8 @@ param(
   [switch]$SkipRuntime,
   [switch]$SkipModels,
   [switch]$SplitRuntime,
+  [ValidateSet("zip", "7z")]
+  [string]$RuntimeCoreFormat = "zip",
   [switch]$AppendOutput
 )
 
@@ -70,6 +72,26 @@ function Compress-FolderContents($SourceDir, $DestinationZip) {
     throw "$EmptyZipLabel$SourceDir"
   }
   Compress-Archive -LiteralPath $Items.FullName -DestinationPath $DestinationZip -CompressionLevel Optimal
+}
+
+function Compress-7ZipFolderContents($SourceDir, $DestinationArchive) {
+  $SevenZip = Join-Path $env:ProgramFiles "7-Zip\7z.exe"
+  if (-not (Test-Path -LiteralPath $SevenZip)) {
+    throw "7-Zip not found: $SevenZip"
+  }
+  $Items = Get-ChildItem -LiteralPath $SourceDir -Force
+  if (-not $Items) {
+    throw "$EmptyZipLabel$SourceDir"
+  }
+  Push-Location $SourceDir
+  try {
+    & $SevenZip a -t7z $DestinationArchive ".\*" -y | Out-Host
+    if ($LASTEXITCODE -ne 0) {
+      throw "7-Zip failed: $LASTEXITCODE"
+    }
+  } finally {
+    Pop-Location
+  }
 }
 
 if ($CreateApp) {
@@ -149,7 +171,11 @@ if ($CreateRuntime) {
       "  ""version"": ""$Version""",
       "}"
     ) | Set-Content -LiteralPath (Join-Path $RuntimeDllStage "runtime_manifest.json") -Encoding UTF8
-    Compress-FolderContents $RuntimeCoreStage (Join-Path $Out "RealtimeAudioTranslator-runtime-cuda12-core-$Version.zip")
+    if ($RuntimeCoreFormat -eq "7z") {
+      Compress-7ZipFolderContents $RuntimeCoreStage (Join-Path $Out "RealtimeAudioTranslator-runtime-cuda12-core-$Version.7z")
+    } else {
+      Compress-FolderContents $RuntimeCoreStage (Join-Path $Out "RealtimeAudioTranslator-runtime-cuda12-core-$Version.zip")
+    }
     Compress-FolderContents $RuntimeDllStage (Join-Path $Out "RealtimeAudioTranslator-runtime-cuda12-dlls-$Version.zip")
   } else {
     $RuntimeStage = Join-Path $Out "_stage_runtime"
@@ -201,7 +227,8 @@ if ($CreateModels) {
 $Checksums = Join-Path $Out "SHA256SUMS.txt"
 $Sha256 = [System.Security.Cryptography.SHA256]::Create()
 try {
-  Get-ChildItem -LiteralPath $Out -Filter *.zip |
+  Get-ChildItem -LiteralPath $Out |
+    Where-Object { $_.Extension -in ".zip", ".7z" } |
     ForEach-Object {
       $Path = $_.FullName
       $Stream = [System.IO.File]::OpenRead((Resolve-Path -LiteralPath $Path))

@@ -2,7 +2,9 @@ param(
   [string]$Version = "",
   [string]$OutputDir = "",
   [string]$RuntimeSource = "",
-  [switch]$SplitRuntime
+  [switch]$SplitRuntime,
+  [ValidateSet("zip", "7z")]
+  [string]$RuntimeCoreFormat = "zip"
 )
 
 $ErrorActionPreference = "Stop"
@@ -17,4 +19,5 @@ Set-Location $Root
   -SkipApp `
   -SkipModels `
   -SplitRuntime:$SplitRuntime `
+  -RuntimeCoreFormat $RuntimeCoreFormat `
   -AppendOutput

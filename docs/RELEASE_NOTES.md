@@ -12,25 +12,26 @@
 8. 可按「匯出字幕」把最新 JSONL 對話紀錄匯出成 SRT 與 TXT，檔案放在 `%USERPROFILE%\.realtime-audio\exports\subtitles`；也可按「清除本機資料」一次清除快取與紀錄。
 9. 預設是自動發話；勾選「啟動時先靜音」後可用「按住說話」（Push to talk）按住才送出我方翻譯語音。
 10. 切換到 Google 或 OpenAI 時，工具會先提示語音或文字可能傳送到第三方服務並可能產生費用。
-11. 若提示缺 runtime，下載並解壓兩個 runtime ZIP：
+11. 若提示缺 runtime，下載並解壓兩個 runtime 壓縮檔：
 
 ```text
-RealtimeAudioTranslator-runtime-cuda12-core-<tag>.zip
+RealtimeAudioTranslator-runtime-cuda12-core-<tag>.7z
 RealtimeAudioTranslator-runtime-cuda12-dlls-<tag>.zip
 ```
 
-兩個 ZIP 都解壓到：
+兩個壓縮檔都解壓到：
 
 ```text
 %USERPROFILE%\.realtime-audio\runtime\cuda12
 ```
 
 解壓後該資料夾內應直接看到 `faster-whisper-xxl.exe` 與 CUDA12 DLL。
+若檔案總管無法開啟 core `.7z`，請使用 7-Zip 解壓。
 
 ## 下載檔案
 
 - 主程式：`RealtimeAudioTranslator-<tag>-win-x64.zip`
-- CUDA12 runtime 核心：`RealtimeAudioTranslator-runtime-cuda12-core-<tag>.zip`
+- CUDA12 runtime 核心：`RealtimeAudioTranslator-runtime-cuda12-core-<tag>.7z`
 - CUDA12 runtime DLL：`RealtimeAudioTranslator-runtime-cuda12-dlls-<tag>.zip`
 - 模型可選包：`RealtimeAudioTranslator-models-<model>-<tag>.zip`
 - 檔案校驗：`SHA256SUMS.txt`
@@ -61,7 +62,7 @@ RealtimeAudioTranslator-runtime-cuda12-dlls-<tag>.zip
 
 - 沒有字幕：確認「顯示字幕」已開啟，並按「測試字幕」。
 - 聽不到對方聲音：確認喇叭來源選的是 Discord 或遊戲正在播放的裝置，再按「測試喇叭」。
-- 找不到 runtime：確認 core 與 DLL 兩個 ZIP 都已解壓到 `%USERPROFILE%\.realtime-audio\runtime\cuda12`。
+- 找不到 runtime：確認 core `.7z` 與 DLL `.zip` 都已解壓到 `%USERPROFILE%\.realtime-audio\runtime\cuda12`。
 - 找不到模型：在工具內下載模型，或解壓模型 zip 到 `%USERPROFILE%\.realtime-audio\models`。
 - 對方聽不到翻譯語音：確認「播放翻譯語音」與「輸出到虛擬麥克風」已開啟，且「TTS 輸出」選 `CABLE Input`。
 - Discord 沒有收到虛擬麥克風聲音：Discord 麥克風請選 `CABLE Output (VB-Audio Virtual Cable)`。

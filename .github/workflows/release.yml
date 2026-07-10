@@ -111,7 +111,7 @@ jobs:
           }
           & ./scripts/package_app_zip.ps1 -Version $version
           if (Test-Path "runtime-download\runtime.pkg") {
-            & ./scripts/package_runtime_zip.ps1 -Version $version -RuntimeSource "downloaded-runtime" -SplitRuntime
+            & ./scripts/package_runtime_zip.ps1 -Version $version -RuntimeSource "downloaded-runtime" -SplitRuntime -RuntimeCoreFormat 7z
           }
           & ./scripts/make_checksums.ps1
 
@@ -122,4 +122,5 @@ jobs:
           body_path: docs/RELEASE_NOTES.md
           files: |
             dist-release/*.zip
+            dist-release/*.7z
             dist-release/SHA256SUMS.txt

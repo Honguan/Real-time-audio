@@ -58,7 +58,7 @@ class RuntimeTests(unittest.TestCase):
         message = runtime_install_message(Path("runtime"))
 
         self.assertIn("runtime", message)
-        self.assertIn("RealtimeAudioTranslator-runtime-cuda12-core-<version>.zip", message)
+        self.assertIn("RealtimeAudioTranslator-runtime-cuda12-core-<version>.7z", message)
         self.assertIn("RealtimeAudioTranslator-runtime-cuda12-dlls-<version>.zip", message)
         self.assertIn("兩個都", message)
         self.assertIn("Faster-Whisper-XXL Windows runtime", message)
@@ -142,6 +142,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("-SkipRuntime", app_script)
         self.assertIn("-SkipModels", app_script)
         self.assertIn("-SkipApp", runtime_script)
+        self.assertIn("RuntimeCoreFormat", runtime_script)
         self.assertIn("-AppendOutput", runtime_script)
         self.assertIn("-SkipApp", models_script)
         self.assertIn("-AppendOutput", models_script)

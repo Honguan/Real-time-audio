@@ -2,9 +2,10 @@ RealtimeAudioTranslator 快速開始
 
 1. 從 GitHub Releases 下載 `RealtimeAudioTranslator-<tag>-win-x64.zip`。
 2. 解壓縮後直接執行 `RealtimeAudioTranslator.exe`，不需要另外安裝 Python。
-3. 第一次開啟若提示缺 runtime，下載 `RealtimeAudioTranslator-runtime-cuda12-core-<tag>.zip` 與
+3. 第一次開啟若提示缺 runtime，下載 `RealtimeAudioTranslator-runtime-cuda12-core-<tag>.7z` 與
    `RealtimeAudioTranslator-runtime-cuda12-dlls-<tag>.zip`，兩個都解壓到：
    `%USERPROFILE%\.realtime-audio\runtime\cuda12`
+   若檔案總管無法開啟 core `.7z`，請使用 7-Zip 解壓。
 4. 若模型無法由 App 下載，下載模型 zip，解壓到：
    `%USERPROFILE%\.realtime-audio\models`
 5. 在主視窗選「場景」，選擇後會自動套用場景預設。
