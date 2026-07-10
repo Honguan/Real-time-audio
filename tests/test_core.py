@@ -2202,6 +2202,7 @@ class CoreTests(unittest.TestCase):
         self.assertNotIn("@args", workflow)
         self.assertNotIn("@packageArgs", workflow)
         self.assertIn("softprops/action-gh-release", workflow)
+        self.assertIn("gh release edit", workflow)
         self.assertIn("tag_name:", workflow)
         self.assertIn("inputs.version || github.ref_name", workflow)
         self.assertIn("dist-release/*.zip", workflow)

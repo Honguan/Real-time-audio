@@ -124,3 +124,9 @@ jobs:
             dist-release/*.zip
             dist-release/*.7z
             dist-release/SHA256SUMS.txt
+
+      - name: Update Release notes
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit "${{ inputs.version || github.ref_name }}" --notes-file docs/RELEASE_NOTES.md
