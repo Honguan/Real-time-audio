@@ -1,5 +1,9 @@
 # Realtime Audio Translator 發布說明
 
+## v0.1.28
+
+- 「測試虛擬麥克風」現在會確認 `CABLE Output` 是否實際收到 TTS 音訊。
+
 ## v0.1.27
 
 - 修正 Windows WASAPI loopback，喇叭／系統聲音現在可正常擷取。

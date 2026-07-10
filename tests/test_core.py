@@ -374,12 +374,15 @@ class CoreTests(unittest.TestCase):
         self.assertIn('("測試虛擬麥克風", self._test_virtual_mic)', gui_source)
         self.assertIn('def _test_tts(self) -> None:', gui_source)
         self.assertIn('def _test_virtual_mic(self) -> None:', gui_source)
-        self.assertIn('config["last_virtual_mic_failed"] = False', gui_source)
+        self.assertIn('config["last_virtual_mic_failed"] = not active', gui_source)
         self.assertIn('config["last_virtual_mic_failed"] = True', gui_source)
         self.assertIn('provider = config.get("tts_provider", "local")', gui_source)
         self.assertIn('tts.speak_local("翻譯語音輸出測試", device)', gui_source)
         self.assertIn('audio = tts.synthesize_openai_linear16("翻譯語音輸出測試")', gui_source)
         self.assertIn('audio = tts.synthesize_google_linear16("翻譯語音輸出測試", config["target_language"])', gui_source)
+        self.assertIn('cable_output = find_device("CABLE Output", want_output=False)', gui_source)
+        self.assertIn('target=capture_wav, args=(path, cable_output, 2.0)', gui_source)
+        self.assertIn('active = audio_segment_active(path, float(config["speech_threshold"]))', gui_source)
 
     def test_setup_guide_button_shows_first_run_steps(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")

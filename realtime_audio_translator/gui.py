@@ -1,5 +1,6 @@
 import subprocess
 import threading
+import time
 import tkinter as tk
 import webbrowser
 from pathlib import Path
@@ -1109,11 +1110,20 @@ class TranslatorApp(tk.Tk):
     def _test_virtual_mic(self) -> None:
         config = self._config_from_vars()
         try:
+            cable_output = find_device("CABLE Output", want_output=False)
+            if cable_output is None:
+                raise RuntimeError("找不到 CABLE Output，請先安裝 VB-CABLE")
+            path = APP_DIR / "cache" / "audio" / "virtual-mic-test.wav"
+            capture = threading.Thread(target=capture_wav, args=(path, cable_output, 2.0))
+            capture.start()
+            time.sleep(0.15)
             self._play_tts_test(config)
-            config["last_virtual_mic_failed"] = False
+            capture.join()
+            active = audio_segment_active(path, float(config["speech_threshold"]))
+            config["last_virtual_mic_failed"] = not active
             self.config = config
             save_config(APP_DIR, self.config)
-            self.status.set("虛擬麥克風測試完成")
+            self.status.set("虛擬麥克風已偵測到聲音" if active else "虛擬麥克風沒有偵測到聲音")
         except Exception as exc:
             config["last_virtual_mic_failed"] = True
             self.config = config
