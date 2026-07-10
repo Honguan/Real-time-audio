@@ -1,7 +1,8 @@
 param(
   [string]$Version = "",
   [string]$OutputDir = "",
-  [string]$RuntimeSource = ""
+  [string]$RuntimeSource = "",
+  [switch]$SplitRuntime
 )
 
 $ErrorActionPreference = "Stop"
@@ -15,4 +16,5 @@ Set-Location $Root
   -SkipBuild `
   -SkipApp `
   -SkipModels `
+  -SplitRuntime:$SplitRuntime `
   -AppendOutput

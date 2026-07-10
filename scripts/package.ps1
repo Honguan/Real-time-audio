@@ -9,6 +9,7 @@ param(
   [switch]$SkipApp,
   [switch]$SkipRuntime,
   [switch]$SkipModels,
+  [switch]$SplitRuntime,
   [switch]$AppendOutput
 )
 
@@ -107,26 +108,71 @@ if ($CreateRuntime) {
       throw "$RuntimeMissingLabel ${CudaDll} ($RuntimeSource)"
     }
   }
-  $RuntimeStage = Join-Path $Out "_stage_runtime"
-  New-Item -ItemType Directory -Path $RuntimeStage | Out-Null
-  Copy-Item -Path (Join-Path $RuntimeSource "*") -Destination $RuntimeStage -Recurse -Force
-  @(
-    $ExtractToLabel,
-    "%USERPROFILE%\.realtime-audio\runtime\cuda12",
-    "",
-    $RuntimeFilesLabel,
-    "faster-whisper-xxl.exe, ffmpeg.exe, _xxl_data, CUDA12 DLL"
-  ) | Set-Content -LiteralPath (Join-Path $RuntimeStage "RUNTIME_README.txt") -Encoding UTF8
-  @(
-    "{",
-    "  ""runtime"": ""faster-whisper-xxl"",",
-    "  ""platform"": ""windows-x64"",",
-    "  ""cuda"": ""12"",",
-    "  ""version"": ""$Version""",
-    "}"
-  ) | Set-Content -LiteralPath (Join-Path $RuntimeStage "runtime_manifest.json") -Encoding UTF8
-  $RuntimeZip = Join-Path $Out "RealtimeAudioTranslator-runtime-cuda12-$Version.zip"
-  Compress-FolderContents $RuntimeStage $RuntimeZip
+  if ($SplitRuntime) {
+    $RuntimeCoreStage = Join-Path $Out "_stage_runtime_core"
+    $RuntimeDllStage = Join-Path $Out "_stage_runtime_dlls"
+    New-Item -ItemType Directory -Path $RuntimeCoreStage | Out-Null
+    New-Item -ItemType Directory -Path $RuntimeDllStage | Out-Null
+    Get-ChildItem -LiteralPath $RuntimeSource -Force |
+      Where-Object { $_.Name -notin $CudaDlls } |
+      Copy-Item -Destination $RuntimeCoreStage -Recurse -Force
+    foreach ($CudaDll in $CudaDlls) {
+      Copy-Item -LiteralPath (Join-Path $RuntimeSource $CudaDll) -Destination $RuntimeDllStage -Force
+    }
+    @(
+      "Extract this archive and the CUDA DLL archive to:",
+      "%USERPROFILE%\.realtime-audio\runtime\cuda12",
+      "",
+      "This archive contains faster-whisper-xxl.exe, ffmpeg.exe, and _xxl_data."
+    ) | Set-Content -LiteralPath (Join-Path $RuntimeCoreStage "RUNTIME_README.txt") -Encoding UTF8
+    @(
+      "Extract this archive and the runtime core archive to:",
+      "%USERPROFILE%\.realtime-audio\runtime\cuda12",
+      "",
+      "This archive contains the required CUDA12 DLL files."
+    ) | Set-Content -LiteralPath (Join-Path $RuntimeDllStage "RUNTIME_README.txt") -Encoding UTF8
+    @(
+      "{",
+      "  ""runtime"": ""faster-whisper-xxl"",",
+      "  ""package"": ""core"",",
+      "  ""platform"": ""windows-x64"",",
+      "  ""cuda"": ""12"",",
+      "  ""version"": ""$Version""",
+      "}"
+    ) | Set-Content -LiteralPath (Join-Path $RuntimeCoreStage "runtime_manifest.json") -Encoding UTF8
+    @(
+      "{",
+      "  ""runtime"": ""faster-whisper-xxl"",",
+      "  ""package"": ""cuda12-dlls"",",
+      "  ""platform"": ""windows-x64"",",
+      "  ""cuda"": ""12"",",
+      "  ""version"": ""$Version""",
+      "}"
+    ) | Set-Content -LiteralPath (Join-Path $RuntimeDllStage "runtime_manifest.json") -Encoding UTF8
+    Compress-FolderContents $RuntimeCoreStage (Join-Path $Out "RealtimeAudioTranslator-runtime-cuda12-core-$Version.zip")
+    Compress-FolderContents $RuntimeDllStage (Join-Path $Out "RealtimeAudioTranslator-runtime-cuda12-dlls-$Version.zip")
+  } else {
+    $RuntimeStage = Join-Path $Out "_stage_runtime"
+    New-Item -ItemType Directory -Path $RuntimeStage | Out-Null
+    Copy-Item -Path (Join-Path $RuntimeSource "*") -Destination $RuntimeStage -Recurse -Force
+    @(
+      $ExtractToLabel,
+      "%USERPROFILE%\.realtime-audio\runtime\cuda12",
+      "",
+      $RuntimeFilesLabel,
+      "faster-whisper-xxl.exe, ffmpeg.exe, _xxl_data, CUDA12 DLL"
+    ) | Set-Content -LiteralPath (Join-Path $RuntimeStage "RUNTIME_README.txt") -Encoding UTF8
+    @(
+      "{",
+      "  ""runtime"": ""faster-whisper-xxl"",",
+      "  ""platform"": ""windows-x64"",",
+      "  ""cuda"": ""12"",",
+      "  ""version"": ""$Version""",
+      "}"
+    ) | Set-Content -LiteralPath (Join-Path $RuntimeStage "runtime_manifest.json") -Encoding UTF8
+    $RuntimeZip = Join-Path $Out "RealtimeAudioTranslator-runtime-cuda12-$Version.zip"
+    Compress-FolderContents $RuntimeStage $RuntimeZip
+  }
 } elseif ((-not $SkipRuntime) -and (-not $AppendOutput)) {
   Write-Warning $RuntimeSkippedWarning
 }
@@ -177,6 +223,12 @@ if (Test-Path -LiteralPath (Join-Path $Out "_stage_app")) {
 }
 if (Test-Path -LiteralPath (Join-Path $Out "_stage_runtime")) {
   Remove-Item -LiteralPath (Join-Path $Out "_stage_runtime") -Recurse -Force
+}
+if (Test-Path -LiteralPath (Join-Path $Out "_stage_runtime_core")) {
+  Remove-Item -LiteralPath (Join-Path $Out "_stage_runtime_core") -Recurse -Force
+}
+if (Test-Path -LiteralPath (Join-Path $Out "_stage_runtime_dlls")) {
+  Remove-Item -LiteralPath (Join-Path $Out "_stage_runtime_dlls") -Recurse -Force
 }
 if (Test-Path -LiteralPath (Join-Path $Out "_stage_models")) {
   Remove-Item -LiteralPath (Join-Path $Out "_stage_models") -Recurse -Force

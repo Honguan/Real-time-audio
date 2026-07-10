@@ -58,9 +58,9 @@ class RuntimeTests(unittest.TestCase):
         message = runtime_install_message(Path("runtime"))
 
         self.assertIn("runtime", message)
-        self.assertIn("RealtimeAudioTranslator-runtime-cuda12-<version>.zip", message)
-        self.assertNotIn("兩個 runtime", message)
-        self.assertNotIn("兩個都", message)
+        self.assertIn("RealtimeAudioTranslator-runtime-cuda12-core-<version>.zip", message)
+        self.assertIn("RealtimeAudioTranslator-runtime-cuda12-dlls-<version>.zip", message)
+        self.assertIn("兩個都", message)
         self.assertIn("Faster-Whisper-XXL Windows runtime", message)
         self.assertIn("https://github.com/Honguan/Real-time-audio/releases", message)
         self.assertIn("https://github.com/Purfview/whisper-standalone-win/releases", message)
@@ -212,6 +212,56 @@ class RuntimeTests(unittest.TestCase):
                 runtime_readme = archive.read("RUNTIME_README.txt").decode("utf-8-sig")
                 self.assertIn("解壓縮到", runtime_readme)
                 self.assertIn("%USERPROFILE%\\.realtime-audio\\runtime\\cuda12", runtime_readme)
+
+    def test_package_script_splits_runtime_core_and_cuda_dlls(self):
+        root = Path(__file__).parents[1]
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp)
+            runtime = work / "runtime"
+            out = work / "release"
+            (runtime / "_xxl_data").mkdir(parents=True)
+            (runtime / "faster-whisper-xxl.exe").write_text("fw", encoding="utf-8")
+            (runtime / "ffmpeg.exe").write_text("ff", encoding="utf-8")
+            (runtime / "_xxl_data" / "data.txt").write_text("data", encoding="utf-8")
+            for name in ("cublas64_12.dll", "cublasLt64_12.dll", "cudnn64_9.dll"):
+                (runtime / name).write_text("cuda", encoding="utf-8")
+
+            subprocess.run(
+                [
+                    "powershell",
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    str(root / "scripts" / "package.ps1"),
+                    "-SkipBuild",
+                    "-SkipApp",
+                    "-SkipModels",
+                    "-SplitRuntime",
+                    "-Version",
+                    "v0.0.0-test",
+                    "-OutputDir",
+                    str(out),
+                    "-RuntimeSource",
+                    str(runtime),
+                ],
+                cwd=root,
+                check=True,
+            )
+
+            core_zip = out / "RealtimeAudioTranslator-runtime-cuda12-core-v0.0.0-test.zip"
+            dll_zip = out / "RealtimeAudioTranslator-runtime-cuda12-dlls-v0.0.0-test.zip"
+            self.assertTrue(core_zip.exists())
+            self.assertTrue(dll_zip.exists())
+            with zipfile.ZipFile(core_zip) as archive:
+                self.assertIn("faster-whisper-xxl.exe", archive.namelist())
+                self.assertIn("_xxl_data/data.txt", archive.namelist())
+                self.assertNotIn("cublas64_12.dll", archive.namelist())
+            with zipfile.ZipFile(dll_zip) as archive:
+                self.assertIn("cublas64_12.dll", archive.namelist())
+                self.assertIn("cublasLt64_12.dll", archive.namelist())
+                self.assertIn("cudnn64_9.dll", archive.namelist())
+                self.assertNotIn("faster-whisper-xxl.exe", archive.namelist())
 
     def test_package_script_rejects_incomplete_runtime_source(self):
         root = Path(__file__).parents[1]

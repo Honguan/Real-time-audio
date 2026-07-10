@@ -111,7 +111,7 @@ jobs:
           }
           & ./scripts/package_app_zip.ps1 -Version $version
           if (Test-Path "runtime-download\runtime.pkg") {
-            & ./scripts/package_runtime_zip.ps1 -Version $version -RuntimeSource "downloaded-runtime"
+            & ./scripts/package_runtime_zip.ps1 -Version $version -RuntimeSource "downloaded-runtime" -SplitRuntime
           }
           & ./scripts/make_checksums.ps1
 
