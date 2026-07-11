@@ -1,5 +1,9 @@
 # Realtime Audio Translator 發布說明
 
+## v0.1.34
+
+- 修正 runtime ASR 輸出時間戳混入字幕，以及離線翻譯的 SentencePiece 空白標記。
+
 ## v0.1.33
 
 - 場景下拉選單改為顯示繁中名稱，設定檔仍保持舊版 key 相容。

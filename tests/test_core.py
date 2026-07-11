@@ -25,7 +25,7 @@ from realtime_audio_translator.engine import RealtimeEngine, audio_devices_overl
 from realtime_audio_translator.gui import LANGUAGE_CHOICES, PERFORMANCE_CHOICES, PROVIDER_CHOICES, TARGET_LANGUAGE_CHOICES, TTS_PROVIDER_CHOICES, TranslatorApp, diagnostic_action_label, diagnostic_actions, first_diagnostic_action, first_run_setup_action, first_run_wizard_needed, format_overlay_line, language_lock_value, latency_seconds_value, main_status_summary, mode_notice, overlay_clipboard_text, overlay_font_size_value, overlay_hold_seconds_value, overlay_opacity_value, overlay_visibility_action, performance_segment_seconds, record_logs_requires_confirmation, setup_guide_actions, status_message_is_error, subtitle_updates_allowed, swap_language_values, troubleshooting_action, visible_button_texts, visible_setting_keys
 from realtime_audio_translator.logbook import ConversationLog
 from realtime_audio_translator.models import cuda_hardware_from_check_output, list_models, model_available, model_download_command, model_install_message, models_dir, recommend_model
-from realtime_audio_translator.offline_translation import install_translation_models, translation_model_available, translation_model_pairs, translation_models_dir
+from realtime_audio_translator.offline_translation import install_translation_models, normalize_translation_text, translation_model_available, translation_model_pairs, translation_models_dir
 from realtime_audio_translator.providers import TextToSpeech, Translator, build_google_translate_request, build_openai_translation_request, google_access_token
 from realtime_audio_translator.release_updater import RELEASES_URL, current_version, is_newer_version, latest_release_tag_from_json, release_update_message
 from realtime_audio_translator.scenarios import SCENARIO_CHOICES, apply_scenario, scenario_key, scenario_label
@@ -1104,6 +1104,9 @@ class CoreTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             config = DEFAULT_CONFIG.copy()
+            config["runtime_dir"] = str(root / "runtime")
+            config["runtime_path"] = str(root / "runtime")
+            config["models_path"] = str(root / "models")
             config["provider"] = "local"
             config["tts_provider"] = "local"
             config["scenario"] = "game_voice"
@@ -1757,6 +1760,7 @@ class CoreTests(unittest.TestCase):
             with tempfile.TemporaryDirectory() as tmp:
                 config = DEFAULT_CONFIG.copy()
                 config["provider"] = "local"
+                config["models_path"] = str(Path(tmp) / "models")
                 config["translation_cache_path"] = str(Path(tmp) / "translation_cache.db")
                 translator = Translator(config)
 
@@ -1802,6 +1806,10 @@ class CoreTests(unittest.TestCase):
             (("zh", "en"), ("en", "ja"), ("ja", "en"), ("en", "zh")),
         )
 
+    def test_offline_translation_normalizes_sentencepiece_markers(self):
+        self.assertEqual(normalize_translation_text("▁这是实时音频翻译测试."), "这是实时音频翻译测试.")
+        self.assertEqual(normalize_translation_text("This is▁an▁instant▁voice test."), "This is an instant voice test.")
+
     def test_offline_translation_model_available_through_english_pivot(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = DEFAULT_CONFIG.copy()
@@ -1842,6 +1850,7 @@ class CoreTests(unittest.TestCase):
                 db = Path(tmp) / "translation_cache.db"
                 config = DEFAULT_CONFIG.copy()
                 config["provider"] = "local"
+                config["models_path"] = str(Path(tmp) / "models")
                 config["translation_cache_path"] = str(db)
 
                 self.assertEqual(Translator(config).translate("hello", "en", "zh-TW"), "本機:hello")
@@ -1883,7 +1892,9 @@ class CoreTests(unittest.TestCase):
             glossary.write_text(json.dumps({"Dragon Pit": "龍坑", "mid lane": "中路"}), encoding="utf-8")
             config = DEFAULT_CONFIG.copy()
             config["provider"] = "local"
+            config["models_path"] = str(Path(tmp) / "models")
             config["glossary_path"] = str(glossary)
+            config["translation_cache_path"] = str(Path(tmp) / "translation_cache.db")
 
             translated = Translator(config).translate("Push mid lane near Dragon Pit", "en", "zh-TW")
 
@@ -1895,7 +1906,9 @@ class CoreTests(unittest.TestCase):
             glossary.write_text(json.dumps({"Dragon": "龍", "Dragon Pit": "龍坑"}), encoding="utf-8")
             config = DEFAULT_CONFIG.copy()
             config["provider"] = "local"
+            config["models_path"] = str(Path(tmp) / "models")
             config["glossary_path"] = str(glossary)
+            config["translation_cache_path"] = str(Path(tmp) / "translation_cache.db")
 
             translated = Translator(config).translate("Dragon Pit", "en", "zh-TW")
 
@@ -1907,7 +1920,9 @@ class CoreTests(unittest.TestCase):
             glossary.write_text(json.dumps({"": "BAD", "Dragon Pit": "龍坑"}), encoding="utf-8")
             config = DEFAULT_CONFIG.copy()
             config["provider"] = "local"
+            config["models_path"] = str(Path(tmp) / "models")
             config["glossary_path"] = str(glossary)
+            config["translation_cache_path"] = str(Path(tmp) / "translation_cache.db")
 
             translated = Translator(config).translate("Dragon Pit", "en", "zh-TW")
 
@@ -1919,7 +1934,9 @@ class CoreTests(unittest.TestCase):
             glossary.write_text(json.dumps({"Dragon Pit": "龍坑"}), encoding="utf-8")
             config = DEFAULT_CONFIG.copy()
             config["provider"] = "local"
+            config["models_path"] = str(Path(tmp) / "models")
             config["glossary_path"] = str(glossary)
+            config["translation_cache_path"] = str(Path(tmp) / "translation_cache.db")
             translator = Translator(config)
 
             self.assertEqual(translator.translate("Dragon Pit", "en", "zh-TW"), "龍坑")
@@ -1931,7 +1948,9 @@ class CoreTests(unittest.TestCase):
             glossary.write_text("{bad", encoding="utf-8")
             config = DEFAULT_CONFIG.copy()
             config["provider"] = "local"
+            config["models_path"] = str(Path(tmp) / "models")
             config["glossary_path"] = str(glossary)
+            config["translation_cache_path"] = str(Path(tmp) / "translation_cache.db")
 
             translated = Translator(config).translate("Dragon Pit", "en", "zh-TW")
 
@@ -2645,6 +2664,26 @@ class CoreTests(unittest.TestCase):
             asr_module.subprocess.run = original_run
 
         self.assertNotIn("--language", calls[0])
+
+    def test_whisper_exe_reads_plain_text_from_json_output(self):
+        import realtime_audio_translator.asr as asr_module
+
+        original_run = asr_module.subprocess.run
+
+        def fake_run(command, **_kwargs):
+            output_dir = Path(command[command.index("--output_dir") + 1])
+            (output_dir / "clip.json").write_text('{"language":"en","text":" hello world "}', encoding="utf-8")
+            return type("Result", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+
+        asr_module.subprocess.run = fake_run
+        try:
+            transcriber = AudioTranscriber.__new__(AudioTranscriber)
+            transcriber.exe_path = Path("fw.exe")
+            transcriber.model_name = "medium"
+            transcriber.model_dir = Path("models")
+            self.assertEqual(transcriber._transcribe_with_exe(Path("clip.wav"), "en"), "hello world")
+        finally:
+            asr_module.subprocess.run = original_run
 
     def test_whisper_model_records_language_probability_and_confidence(self):
         transcriber = AudioTranscriber.__new__(AudioTranscriber)

@@ -1,3 +1,4 @@
+import json
 import math
 import os
 import subprocess
@@ -95,7 +96,7 @@ class AudioTranscriber:
                 "--output_dir",
                 str(out_dir),
                 "--output_format",
-                "txt",
+                "json",
                 "--beep_off",
             ]
             if language:
@@ -103,5 +104,9 @@ class AudioTranscriber:
             result = subprocess.run(command, check=False, capture_output=True, text=True, encoding="utf-8", errors="replace")
             if result.returncode != 0:
                 raise RuntimeError((result.stderr or result.stdout).strip())
-            txt_files = list(out_dir.glob("*.txt"))
-            return txt_files[0].read_text(encoding="utf-8", errors="replace").strip() if txt_files else ""
+            json_files = list(out_dir.glob("*.json"))
+            if not json_files:
+                return ""
+            data = json.loads(json_files[0].read_text(encoding="utf-8", errors="replace"))
+            self.last_language = data.get("language") or language
+            return str(data.get("text") or "").strip()

@@ -16,6 +16,10 @@ def language_code(language: str) -> str:
     return str(language or "").split("-")[0].lower()
 
 
+def normalize_translation_text(text: str) -> str:
+    return " ".join(str(text).replace("▁", " ").split())
+
+
 def translation_models_dir(config: dict) -> Path:
     return models_dir(config) / "translation"
 
@@ -167,7 +171,7 @@ def translate_offline(config: dict, text: str, source_language: str, target_lang
             length_penalty=0.2,
             return_scores=True,
         )
-        translated = tokenizer.decode(results[0].hypotheses[0])
+        translated = normalize_translation_text(tokenizer.decode(results[0].hypotheses[0]))
         if target_prefix and translated.startswith(target_prefix):
             translated = translated[len(target_prefix):]
         translated = translated.lstrip()
