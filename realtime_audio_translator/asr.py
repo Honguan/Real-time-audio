@@ -6,7 +6,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from .runtime import runtime_dir, whisper_exe
+from .runtime import runtime_dir, runtime_status, whisper_exe
 
 
 DLL_DIRECTORIES = []
@@ -26,6 +26,8 @@ def add_xxl_data(repo_root: Path, runtime_root: Path | None = None) -> None:
 class AudioTranscriber:
     def __init__(self, repo_root: Path, model_name: str, model_dir: Path, device: str = "cuda", compute_type: str = "auto", config: dict | None = None):
         runtime_root = runtime_dir(config)
+        if runtime_root.exists() and any(runtime_root.iterdir()) and not runtime_status(runtime_root, verify_hashes=True)["ready"]:
+            raise RuntimeError(f"runtime 未通過完整性驗證：{runtime_root}")
         add_runtime_dll_directory(runtime_root)
         add_xxl_data(repo_root, runtime_root)
         self.model_name = model_name

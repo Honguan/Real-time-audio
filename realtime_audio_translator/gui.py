@@ -956,7 +956,7 @@ class TranslatorApp(tk.Tk):
     def _recommend(self) -> None:
         config = self._config_from_vars()
         runtime = runtime_dir(config)
-        status = runtime_status(runtime)
+        status = runtime_status(runtime, verify_hashes=True)
         if not status["ready"]:
             self.status.set("找不到 runtime：" + ", ".join(status["missing"]))
             self.vars["model"].set("medium")
@@ -1020,7 +1020,7 @@ class TranslatorApp(tk.Tk):
 
     def _cuda_hardware(self, config: dict) -> tuple[int, int]:
         runtime = runtime_dir(config)
-        status = runtime_status(runtime)
+        status = runtime_status(runtime, verify_hashes=True)
         if not status["ready"]:
             return 0, 0
         exe = whisper_exe(runtime)
@@ -1045,7 +1045,7 @@ class TranslatorApp(tk.Tk):
     def _download_model(self) -> None:
         self._save()
         runtime = runtime_dir(self.config)
-        status = runtime_status(runtime)
+        status = runtime_status(runtime, verify_hashes=True)
         if not status["ready"]:
             messagebox.showerror("找不到 runtime", runtime_install_message(runtime))
             return
@@ -1092,7 +1092,7 @@ class TranslatorApp(tk.Tk):
 
     def _refresh_commands(self) -> None:
         runtime = runtime_dir(self._config_from_vars())
-        status = runtime_status(runtime)
+        status = runtime_status(runtime, verify_hashes=True)
         if not status["ready"]:
             messagebox.showerror("找不到 runtime", runtime_install_message(runtime))
             return
@@ -1230,7 +1230,7 @@ class TranslatorApp(tk.Tk):
     def _start(self) -> None:
         self._save()
         self._auto_optimize_before_start()
-        status = runtime_status(runtime_dir(self.config))
+        status = runtime_status(runtime_dir(self.config), verify_hashes=True)
         if not status["ready"]:
             append_app_log(APP_DIR, "runtime_missing", missing=status["missing"])
             messagebox.showerror("找不到 runtime", runtime_install_message(runtime_dir(self.config)))

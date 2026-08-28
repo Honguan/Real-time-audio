@@ -1,15 +1,19 @@
 import json
+import os
+import tempfile
 import zipfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import requests
 
+from .archive_install import atomic_replace_tree, safe_extract_zip, verify_install_manifest, write_install_manifest
 from .models import models_dir
 
 
 ARGOS_INDEX_URL = "https://raw.githubusercontent.com/argosopentech/argospm-index/main/index.json"
 _TRANSLATORS: dict[Path, object] = {}
 _TOKENIZERS: dict[Path, object] = {}
+_VERIFIED_PACKAGES: dict[Path, tuple[tuple[str, int, int], ...]] = {}
 
 
 def language_code(language: str) -> str:
@@ -24,12 +28,37 @@ def translation_models_dir(config: dict) -> Path:
     return models_dir(config) / "translation"
 
 
+def _verified_package(package_dir: Path) -> bool:
+    if not verify_install_manifest(package_dir):
+        _VERIFIED_PACKAGES.pop(package_dir, None)
+        return False
+    try:
+        signature = tuple(
+            sorted(
+                (path.relative_to(package_dir).as_posix(), path.stat().st_size, path.stat().st_mtime_ns)
+                for path in package_dir.rglob("*")
+                if path.is_file()
+            )
+        )
+    except OSError:
+        return False
+    if _VERIFIED_PACKAGES.get(package_dir) == signature:
+        return True
+    if not verify_install_manifest(package_dir, verify_hashes=True):
+        _VERIFIED_PACKAGES.pop(package_dir, None)
+        return False
+    _VERIFIED_PACKAGES[package_dir] = signature
+    return True
+
+
 def _installed_packages(config: dict) -> list[tuple[dict, Path]]:
     packages_dir = translation_models_dir(config) / "packages"
     packages: list[tuple[dict, Path]] = []
     if not packages_dir.exists():
         return packages
     for package_dir in packages_dir.iterdir():
+        if not _verified_package(package_dir):
+            continue
         metadata_path = package_dir / "metadata.json"
         try:
             metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
@@ -76,14 +105,36 @@ def install_translation_models(config: dict) -> int:
     installed = 0
     for model_file in models_path.glob("*.argosmodel"):
         with zipfile.ZipFile(model_file) as archive:
-            metadata_name = next((name for name in archive.namelist() if name.endswith("/metadata.json")), "")
-            if not metadata_name:
+            metadata_names = [PurePosixPath(name.replace("\\", "/")) for name in archive.namelist() if name.replace("\\", "/").endswith("/metadata.json")]
+        if len(metadata_names) == 1 and len(metadata_names[0].parts) == 2:
+            existing = packages_dir / metadata_names[0].parts[0]
+            if _verified_package(existing):
                 continue
-            package_name = Path(metadata_name).parent.name
-            package_dir = packages_dir / package_name
-            if (package_dir / "metadata.json").is_file():
+        with tempfile.TemporaryDirectory(prefix=".argos-install-", dir=models_path) as temp:
+            staging = Path(temp) / "packages"
+            safe_extract_zip(model_file, staging)
+            metadata_paths = list(staging.glob("*/metadata.json"))
+            if len(metadata_paths) != 1:
+                raise RuntimeError(f"Argos 模型必須包含一個頂層 metadata.json：{model_file.name}")
+            package_dir = metadata_paths[0].parent
+            if any(path.relative_to(staging).parts[0] != package_dir.name for path in staging.rglob("*")):
+                raise RuntimeError(f"Argos 模型包含多個頂層目錄：{model_file.name}")
+            try:
+                metadata = json.loads(metadata_paths[0].read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError) as exc:
+                raise RuntimeError(f"Argos 模型 metadata 無效：{model_file.name}") from exc
+            if not isinstance(metadata, dict) or not metadata.get("from_code") or not metadata.get("to_code"):
+                raise RuntimeError(f"Argos 模型 metadata 缺少語言代碼：{model_file.name}")
+            if not (package_dir / "model").is_dir() or not (package_dir / "sentencepiece.model").is_file():
+                raise RuntimeError(f"Argos 模型內容不完整：{model_file.name}")
+            write_install_manifest(package_dir)
+            if not verify_install_manifest(package_dir, verify_hashes=True):
+                raise RuntimeError(f"Argos 模型 manifest 驗證失敗：{model_file.name}")
+            target = packages_dir / package_dir.name
+            if _verified_package(target):
                 continue
-            archive.extractall(packages_dir)
+            atomic_replace_tree(package_dir, target)
+            _VERIFIED_PACKAGES.pop(target, None)
             installed += 1
     return installed
 
@@ -126,12 +177,19 @@ def download_translation_models(config: dict, source_language: str, target_langu
         url = str(package["links"][0])
         model_path = models_path / Path(url).name
         if not model_path.exists():
-            with requests.get(url, timeout=120, stream=True) as response:
-                response.raise_for_status()
-                with model_path.open("wb") as handle:
-                    for block in response.iter_content(1024 * 1024):
-                        if block:
-                            handle.write(block)
+            temporary = None
+            try:
+                with tempfile.NamedTemporaryFile(prefix=f".{model_path.name}-", suffix=".tmp", dir=models_path, delete=False) as handle:
+                    temporary = Path(handle.name)
+                    with requests.get(url, timeout=120, stream=True) as response:
+                        response.raise_for_status()
+                        for block in response.iter_content(1024 * 1024):
+                            if block:
+                                handle.write(block)
+                os.replace(temporary, model_path)
+            finally:
+                if temporary is not None:
+                    temporary.unlink(missing_ok=True)
         downloaded.append(model_path)
     install_translation_models(config)
     return downloaded

@@ -3,6 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+from realtime_audio_translator.archive_install import write_install_manifest
 from realtime_audio_translator.audio import audio_segment_active, device_name_from_label, find_device, loopback_device_for_output, virtual_mic_recaptures_tts
 from realtime_audio_translator.asr import AudioTranscriber, add_runtime_dll_directory, add_xxl_data
 from realtime_audio_translator.engine import RealtimeEngine, audio_devices_overlap, direction_label, drain_queue, overlay_text_from_config, safe_target_language
@@ -148,6 +149,20 @@ class AudioTests(unittest.TestCase):
                     asr_module.os.add_dll_directory = original_add
                 asr_module.DLL_DIRECTORIES[:] = original_handles
 
+    def test_audio_transcriber_rejects_unverified_runtime_before_loading_dlls(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            runtime = root / "runtime"
+            (runtime / "_xxl_data").mkdir(parents=True)
+            executable = runtime / "faster-whisper-xxl.exe"
+            executable.write_bytes(b"working")
+            (runtime / "ffmpeg.exe").write_bytes(b"ffmpeg!")
+            write_install_manifest(runtime)
+            executable.write_bytes(b"altered")
+
+            with self.assertRaisesRegex(RuntimeError, "完整性驗證"):
+                AudioTranscriber(root, "medium", root / "models", config={"runtime_dir": str(runtime)})
+
     def test_whisper_model_stores_detected_language(self):
         transcriber = AudioTranscriber.__new__(AudioTranscriber)
         transcriber.model_name = "medium"
@@ -173,7 +188,7 @@ class AudioTests(unittest.TestCase):
         self.assertIn("UPSTREAM_RUNTIME_RELEASE_URL", gui_source)
         self.assertIn('subprocess.run([str(runtime_dir(config) / "ffmpeg.exe"), "-version"]', gui_source)
         self.assertIn('config["last_ffmpeg_failed"]', gui_source)
-        self.assertIn("status = runtime_status(runtime)", gui_source)
+        self.assertIn("status = runtime_status(runtime, verify_hashes=True)", gui_source)
         self.assertIn('if not status["ready"]:', gui_source)
         self.assertIn('messagebox.showerror("找不到 runtime", runtime_install_message(runtime))', gui_source)
         self.assertIn('self.status.set("找不到 runtime：" + ", ".join(status["missing"]))', gui_source)
