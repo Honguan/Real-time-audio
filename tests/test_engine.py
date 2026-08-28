@@ -36,15 +36,17 @@ class EngineTests(unittest.TestCase):
         statuses = []
         config = DEFAULT_CONFIG.copy()
         config["record_logs"] = False
-        engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, statuses.append)
 
         with tempfile.TemporaryDirectory() as tmp:
-            wav = Path(tmp) / "clip.wav"
+            state_root = Path(tmp)
+            engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, statuses.append, state_root)
+            wav = state_root / "clip.wav"
             write_wav(wav, 12000)
             engine.running = True
             engine.transcriber = StaticTranscriber("hello")
             engine.translator = StoppingTranslator(engine, "你好")
             engine._process_segments("speaker", QueuedWorker(wav))
+            self.assertIsInstance(load_config(state_root)["last_latency_seconds"], float)
 
         self.assertTrue(any(status.startswith("喇叭延遲 ") for status in statuses))
 
@@ -781,18 +783,22 @@ class EngineTests(unittest.TestCase):
         statuses = []
         config = DEFAULT_CONFIG.copy()
         config["record_logs"] = False
-        engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, statuses.append)
+        with tempfile.TemporaryDirectory() as tmp:
+            state_root = Path(tmp)
+            engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, statuses.append, state_root)
 
-        class BrokenTranscriber:
-            def __init__(self, *args, **kwargs):
-                raise RuntimeError("Runtime missing: faster-whisper-xxl.exe")
+            class BrokenTranscriber:
+                def __init__(self, *args, **kwargs):
+                    raise RuntimeError("Runtime missing: faster-whisper-xxl.exe")
 
-        original_transcriber = engine_module.AudioTranscriber
-        engine_module.AudioTranscriber = BrokenTranscriber
-        try:
-            engine.start()
-        finally:
-            engine_module.AudioTranscriber = original_transcriber
+            original_transcriber = engine_module.AudioTranscriber
+            engine_module.AudioTranscriber = BrokenTranscriber
+            try:
+                engine.start()
+            finally:
+                engine_module.AudioTranscriber = original_transcriber
+
+            self.assertTrue(load_config(state_root)["last_asr_failed"])
 
         self.assertFalse(engine.running)
         self.assertEqual(statuses[-1], "找不到 runtime：faster-whisper-xxl.exe")

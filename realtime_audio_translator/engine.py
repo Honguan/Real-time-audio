@@ -7,7 +7,7 @@ from typing import Callable
 from .asr import AudioTranscriber
 from .audio import SegmentWorker, audio_segment_active, device_name_from_label, find_device, virtual_mic_recaptures_tts
 from .ai_confidence import build_confidence_snapshot, format_confidence_status
-from .config import APP_DIR, DEFAULT_CONFIG, TARGET_LANGUAGE_CHOICES, validate_language_pair
+from .config import APP_DIR, DEFAULT_CONFIG, TARGET_LANGUAGE_CHOICES, save_config_state, validate_language_pair
 from .logbook import ConversationLog
 from .models import models_dir
 from .providers import TextToSpeech, Translator
@@ -52,11 +52,12 @@ def safe_target_language(language: str, fallback: str) -> str:
 
 
 class RealtimeEngine:
-    def __init__(self, repo_root: Path, config: dict, overlay: OverlayCallback, status: StatusCallback):
+    def __init__(self, repo_root: Path, config: dict, overlay: OverlayCallback, status: StatusCallback, state_root: Path | None = None):
         self.repo_root = repo_root
         self.config = config
         self.overlay = overlay
         self.status = status
+        self.state_root = state_root
         self.running = False
         self.paused = False
         self.muted = bool(config.get("start_muted", False))
@@ -88,12 +89,14 @@ class RealtimeEngine:
         except Exception as exc:
             self.running = False
             self.config["last_asr_failed"] = True
+            self._save_state({"last_asr_failed"})
             message = str(exc)
             if message.startswith("Runtime missing: "):
                 message = "找不到 runtime：" + message.removeprefix("Runtime missing: ")
             self.status(message)
             return
         self.config["last_asr_failed"] = False
+        self._save_state({"last_asr_failed"})
         started = []
         skipped_feedback = False
         skipped_mic_feedback = False
@@ -185,16 +188,20 @@ class RealtimeEngine:
                 clean_text = text.strip()
                 speech_units = len(clean_text.split()) if " " in clean_text else len(clean_text)
                 self.config["last_speech_units_per_second"] = speech_units / segment_seconds
+                state_keys = {"last_speech_units_per_second"}
                 detected_source = getattr(self.transcriber, "last_language", None) if source == "auto" else None
                 source_for_output = detected_source or fallback_source
                 language_confidence = getattr(self.transcriber, "last_language_probability", None)
                 if detected_source:
                     self.config["last_detected_language"] = detected_source
+                    state_keys.add("last_detected_language")
                 if language_confidence is not None:
                     self.config["last_language_confidence"] = language_confidence
+                    state_keys.add("last_language_confidence")
                 asr_confidence = getattr(self.transcriber, "last_confidence", None)
                 if asr_confidence is not None:
                     self.config["last_asr_confidence"] = asr_confidence
+                    state_keys.add("last_asr_confidence")
                 translation_confidence = None
                 translation_latency = None
                 tts_latency = None
@@ -206,14 +213,17 @@ class RealtimeEngine:
                     translation_confidence = getattr(self.translator, "last_confidence", None)
                     if translation_confidence is not None:
                         self.config["last_translation_confidence"] = translation_confidence
+                        state_keys.add("last_translation_confidence")
                 except Exception as exc:
                     translated = ""
                     translation_failed = True
                     self.status(f"{direction_label(direction)}：翻譯失敗：{exc}")
                 self.config["last_translation_empty"] = not translation_failed and not bool(str(translated).strip())
+                state_keys.add("last_translation_empty")
                 if not translation_failed:
                     self.config["last_source_text"] = text
                     self.config["last_translated_text"] = translated
+                    state_keys.update({"last_source_text", "last_translated_text"})
                 if translation_failed:
                     overlay_text = f"{source_for_output}: {text}" if self.config.get("show_language_labels") else text
                 else:
@@ -228,8 +238,11 @@ class RealtimeEngine:
                         tts_latency = self._speak_translation(direction, translated, target, self.config.get("tts_output_device", "CABLE Input"))
                 if tts_latency is not None:
                     self.config["last_tts_latency_seconds"] = tts_latency
+                    state_keys.add("last_tts_latency_seconds")
                 latency = time.perf_counter() - started
                 self.config["last_latency_seconds"] = latency
+                state_keys.add("last_latency_seconds")
+                self._save_state(state_keys)
                 if self.log and not translation_failed:
                     self.log.append(direction, source_for_output, target, text, translated, self.config["provider"], latency_seconds=latency)
                 if not translation_failed:
@@ -263,4 +276,9 @@ class RealtimeEngine:
         except Exception as exc:
             self.config["last_tts_failed"] = True
             self.status(f"{direction_label(direction)}：TTS 失敗：{exc}")
+        self._save_state({"last_tts_failed"})
         return time.perf_counter() - tts_started
+
+    def _save_state(self, keys: set[str]) -> None:
+        if self.state_root is not None:
+            save_config_state(self.state_root, self.config, keys)

@@ -2,10 +2,11 @@ import json
 import sqlite3
 import tempfile
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest.mock import patch
 from realtime_audio_translator.commands import command_choices, parse_help_options
-from realtime_audio_translator.config import DEFAULT_CONFIG, _has_reparse_point, clear_cache, clear_logs, ensure_app_dirs, ensure_glossary_file, load_config, log_files_to_clear, save_audio_devices, save_config
+from realtime_audio_translator.config import DEFAULT_CONFIG, _has_reparse_point, clear_cache, clear_logs, ensure_app_dirs, ensure_glossary_file, load_config, log_files_to_clear, save_audio_devices, save_config, save_config_state
 from realtime_audio_translator.ai_memory import add_glossary_term, cache_translation, cached_translation
 from realtime_audio_translator.app_log import append_app_log
 from realtime_audio_translator.gui import LANGUAGE_CHOICES, PERFORMANCE_CHOICES, PROVIDER_CHOICES, TARGET_LANGUAGE_CHOICES, TTS_PROVIDER_CHOICES, TranslatorApp, diagnostic_action_label, diagnostic_actions, first_diagnostic_action, first_run_setup_action, first_run_wizard_needed, format_overlay_line, language_lock_value, latency_seconds_value, main_status_summary, mode_notice, overlay_clipboard_text, overlay_font_size_value, overlay_hold_seconds_value, overlay_opacity_value, overlay_visibility_action, performance_segment_seconds, record_logs_requires_confirmation, setup_guide_actions, status_message_is_error, subtitle_updates_allowed, swap_language_values, troubleshooting_action, visible_button_texts, visible_setting_keys
@@ -14,6 +15,170 @@ from realtime_audio_translator.release_updater import RELEASES_URL, current_vers
 
 
 class ConfigTests(unittest.TestCase):
+    def test_interrupted_config_write_preserves_last_complete_settings(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config = DEFAULT_CONFIG.copy()
+            save_config(root, config)
+            config["target_language"] = "ja"
+
+            def interrupted_dump(_value, handle, **_kwargs):
+                handle.write('{"target_language":')
+                raise OSError("simulated crash")
+
+            with patch("realtime_audio_translator.config.json.dump", side_effect=interrupted_dump):
+                with self.assertRaisesRegex(OSError, "simulated crash"):
+                    save_config(root, config)
+
+            self.assertEqual(load_config(root)["target_language"], DEFAULT_CONFIG["target_language"])
+
+    def test_concurrent_config_saves_leave_valid_json(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+
+            def save(index):
+                config = DEFAULT_CONFIG.copy()
+                config["tts_volume"] = index % 101
+                save_config(root, config)
+
+            with ThreadPoolExecutor(max_workers=8) as executor:
+                list(executor.map(save, range(80)))
+
+            document = json.loads((root / "config" / "settings.json").read_text(encoding="utf-8"))
+            self.assertEqual(document["schema_version"], 1)
+            self.assertIn(document["settings"]["tts_volume"], range(101))
+
+    def test_config_uses_one_authoritative_settings_file_and_separates_state(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config = DEFAULT_CONFIG.copy()
+            config["last_error"] = "runtime failed"
+
+            save_config(root, config)
+            save_config_state(root, config, {"last_error"})
+
+            settings = json.loads((root / "config" / "settings.json").read_text(encoding="utf-8"))
+            state = json.loads((root / "config" / "state.json").read_text(encoding="utf-8"))
+            self.assertFalse((root / "config.json").exists())
+            self.assertNotIn("last_error", settings["settings"])
+            self.assertEqual(state["diagnostics"]["last_error"], "runtime failed")
+
+    def test_concurrent_disjoint_state_updates_are_merged(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            save_config(root, DEFAULT_CONFIG.copy())
+            error_state = DEFAULT_CONFIG.copy()
+            error_state["last_error"] = "runtime failed"
+            metric_state = DEFAULT_CONFIG.copy()
+            metric_state["last_cuda_devices"] = 2
+
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                futures = [
+                    executor.submit(save_config_state, root, error_state, {"last_error"}),
+                    executor.submit(save_config_state, root, metric_state, {"last_cuda_devices"}),
+                ]
+                for future in futures:
+                    future.result()
+
+            config = load_config(root)
+            self.assertEqual(config["last_error"], "runtime failed")
+            self.assertEqual(config["last_cuda_devices"], 2)
+
+    def test_load_config_migrates_legacy_settings_and_drops_unknown_fields(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ensure_app_dirs(root)
+            settings_path = root / "config" / "settings.json"
+            settings_path.write_text(
+                json.dumps({"target_language": "ja", "last_error": "legacy", "unknown_setting": True}),
+                encoding="utf-8",
+            )
+
+            config = load_config(root)
+            document = json.loads(settings_path.read_text(encoding="utf-8"))
+
+            self.assertEqual(config["target_language"], "ja")
+            self.assertEqual(config["last_error"], "legacy")
+            self.assertNotIn("unknown_setting", config)
+            self.assertEqual(document["schema_version"], 1)
+            self.assertNotIn("unknown_setting", document["settings"])
+
+    def test_load_config_migrates_existing_mirrors_from_legacy_authority(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ensure_app_dirs(root)
+            (root / "config" / "settings.json").write_text(json.dumps({"target_language": "ko"}), encoding="utf-8")
+            (root / "config.json").write_text(json.dumps({"target_language": "ja"}), encoding="utf-8")
+
+            config = load_config(root)
+
+            self.assertEqual(config["target_language"], "ja")
+            self.assertFalse((root / "config.json").exists())
+
+    def test_load_config_validates_setting_types_ranges_and_paths(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ensure_app_dirs(root)
+            (root / "config" / "settings.json").write_text(
+                json.dumps({"record_logs": "yes", "tts_volume": 101, "segment_seconds": -1, "runtime_dir": "relative", "provider": "unknown", "last_ffmpeg_failed": "yes"}),
+                encoding="utf-8",
+            )
+
+            config = load_config(root)
+
+            self.assertEqual(config["record_logs"], DEFAULT_CONFIG["record_logs"])
+            self.assertEqual(config["tts_volume"], DEFAULT_CONFIG["tts_volume"])
+            self.assertEqual(config["segment_seconds"], DEFAULT_CONFIG["segment_seconds"])
+            self.assertEqual(config["runtime_dir"], DEFAULT_CONFIG["runtime_dir"])
+            self.assertEqual(config["provider"], DEFAULT_CONFIG["provider"])
+            self.assertEqual(config["last_ffmpeg_failed"], DEFAULT_CONFIG["last_ffmpeg_failed"])
+
+    def test_load_config_rejects_future_schema(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ensure_app_dirs(root)
+            (root / "config" / "settings.json").write_text(
+                json.dumps({"schema_version": 99, "settings": {}}), encoding="utf-8"
+            )
+
+            with self.assertRaisesRegex(ValueError, "schema_version"):
+                load_config(root)
+
+    def test_load_config_does_not_downgrade_future_schema_to_legacy(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ensure_app_dirs(root)
+            settings_path = root / "config" / "settings.json"
+            future = {"schema_version": 99, "settings": {"target_language": "ko"}}
+            settings_path.write_text(json.dumps(future), encoding="utf-8")
+            (root / "config.json").write_text(json.dumps({"target_language": "ja"}), encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "schema_version"):
+                load_config(root)
+
+            self.assertEqual(json.loads(settings_path.read_text(encoding="utf-8")), future)
+            self.assertTrue((root / "config.json").exists())
+
+    def test_load_config_recovers_previous_settings_from_backup(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config = DEFAULT_CONFIG.copy()
+            save_config(root, config)
+            save_config_state(root, config, {"last_error"})
+            config["target_language"] = "ja"
+            config["last_error"] = "new error"
+            save_config(root, config)
+            save_config_state(root, config, {"last_error"})
+            (root / "config" / "settings.json").write_text("{broken", encoding="utf-8")
+            (root / "config" / "state.json").write_text(
+                json.dumps({"schema_version": 1, "session_metrics": [], "diagnostics": {}}), encoding="utf-8"
+            )
+
+            recovered = load_config(root)
+
+            self.assertEqual(recovered["target_language"], DEFAULT_CONFIG["target_language"])
+            json.loads((root / "config" / "settings.json").read_text(encoding="utf-8"))
+
     def test_config_round_trip_creates_expected_dirs(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -28,7 +193,7 @@ class ConfigTests(unittest.TestCase):
             self.assertTrue((root / "models" / "translation").is_dir())
             self.assertTrue((root / "models" / "tts").is_dir())
             self.assertTrue((root / "config").is_dir())
-            self.assertEqual(json.loads((root / "config" / "settings.json").read_text(encoding="utf-8"))["target_language"], "ja")
+            self.assertEqual(json.loads((root / "config" / "settings.json").read_text(encoding="utf-8"))["settings"]["target_language"], "ja")
             self.assertEqual(json.loads((root / "config" / "audio_devices.json").read_text(encoding="utf-8")), [])
             self.assertEqual(json.loads((root / "config" / "glossary.json").read_text(encoding="utf-8")), {})
             self.assertTrue((root / "logs").is_dir())
@@ -97,7 +262,8 @@ class ConfigTests(unittest.TestCase):
             (root / "config.json").write_text(json.dumps({"target_language": "ja"}), encoding="utf-8")
 
             self.assertEqual(load_config(root)["target_language"], "ja")
-            self.assertEqual(json.loads((root / "config" / "settings.json").read_text(encoding="utf-8"))["target_language"], "ja")
+            self.assertEqual(json.loads((root / "config" / "settings.json").read_text(encoding="utf-8"))["settings"]["target_language"], "ja")
+            self.assertFalse((root / "config.json").exists())
 
     def test_load_config_rejects_invalid_languages(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -186,7 +352,7 @@ class ConfigTests(unittest.TestCase):
 
             save_config(root, config)
 
-            saved = json.loads((root / "config" / "settings.json").read_text(encoding="utf-8"))
+            saved = json.loads((root / "config" / "settings.json").read_text(encoding="utf-8"))["settings"]
             self.assertEqual(saved["ui_mode"], "advanced")
             self.assertEqual(saved["asr_model"], "medium")
             self.assertEqual(saved["translation_engine"], "openai")
@@ -198,7 +364,7 @@ class ConfigTests(unittest.TestCase):
             config["target_language"] = "auto"
             config["source_language"] = "bad"
             save_config(root, config)
-            saved = json.loads((root / "config" / "settings.json").read_text(encoding="utf-8"))
+            saved = json.loads((root / "config" / "settings.json").read_text(encoding="utf-8"))["settings"]
             self.assertEqual(saved["source_language"], DEFAULT_CONFIG["source_language"])
             self.assertEqual(saved["target_language"], DEFAULT_CONFIG["target_language"])
 
@@ -211,7 +377,7 @@ class ConfigTests(unittest.TestCase):
             config["cloud_api_enabled"] = False
 
             save_config(root, config)
-            saved = json.loads((root / "config" / "settings.json").read_text(encoding="utf-8"))
+            saved = json.loads((root / "config" / "settings.json").read_text(encoding="utf-8"))["settings"]
             self.assertEqual(saved["provider"], "local")
             self.assertEqual(saved["tts_provider"], "local")
             self.assertEqual(saved["translation_engine"], "local")

@@ -71,7 +71,7 @@ Whisper 模型可放在 `models\whisper-small`；翻譯模型放在 `models\tran
 - 「開啟紀錄」：開啟紀錄資料夾，`app.log` 會記錄開始、停止、缺模型與字幕匯出事件。
 - 「清除快取」/「清除紀錄」/「清除本機資料」：清除本機翻譯快取、暫存音訊與對話紀錄。
 - 「匯出字幕」：把最新 JSONL 對話紀錄匯出成 SRT 與 TXT，檔案放在 `%USERPROFILE%\.realtime-audio\exports\subtitles`。
-- 「開啟程式資料夾」：開啟 `%USERPROFILE%\.realtime-audio`，設定鏡像在 `config\settings.json`，術語表在 `config\glossary.json`，音訊裝置快照在 `config\audio_devices.json`。
+- 「開啟程式資料夾」：開啟 `%USERPROFILE%\.realtime-audio`；唯一設定檔在 `config\settings.json`，執行狀態另存於 `config\state.json`，術語表在 `config\glossary.json`，音訊裝置快照在 `config\audio_devices.json`。
 - 「新增術語」：加入固定術語翻譯，例如 `cooldown` → `冷卻`。
 - 「顯示語言」：在字幕前顯示語言代碼。
 - 「場景」：選擇遊戲、Discord、會議、客服對話、字幕-only、自己說話翻譯或雙向翻譯預設後會自動套用；進階模式也可按「套用場景」。
