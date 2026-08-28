@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .ai_auto_tuner import recommend_tuning
-from .audio import device_name_from_label, find_device, virtual_mic_recaptures_tts
+from .audio import find_device, same_device_identity, virtual_mic_recaptures_tts
 from .config import APP_DIR
 from .models import model_available, models_dir
 from .offline_translation import translation_model_available, translation_models_dir
@@ -21,9 +21,7 @@ class DiagnosticIssue:
 
 
 def _devices_overlap(left: str, right: str) -> bool:
-    left_name = device_name_from_label(left).lower().strip()
-    right_name = device_name_from_label(right).lower().strip()
-    return bool(left_name and right_name and (left_name in right_name or right_name in left_name))
+    return same_device_identity(left, right)
 
 
 def _find_device_safe(name_part: str, want_output: bool) -> int | None:
@@ -78,54 +76,64 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
             "warning",
             "可能發生音訊回授",
             "喇叭來源與翻譯語音輸出看起來是同一個裝置",
-            "把「TTS 輸出」設為 CABLE Input，「對方翻譯播放輸出」改成不同喇叭或先關閉「播放對方翻譯」",
+            "把翻譯語音改到不同的輸出端點，或先關閉「播放對方翻譯」",
             "audio_settings",
         ))
-    if config.get("tts_enabled", True) and config.get("virtual_mic_enabled", False) and "cable input" not in str(config.get("tts_output_device", "")).lower():
+    if config.get("tts_enabled", True) and config.get("virtual_mic_enabled", False) and not config.get("tts_output_device"):
         issues.append(DiagnosticIssue(
             "virtual_mic_route",
             "warning",
             "虛擬麥克風輸出可能未設定",
-            "「TTS 輸出」目前看起來不是 CABLE Input",
-            "把「TTS 輸出」設為 CABLE Input，並把 Discord 麥克風設為 CABLE Output",
+            "「TTS 輸出」仍使用系統預設端點",
+            "選擇虛擬音訊線的輸出端點，並在通話軟體選擇對應的輸入端點",
             "audio_settings",
         ))
     tts_output_device = str(config.get("tts_output_device", ""))
+    virtual_input_device = str(config.get("virtual_mic_input_device", ""))
     if (
         config.get("tts_enabled", True)
         and config.get("virtual_mic_enabled", False)
-        and "cable input" in tts_output_device.lower()
+        and tts_output_device
         and _find_device_safe(tts_output_device, want_output=True) is None
     ):
         issues.append(DiagnosticIssue(
             "virtual_mic_device_missing",
             "warning",
-            "找不到 VB-CABLE 輸出",
-            "「TTS 輸出」選了 CABLE Input，但系統沒有找到可用輸出裝置",
-            "安裝 VB-CABLE，或重新選擇可用的 CABLE Input 輸出裝置",
+            "找不到虛擬音訊輸出",
+            "已儲存的虛擬音訊端點目前不可用",
+            "重新連接虛擬音訊裝置，或重新選擇輸出端點",
             "audio_settings",
         ))
-    if config.get("tts_enabled", True) and config.get("virtual_mic_enabled", False) and _find_device_safe("CABLE Output", want_output=False) is None:
+    if config.get("tts_enabled", True) and config.get("virtual_mic_enabled", False) and not virtual_input_device:
         issues.append(DiagnosticIssue(
             "virtual_mic_input_missing",
             "warning",
-            "找不到 VB-CABLE 麥克風",
-            "系統沒有找到 CABLE Output 輸入裝置，Discord 可能無法選到虛擬麥克風",
-            "安裝 VB-CABLE，或重新啟動後確認 Discord 麥克風可選 CABLE Output",
+            "未選擇虛擬麥克風檢查輸入",
+            "無法驗證虛擬音訊線的接收端點",
+            "選擇與 TTS 輸出配對的虛擬音訊輸入端點",
             "audio_settings",
         ))
-    if config.get("microphone_enabled", True) and config.get("tts_enabled", True) and config.get("virtual_mic_enabled", False) and virtual_mic_recaptures_tts(config.get("microphone_device", ""), config.get("tts_output_device", "")):
+    if virtual_input_device and _find_device_safe(virtual_input_device, want_output=False) is None:
+        issues.append(DiagnosticIssue(
+            "virtual_mic_input_missing",
+            "warning",
+            "找不到虛擬麥克風輸入",
+            "已儲存的虛擬音訊輸入端點目前不可用",
+            "重新連接虛擬音訊裝置，或重新選擇輸入端點",
+            "audio_settings",
+        ))
+    if config.get("microphone_enabled", True) and config.get("tts_enabled", True) and config.get("virtual_mic_enabled", False) and virtual_mic_recaptures_tts(config.get("microphone_device", ""), virtual_input_device):
         issues.append(DiagnosticIssue(
             "microphone_feedback_risk",
             "warning",
             "麥克風可能收到翻譯語音",
-            "「麥克風來源」看起來選到 CABLE Output，會把送給 Discord 的翻譯語音再收回來",
-            "「麥克風來源」請選實體麥克風；Discord 的麥克風才選 CABLE Output",
+            "「麥克風來源」與虛擬音訊線的接收端點相同，會把翻譯語音再收回來",
+            "「麥克風來源」請選實體麥克風；通話軟體才選虛擬音訊輸入端點",
             "audio_settings",
         ))
-    if config.get("speaker_enabled", True) and not _find_device_safe(config.get("speaker_device", ""), want_output=True):
+    if config.get("speaker_enabled", True) and _find_device_safe(config.get("speaker_device", ""), want_output=True) is None:
         issues.append(DiagnosticIssue("speaker_device_missing", "warning", "找不到喇叭來源", "未選到可用輸出裝置", "選擇正在播放 Discord 或遊戲語音的喇叭", "audio_settings"))
-    if config.get("microphone_enabled", True) and not _find_device_safe(config.get("microphone_device", ""), want_output=False):
+    if config.get("microphone_enabled", True) and _find_device_safe(config.get("microphone_device", ""), want_output=False) is None:
         issues.append(DiagnosticIssue("microphone_device_missing", "warning", "找不到麥克風", "未選到可用輸入裝置", "選擇你的實體麥克風", "audio_settings"))
     cloud = [name for name in (config.get("provider"), config.get("tts_provider")) if name in ("openai", "google")]
     if "openai" in cloud and not os.environ.get("OPENAI_API_KEY"):
@@ -213,7 +221,7 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
             "warning",
             "Discord 沒有收到虛擬麥克風聲音",
             "最近一次「測試虛擬麥克風」播放失敗",
-            "確認「TTS 輸出」選 CABLE Input，並把 Discord 麥克風設為 CABLE Output",
+            "確認「TTS 輸出」與通話軟體麥克風分別選擇虛擬音訊線的配對端點",
             "audio_settings",
         ))
     if config.get("last_asr_failed"):

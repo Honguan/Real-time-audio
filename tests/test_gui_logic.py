@@ -234,8 +234,8 @@ class GuiLogicTests(unittest.TestCase):
         self.assertIn('tts.speak_local("翻譯語音輸出測試", device)', gui_source)
         self.assertIn('audio = tts.synthesize_openai_linear16("翻譯語音輸出測試")', gui_source)
         self.assertIn('audio = tts.synthesize_google_linear16("翻譯語音輸出測試", config["target_language"])', gui_source)
-        self.assertIn('cable_output = find_device("CABLE Output", want_output=False)', gui_source)
-        self.assertIn('target=capture_wav, args=(path, cable_output, 2.0)', gui_source)
+        self.assertIn('virtual_input = find_device(config["virtual_mic_input_device"], want_output=False)', gui_source)
+        self.assertIn('target=capture_wav, args=(path, virtual_input, 2.0)', gui_source)
         self.assertIn('active = audio_segment_active(path, float(config["speech_threshold"]))', gui_source)
 
     def test_setup_guide_button_shows_first_run_steps(self):
@@ -251,7 +251,7 @@ class GuiLogicTests(unittest.TestCase):
         self.assertIn("喇叭來源", gui_source)
         self.assertIn("麥克風來源", gui_source)
         self.assertIn("TTS 輸出", gui_source)
-        self.assertIn("CABLE Output", gui_source)
+        self.assertIn("虛擬音訊線輸出", gui_source)
         self.assertIn("選場景會自動套用", gui_source)
         self.assertIn("自動優化", gui_source)
         self.assertIn("測試麥克風", gui_source)

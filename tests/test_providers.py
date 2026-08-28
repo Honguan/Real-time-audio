@@ -8,6 +8,7 @@ import zipfile
 from pathlib import Path
 from unittest.mock import patch
 from realtime_audio_translator.archive_install import verify_install_manifest, write_install_manifest
+from realtime_audio_translator.audio import device_identity
 from realtime_audio_translator.config import DEFAULT_CONFIG, _has_reparse_point, clear_cache, clear_logs, ensure_app_dirs, ensure_glossary_file, load_config, log_files_to_clear, save_audio_devices, save_config
 from realtime_audio_translator.ai_memory import add_glossary_term, cache_translation, cached_translation
 from realtime_audio_translator.offline_translation import download_translation_models, install_translation_models, normalize_translation_text, translation_model_available, translation_model_pairs, translation_models_dir
@@ -495,24 +496,29 @@ class ProvidersTests(unittest.TestCase):
         original_run = tts_module.subprocess.run
         tts_module.subprocess.run = lambda *args, **kwargs: calls.append((args, kwargs))
         try:
-            tts_module.speak_windows_sapi("hello", "CABLE Input", voice_name="Microsoft Jenny")
+            identity = device_identity({"index": 4, "name": "虛擬輸出", "hostapi": "Windows WASAPI", "input_channels": 0, "output_channels": 2, "default_samplerate": 48000.0})
+            with patch.object(tts_module, "_play_wav"):
+                tts_module.speak_windows_sapi("hello", identity, voice_name="Microsoft Jenny")
         finally:
             tts_module.subprocess.run = original_run
 
         self.assertEqual(calls[0][1]["env"]["RAT_TTS_VOICE"], "Microsoft Jenny")
 
-    def test_windows_sapi_strips_hostapi_from_output_device(self):
+    def test_windows_sapi_routes_rendered_audio_by_device_identity(self):
         import realtime_audio_translator.tts as tts_module
 
         calls = []
         original_run = tts_module.subprocess.run
         tts_module.subprocess.run = lambda *args, **kwargs: calls.append((args, kwargs))
         try:
-            tts_module.speak_windows_sapi("hello", "CABLE Input (VB-Audio Virtual Cable) [Windows WASAPI]")
+            identity = device_identity({"index": 4, "name": "虛擬輸出", "hostapi": "Windows WASAPI", "input_channels": 0, "output_channels": 2, "default_samplerate": 48000.0})
+            with patch.object(tts_module, "_play_wav") as play:
+                tts_module.speak_windows_sapi("hello", identity)
         finally:
             tts_module.subprocess.run = original_run
 
-        self.assertEqual(calls[0][1]["env"]["RAT_TTS_DEVICE"], "CABLE Input (VB-Audio Virtual Cable)")
+        self.assertTrue(calls[0][1]["env"]["RAT_TTS_WAV"].endswith("sapi.wav"))
+        self.assertEqual(play.call_args.args[1], identity)
 
     def test_windows_sapi_terminates_when_cancelled(self):
         import realtime_audio_translator.tts as tts_module

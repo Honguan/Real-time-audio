@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Callable
 
 from .asr import AudioTranscriber
-from .audio import SegmentWorker, WorkerHealth, audio_segment_active, device_name_from_label, discard_audio_segment, find_device, virtual_mic_recaptures_tts
+from .audio import DeviceResolutionError, SegmentWorker, WorkerHealth, audio_segment_active, discard_audio_segment, find_device, same_device_identity, virtual_mic_recaptures_tts
 from .ai_confidence import build_confidence_snapshot, format_confidence_status
 from .config import APP_DIR, DEFAULT_CONFIG, STATE_KEYS, TARGET_LANGUAGE_CHOICES, save_config_state, validate_language_pair
 from .logbook import ConversationLog
@@ -54,9 +54,7 @@ def overlay_text_from_config(original: str, translated: str, source_language: st
 
 
 def audio_devices_overlap(left: str, right: str) -> bool:
-    left_name = device_name_from_label(left).lower().strip()
-    right_name = device_name_from_label(right).lower().strip()
-    return bool(left_name and right_name and (left_name in right_name or right_name in left_name))
+    return same_device_identity(left, right)
 
 
 def safe_target_language(language: str, fallback: str) -> str:
@@ -141,7 +139,7 @@ class RealtimeEngine:
             else:
                 started.append(self._start_direction("speaker", self.config.get("speaker_device", ""), True))
         if self.config.get("microphone_enabled", True):
-            if self.config.get("tts_enabled", True) and self.config.get("virtual_mic_enabled", False) and virtual_mic_recaptures_tts(self.config.get("microphone_device", ""), self.config.get("tts_output_device", "")):
+            if self.config.get("tts_enabled", True) and self.config.get("virtual_mic_enabled", False) and virtual_mic_recaptures_tts(self.config.get("microphone_device", ""), self.config.get("virtual_mic_input_device", "")):
                 skipped_mic_feedback = True
             else:
                 started.append(self._start_direction("me", self.config.get("microphone_device", ""), False))
@@ -214,11 +212,10 @@ class RealtimeEngine:
                 self.status(self._capture_status("執行中") + suffix)
 
     def _start_direction(self, direction: str, device_hint: str, loopback: bool) -> bool:
-        device = find_device(device_hint, want_output=loopback) if device_hint else None
-        if device is None:
-            device = find_device("Microphone" if not loopback else "Speakers", want_output=loopback)
-        if device is None:
-            self.status(f"{direction_label(direction)}：找不到音訊裝置")
+        try:
+            device = find_device(device_hint, want_output=loopback)
+        except (DeviceResolutionError, OSError) as exc:
+            self.status(f"{direction_label(direction)}：{exc}")
             return False
         session = self._session
         worker = SegmentWorker(
@@ -396,7 +393,7 @@ class RealtimeEngine:
                         return
                     self._publish(session, self.overlay, "", overlay_text)
                     if config.get("tts_enabled", True) and config.get("virtual_mic_enabled", False) and not self.muted and translated and not translation_failed:
-                        tts_latency = self._speak_translation(direction, translated, target, config.get("tts_output_device", "CABLE Input"), session)
+                        tts_latency = self._speak_translation(direction, translated, target, config.get("tts_output_device", ""), session)
                 if not self._session_active(session):
                     return
                 if tts_latency is not None:

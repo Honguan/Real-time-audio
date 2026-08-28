@@ -9,7 +9,7 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, simpledialog, ttk
 from typing import Literal
 
-from .audio import audio_segment_active, capture_wav, find_device, format_device_label, list_audio_devices
+from .audio import DeviceResolutionError, audio_segment_active, capture_wav, device_descriptor, device_identity, find_device, format_device_label, list_audio_devices
 from .ai_auto_tuner import apply_tuning, recommend_tuning
 from .ai_memory import add_glossary_term
 from .ai_orchestrator import plan_session
@@ -35,7 +35,7 @@ PROVIDER_CHOICES = ("local", "google", "openai")
 TTS_PROVIDER_CHOICES = ("local", "google", "openai")
 PERFORMANCE_CHOICES = ("low_latency", "balanced", "quality", "offline_light")
 CLOUD_PROVIDERS = ("google", "openai")
-AUDIO_DEVICE_KEYS = ("speaker_device", "microphone_device", "tts_output_device", "speaker_tts_output_device")
+AUDIO_DEVICE_KEYS = ("speaker_device", "microphone_device", "tts_output_device", "virtual_mic_input_device", "speaker_tts_output_device")
 SEVERITY_LABELS = {"error": "錯誤", "warning": "警告", "info": "提示"}
 
 
@@ -62,6 +62,7 @@ SETTING_ROWS = (
     ("喇叭來源", "speaker_device"),
     ("麥克風來源", "microphone_device"),
     ("TTS 輸出", "tts_output_device"),
+    ("虛擬麥克風檢查輸入", "virtual_mic_input_device"),
     ("對方翻譯播放輸出", "speaker_tts_output_device"),
     ("TTS 速度", "tts_rate"),
     ("TTS 音量", "tts_volume"),
@@ -256,7 +257,7 @@ def setup_guide_message() -> str:
         "1. 按「一鍵診斷」處理 runtime，進階模式也可手動匯入 runtime。\n"
         "2. 按「一鍵診斷」下載模型，或把模型 zip 解壓到 models 資料夾。\n"
         "3. 選擇「喇叭來源」、「麥克風來源」與「TTS 輸出」。\n"
-        "4. Discord 麥克風選 CABLE Output，本工具「TTS 輸出」選 CABLE Input。\n"
+        "4. 本工具「TTS 輸出」選虛擬音訊線輸出，通話軟體麥克風選對應的輸入。\n"
         "5. 選場景會自動套用；進階模式可調模型、runtime 路徑與自動優化。\n"
         "6. 開始前先跑「測試麥克風」與「測試虛擬麥克風」；進階模式可再測字幕、喇叭與 TTS。"
     )
@@ -354,6 +355,8 @@ class TranslatorApp(tk.Tk):
         self.repo_root = repo_root or resource_root()
         self.config = load_config(APP_DIR)
         self.engine: RealtimeEngine | None = None
+        self._device_id_by_label: dict[str, str] = {"系統預設": ""}
+        self._device_label_by_id: dict[str, str] = {"": "系統預設"}
         self._engine_events = queue.Queue()
         self._closing = False
         self.title("Realtime Audio Translator")
@@ -412,7 +415,7 @@ class TranslatorApp(tk.Tk):
                 widget = ttk.Combobox(frame, textvariable=self.vars[key], values=values, state="readonly")
                 widget.bind("<<ComboboxSelected>>", lambda _event, name=key: self._apply_performance_mode() if name == "performance_mode" else self._apply_scenario() if name == "scenario" else self._save())
             elif key in AUDIO_DEVICE_KEYS or key in ("model", "device", "compute_type", "tts_voice_name"):
-                widget = ttk.Combobox(frame, textvariable=self.vars[key], values=[])
+                widget = ttk.Combobox(frame, textvariable=self.vars[key], values=[], state="readonly" if key in AUDIO_DEVICE_KEYS else "normal")
                 widget.bind("<<ComboboxSelected>>", lambda _event: self._save())
                 self.comboboxes[key] = widget
             else:
@@ -550,7 +553,37 @@ class TranslatorApp(tk.Tk):
     def _refresh_lists(self) -> None:
         raw_devices = list_audio_devices()
         save_audio_devices(APP_DIR, raw_devices)
-        devices = [format_device_label(d) for d in raw_devices]
+        config_changed = False
+        self._device_id_by_label = {"系統預設": ""}
+        self._device_label_by_id = {"": "系統預設"}
+        for device in raw_devices:
+            label = format_device_label(device)
+            identity = device_identity(device)
+            self._device_id_by_label[label] = identity
+            self._device_label_by_id[identity] = label
+        for key in AUDIO_DEVICE_KEYS:
+            identity = str(self.config.get(key) or "")
+            if not identity:
+                self.vars[key].set("系統預設")
+                continue
+            try:
+                index = find_device(identity, want_output=key in {"speaker_device", "tts_output_device", "speaker_tts_output_device"}, devices=raw_devices)
+                current = next(device for device in raw_devices if device["index"] == index)
+                current_identity = device_identity(current)
+                config_changed = config_changed or current_identity != identity
+                self.config[key] = current_identity
+                self.vars[key].set(self._device_label_by_id[current_identity])
+            except (DeviceResolutionError, StopIteration):
+                try:
+                    label = f"{format_device_label(device_descriptor(identity))}（不可用，請重新選擇）"
+                except DeviceResolutionError:
+                    label = "未知裝置（不可用，請重新選擇）"
+                self._device_id_by_label[label] = identity
+                self._device_label_by_id[identity] = label
+                self.vars[key].set(label)
+        if config_changed:
+            save_config(APP_DIR, self.config)
+        devices = list(self._device_id_by_label)
         commands = APP_DIR / "commands.json"
         models = sorted(set(list_models(self.repo_root / "_models", models_dir(self._config_from_vars()))) | set(command_choices(commands, "model")))
         asr_devices = command_choices(commands, "device") or ["cuda", "cpu"]
@@ -589,7 +622,7 @@ class TranslatorApp(tk.Tk):
         for key, variable in self.vars.items():
             if key.startswith("last_"):
                 continue
-            config[key] = variable.get()
+            config[key] = self._device_id_by_label.get(variable.get(), "") if key in AUDIO_DEVICE_KEYS else variable.get()
         config["scenario"] = scenario_key(config["scenario"])
         config["overlay_visible"] = self.overlay_visible.get()
         config["overlay_topmost"] = self.overlay_topmost.get()
@@ -1045,7 +1078,8 @@ class TranslatorApp(tk.Tk):
     def _load_config_into_widgets(self, updated: dict) -> None:
         for key, variable in self.vars.items():
             if key in updated:
-                variable.set(scenario_label(str(updated[key])) if key == "scenario" else str(updated[key]))
+                value = self._device_label_by_id.get(str(updated[key]), "系統預設") if key in AUDIO_DEVICE_KEYS else scenario_label(str(updated[key])) if key == "scenario" else str(updated[key])
+                variable.set(value)
         self.overlay_visible.set(bool(updated.get("overlay_visible", self.overlay_visible.get())))
         self.overlay_topmost.set(bool(updated.get("overlay_topmost", self.overlay_topmost.get())))
         self.show_language_labels.set(bool(updated.get("show_language_labels", self.show_language_labels.get())))
@@ -1187,7 +1221,7 @@ class TranslatorApp(tk.Tk):
         import numpy as np
         import sounddevice as sd
 
-        device = find_device(self.vars["tts_output_device"].get(), want_output=True)
+        device = find_device(self._config_from_vars()["tts_output_device"], want_output=True)
         samplerate = 24000
         data = np.array([math.sin(2 * math.pi * 440 * i / samplerate) * 0.2 for i in range(samplerate // 4)], dtype="float32")
         sd.play(data, samplerate=samplerate, device=device, blocking=True)
@@ -1209,11 +1243,11 @@ class TranslatorApp(tk.Tk):
     def _test_virtual_mic(self) -> None:
         config = self._config_from_vars()
         try:
-            cable_output = find_device("CABLE Output", want_output=False)
-            if cable_output is None:
-                raise RuntimeError("找不到 CABLE Output，請先安裝 VB-CABLE")
+            if not config["virtual_mic_input_device"]:
+                raise DeviceResolutionError("請先選擇虛擬麥克風檢查輸入")
+            virtual_input = find_device(config["virtual_mic_input_device"], want_output=False)
             path = APP_DIR / "cache" / "audio" / "virtual-mic-test.wav"
-            capture = threading.Thread(target=capture_wav, args=(path, cable_output, 2.0))
+            capture = threading.Thread(target=capture_wav, args=(path, virtual_input, 2.0))
             capture.start()
             time.sleep(0.15)
             self._play_tts_test(config)
@@ -1231,7 +1265,7 @@ class TranslatorApp(tk.Tk):
 
     def _play_tts_test(self, config: dict) -> None:
         provider = config.get("tts_provider", "local")
-        device = self.vars["tts_output_device"].get()
+        device = config["tts_output_device"]
         tts = TextToSpeech(config)
         if provider == "local":
             tts.speak_local("翻譯語音輸出測試", device)

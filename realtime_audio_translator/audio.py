@@ -1,4 +1,5 @@
 import audioop
+import json
 import queue
 import threading
 import time
@@ -25,30 +26,91 @@ def list_audio_devices() -> list[dict]:
                 "input_channels": int(device["max_input_channels"]),
                 "output_channels": int(device["max_output_channels"]),
                 "hostapi": hostapis[device["hostapi"]]["name"],
+                "default_samplerate": float(device["default_samplerate"]),
             }
         )
     return devices
 
 
 def format_device_label(device: dict) -> str:
-    return f"{device['name']} [{device['hostapi']}]"
+    return f"{device['name']} [{device['hostapi']} · #{device['index']}]"
 
 
-def device_name_from_label(label: str) -> str:
-    return label.rsplit(" [", 1)[0]
+class DeviceResolutionError(ValueError):
+    pass
+
+
+DEVICE_ID_FIELDS = ("index", "name", "hostapi", "input_channels", "output_channels", "default_samplerate")
+
+
+def device_identity(device: dict) -> str:
+    descriptor = {key: device[key] for key in DEVICE_ID_FIELDS}
+    return "portaudio:" + json.dumps(descriptor, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+
+
+def device_descriptor(identity: str) -> dict:
+    if not str(identity).startswith("portaudio:"):
+        raise DeviceResolutionError("音訊裝置設定無效，請重新選擇裝置")
+    try:
+        descriptor = json.loads(str(identity).removeprefix("portaudio:"))
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise DeviceResolutionError("音訊裝置設定無效，請重新選擇裝置") from exc
+    if not isinstance(descriptor, dict) or any(key not in descriptor for key in DEVICE_ID_FIELDS):
+        raise DeviceResolutionError("音訊裝置設定不完整，請重新選擇裝置")
+    try:
+        descriptor["index"] = int(descriptor["index"])
+        descriptor["input_channels"] = int(descriptor["input_channels"])
+        descriptor["output_channels"] = int(descriptor["output_channels"])
+        descriptor["default_samplerate"] = float(descriptor["default_samplerate"])
+        descriptor["name"] = str(descriptor["name"])
+        descriptor["hostapi"] = str(descriptor["hostapi"])
+    except (TypeError, ValueError) as exc:
+        raise DeviceResolutionError("音訊裝置設定無效，請重新選擇裝置") from exc
+    return descriptor
+
+
+def _device_signature(device: dict) -> tuple:
+    return tuple(device[key] for key in DEVICE_ID_FIELDS if key not in {"index", "default_samplerate"})
+
+
+def find_device(identity: str, want_output: bool, devices: list[dict] | None = None) -> int:
+    if not identity:
+        try:
+            default = _sd().query_devices(kind="output" if want_output else "input")
+            return int(default["index"])
+        except Exception as exc:
+            raise DeviceResolutionError("找不到系統預設音訊裝置") from exc
+    saved = device_descriptor(identity)
+    try:
+        available = devices if devices is not None else list_audio_devices()
+    except Exception as exc:
+        raise DeviceResolutionError("無法讀取音訊裝置清單") from exc
+    candidates = [
+        device for device in available
+        if device["output_channels" if want_output else "input_channels"] > 0
+    ]
+    exact = next((device for device in candidates if device["index"] == saved["index"] and _device_signature(device) == _device_signature(saved)), None)
+    if exact:
+        return int(exact["index"])
+    matches = [device for device in candidates if _device_signature(device) == _device_signature(saved)]
+    if len(matches) == 1:
+        return int(matches[0]["index"])
+    if len(matches) > 1:
+        raise DeviceResolutionError(f"音訊裝置「{saved['name']}」有多個相同端點，請重新選擇")
+    raise DeviceResolutionError(f"找不到已儲存的音訊裝置「{saved['name']}」，請重新連接或重新選擇")
+
+
+def same_device_identity(left: str, right: str) -> bool:
+    if not left or not right:
+        return False
+    try:
+        return device_descriptor(left) == device_descriptor(right)
+    except DeviceResolutionError:
+        return False
 
 
 def virtual_mic_recaptures_tts(microphone_device: str, tts_output_device: str) -> bool:
-    microphone = device_name_from_label(microphone_device).lower()
-    output = device_name_from_label(tts_output_device).lower()
-    return "cable output" in microphone and "cable input" in output
-
-
-def loopback_device_for_output(loopback_devices, output_name: str):
-    output = device_name_from_label(output_name).lower().strip()
-    if not output:
-        return None
-    return next((device for device in loopback_devices if output in str(device.get("name", "")).lower()), None)
+    return same_device_identity(microphone_device, tts_output_device)
 
 
 def audio_segment_active(path: Path, threshold: float) -> bool:
@@ -63,26 +125,16 @@ def audio_segment_active(path: Path, threshold: float) -> bool:
         return audioop.rms(frames, handle.getsampwidth()) / peak >= threshold
 
 
-def find_device(name_part: str, want_output: bool) -> int | None:
-    needle = device_name_from_label(name_part).lower().strip()
-    if not needle:
-        return None
-    for device in list_audio_devices():
-        if needle in device["name"].lower():
-            if want_output and device["output_channels"] > 0:
-                return device["index"]
-            if not want_output and device["input_channels"] > 0:
-                return device["index"]
-    return None
-
-
 def capture_wav(path: Path, device_index: int, seconds: float, loopback: bool = False, cancel_event=None) -> Path:
     import numpy as np
 
     sd = _sd()
     device = sd.query_devices(device_index)
     if loopback:
-        return _capture_loopback_wav(path, device, seconds, cancel_event)
+        output = next((candidate for candidate in list_audio_devices() if candidate["index"] == device_index), None)
+        if output is None:
+            raise DeviceResolutionError("已選擇的輸出裝置已不可用")
+        return _capture_loopback_wav(path, output, seconds, cancel_event)
     samplerate = int(device.get("default_samplerate") or 48000)
     channels = int(device["max_input_channels"])
     channels = max(1, min(channels, 2))
@@ -108,14 +160,35 @@ def capture_wav(path: Path, device_index: int, seconds: float, loopback: bool = 
     return path
 
 
+def _pyaudio_output_for_device(audio, output_device: dict) -> dict:
+    outputs = []
+    for index in range(audio.get_device_count()):
+        candidate = audio.get_device_info_by_index(index)
+        if int(candidate.get("maxOutputChannels", 0)) <= 0:
+            continue
+        hostapi = audio.get_host_api_info_by_index(int(candidate["hostApi"]))["name"]
+        if (
+            str(candidate["name"]) == str(output_device["name"])
+            and str(hostapi) == str(output_device["hostapi"])
+            and int(candidate["maxOutputChannels"]) == int(output_device["output_channels"])
+            and float(candidate["defaultSampleRate"]) == float(output_device["default_samplerate"])
+        ):
+            outputs.append(candidate)
+    if len(outputs) != 1:
+        reason = "有多個相同端點" if outputs else "不存在"
+        raise DeviceResolutionError(f"無法對應 WASAPI loopback：輸出裝置「{output_device['name']}」{reason}")
+    return outputs[0]
+
+
 def _capture_loopback_wav(path: Path, output_device: dict, seconds: float, cancel_event=None) -> Path:
     import numpy as np
     import pyaudiowpatch as pyaudio
 
     with pyaudio.PyAudio() as audio:
-        loopback = loopback_device_for_output(audio.get_loopback_device_info_generator(), output_device["name"])
+        output = _pyaudio_output_for_device(audio, output_device)
+        loopback = audio.get_wasapi_loopback_analogue_by_dict(output)
         if loopback is None:
-            raise RuntimeError(f"找不到喇叭的 WASAPI loopback 裝置：{output_device['name']}")
+            raise DeviceResolutionError(f"找不到輸出裝置「{output_device['name']}」的 WASAPI loopback")
         samplerate = int(loopback["defaultSampleRate"])
         channels = max(1, int(loopback["maxInputChannels"]))
         frames = int(samplerate * seconds)
