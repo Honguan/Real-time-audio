@@ -50,8 +50,37 @@ class EngineTests(unittest.TestCase):
             engine._pipeline("speaker").translator = StoppingTranslator(engine, "你好")
             engine._process_segments("speaker", QueuedWorker(wav))
             self.assertIsInstance(load_config(state_root)["last_latency_seconds"], float)
+            self.assertFalse(wav.exists())
 
         self.assertTrue(any(status.startswith("喇叭延遲 ") for status in statuses))
+
+    def test_engine_reports_bounded_queue_overload_metrics(self):
+        statuses = []
+        config = DEFAULT_CONFIG.copy()
+        config["record_logs"] = False
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            wavs = [root / f"clip-{index}.wav" for index in range(3)]
+            for wav in wavs:
+                write_wav(wav, 12000)
+            worker = QueuedWorker(wavs[0])
+            worker.queue = queue.Queue(maxsize=3)
+            for wav in wavs:
+                worker.queue.put_nowait(wav)
+            worker.dropped_segments = 4
+            engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, statuses.append)
+            engine.running = True
+            engine.transcriber = StaticTranscriber("hello")
+            engine._pipeline("speaker").translator = StoppingTranslator(engine, "你好")
+
+            engine._process_segments("speaker", worker)
+
+            self.assertEqual(engine.pipelines["speaker"].metrics["last_queue_depth"], 2)
+            self.assertEqual(engine.pipelines["speaker"].metrics["last_dropped_segments"], 4)
+            self.assertTrue(any("處理落後，已略過 4 段；佇列 2/3" in status for status in statuses))
+            self.assertFalse(wavs[0].exists())
+            drain_queue(worker.queue)
 
     def test_engine_can_overlay_original_and_translation(self):
         overlays = []
@@ -70,6 +99,8 @@ class EngineTests(unittest.TestCase):
                 return TranslationResult("你好", 0.8)
 
         class Worker:
+            maxsize = 3
+
             def __init__(self, wav):
                 self.queue = self
                 self.wav = wav
@@ -77,6 +108,9 @@ class EngineTests(unittest.TestCase):
             def get(self, timeout):
                 engine.running = False
                 return self.wav
+
+            def qsize(self):
+                return 0
 
         with tempfile.TemporaryDirectory() as tmp:
             wav = Path(tmp) / "clip.wav"

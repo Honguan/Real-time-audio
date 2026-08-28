@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Callable
 
 from .asr import AudioTranscriber
-from .audio import SegmentWorker, audio_segment_active, device_name_from_label, find_device, virtual_mic_recaptures_tts
+from .audio import SegmentWorker, audio_segment_active, device_name_from_label, discard_audio_segment, find_device, virtual_mic_recaptures_tts
 from .ai_confidence import build_confidence_snapshot, format_confidence_status
 from .config import APP_DIR, DEFAULT_CONFIG, STATE_KEYS, TARGET_LANGUAGE_CHOICES, save_config_state, validate_language_pair
 from .logbook import ConversationLog
@@ -36,7 +36,9 @@ def drain_queue(items) -> int:
     removed = 0
     while True:
         try:
-            items.get_nowait()
+            item = items.get_nowait()
+            if isinstance(item, Path):
+                discard_audio_segment(item)
             removed += 1
         except queue.Empty:
             return removed
@@ -243,9 +245,24 @@ class RealtimeEngine:
                 wav = worker.queue.get(timeout=0.5)
             except Exception:
                 continue
-            if not config.get("speaker_enabled" if direction == "speaker" else "microphone_enabled", True):
-                continue
             try:
+                if not config.get("speaker_enabled" if direction == "speaker" else "microphone_enabled", True):
+                    continue
+                previous_dropped = metrics.get("last_dropped_segments", 0)
+                queue_depth = worker.queue.qsize()
+                dropped_segments = getattr(worker, "dropped_segments", 0)
+                try:
+                    processing_lag = max(0.0, time.time() - wav.stat().st_mtime)
+                except OSError:
+                    processing_lag = 0.0
+                backlog_metrics = {
+                    "last_queue_depth": queue_depth,
+                    "last_dropped_segments": dropped_segments,
+                    "last_processing_lag_seconds": processing_lag,
+                }
+                self._record_metrics(direction, backlog_metrics, set(backlog_metrics))
+                if dropped_segments > previous_dropped or queue_depth >= max(1, worker.queue.maxsize - 1):
+                    self._publish(session, self.status, f"{direction_label(direction)}：處理落後，已略過 {dropped_segments} 段；佇列 {queue_depth}/{worker.queue.maxsize}")
                 started = time.perf_counter()
                 if not audio_segment_active(wav, config.get("speech_threshold", 0.01)):
                     continue
@@ -354,6 +371,8 @@ class RealtimeEngine:
                     self._publish(session, self.status, f"{direction_label(direction)}延遲 {latency:.2f} 秒；{format_confidence_status(snapshot, bool(config.get('advanced_mode')))}")
             except Exception as exc:
                 self._publish(session, self.status, f"{direction_label(direction)}：{exc}")
+            finally:
+                discard_audio_segment(wav)
 
     def _speak_translation(self, direction: str, translated: str, target: str, tts_device: str, session: str | None = None) -> float | None:
         while not self._tts_lock.acquire(timeout=0.05):
