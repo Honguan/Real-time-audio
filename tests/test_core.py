@@ -2377,9 +2377,7 @@ class CoreTests(unittest.TestCase):
         self.assertIn("require_runtime_asset", workflow)
         self.assertIn("github.event_name == 'push' || inputs.build_runtime == 'true'", workflow)
         self.assertIn("python -m pip install -r requirements.txt", workflow)
-        self.assertIn("unittest discover -s tests -v", workflow)
-        self.assertIn("if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }", workflow)
-        self.assertIn("compileall realtime_audio_translator tests", workflow)
+        self.assertIn(".\\scripts\\test.ps1", workflow)
         self.assertIn("releases?per_page=20", workflow)
         self.assertNotIn("/releases/latest", workflow)
         self.assertIn("Sort-Object updated_at -Descending", workflow)
@@ -2401,6 +2399,25 @@ class CoreTests(unittest.TestCase):
         self.assertIn("dist-release/*.zip", workflow)
         self.assertIn("dist-release/*.7z", workflow)
         self.assertIn("dist-release/SHA256SUMS.txt", workflow)
+
+    def test_ci_workflow_gates_push_and_pull_requests_with_shared_tests(self):
+        ci_path = Path(".github/workflows/ci.yml")
+        script_path = Path("scripts/test.ps1")
+
+        self.assertTrue(ci_path.is_file())
+        self.assertTrue(script_path.is_file())
+        self.assertFalse(Path(".github/workflows/test.yml").exists())
+
+        ci = ci_path.read_text(encoding="utf-8")
+        script = script_path.read_text(encoding="utf-8")
+        self.assertIn("push:", ci)
+        self.assertIn("pull_request:", ci)
+        self.assertGreaterEqual(ci.count("- master"), 2)
+        self.assertIn('cache: "pip"', ci)
+        self.assertIn(".\\scripts\\test.ps1", ci)
+        self.assertIn("& $Python -m unittest discover -s tests", script)
+        self.assertIn("& $Python -m compileall -q realtime_audio_translator tests", script)
+        self.assertIn("$LASTEXITCODE", script)
 
     def test_release_workflow_packages_basic_offline_languages(self):
         workflow = Path(".github/workflows/release.yml").read_text(encoding="utf-8")
