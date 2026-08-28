@@ -14,7 +14,7 @@ from unittest.mock import patch
 from realtime_audio_translator.audio import audio_segment_active, device_name_from_label, find_device, loopback_device_for_output, virtual_mic_recaptures_tts
 from realtime_audio_translator.asr import AudioTranscriber, add_runtime_dll_directory, add_xxl_data
 from realtime_audio_translator.commands import command_choices, parse_help_options
-from realtime_audio_translator.config import DEFAULT_CONFIG, clear_cache, clear_logs, ensure_app_dirs, ensure_glossary_file, load_config, save_audio_devices, save_config
+from realtime_audio_translator.config import DEFAULT_CONFIG, _has_reparse_point, clear_cache, clear_logs, ensure_app_dirs, ensure_glossary_file, load_config, log_files_to_clear, save_audio_devices, save_config
 from realtime_audio_translator.ai_orchestrator import plan_session
 from realtime_audio_translator.ai_auto_tuner import apply_tuning, recommend_tuning
 from realtime_audio_translator.ai_confidence import build_confidence_snapshot, format_confidence_status
@@ -1465,10 +1465,17 @@ class CoreTests(unittest.TestCase):
             custom_logs = root / "custom-logs"
             ensure_app_dirs(root)
             (root / "logs" / "app.log").write_text("app event", encoding="utf-8")
-            (root / "logs" / "session.jsonl").write_text("secret", encoding="utf-8")
+            root_log = ConversationLog(root / "logs", "session")
+            root_log.append("me", "en", "zh", "hello", "你好", "local")
             (root / "exports" / "subtitles" / "session.srt").write_text("secret", encoding="utf-8")
             custom_logs.mkdir()
-            (custom_logs / "session.jsonl").write_text("secret", encoding="utf-8")
+            custom_log = ConversationLog(custom_logs, "session")
+            custom_log.append("me", "en", "zh", "hello", "你好", "local")
+            (custom_logs / "notes.txt").write_text("keep", encoding="utf-8")
+            (custom_logs / "notes.md").write_text("keep", encoding="utf-8")
+            (custom_logs / "data.jsonl").write_text('{"unrelated": true}\n', encoding="utf-8")
+            (custom_logs / "unrelated").mkdir()
+            (custom_logs / "unrelated" / "keep.jsonl").write_text("keep", encoding="utf-8")
             (root / "cache" / "audio" / "clip.wav").write_bytes(b"audio")
             (root / "cache" / "temp_audio" / "clip.wav").write_bytes(b"audio")
             cache_translation(root / "cache" / "translation_cache.db", "local", "en", "zh", "hello", "你好")
@@ -1483,11 +1490,62 @@ class CoreTests(unittest.TestCase):
             self.assertEqual([path.name for path in (root / "logs").iterdir()], ["app.log"])
             self.assertEqual((root / "logs" / "app.log").read_text(encoding="utf-8"), "")
             self.assertEqual(list((root / "exports" / "subtitles").iterdir()), [])
-            self.assertEqual([path.name for path in custom_logs.iterdir()], ["app.log"])
+            self.assertEqual(sorted(path.name for path in custom_logs.iterdir()), ["data.jsonl", "notes.md", "notes.txt", "unrelated"])
+            self.assertEqual((custom_logs / "notes.txt").read_text(encoding="utf-8"), "keep")
+            self.assertEqual((custom_logs / "notes.md").read_text(encoding="utf-8"), "keep")
+            self.assertTrue((custom_logs / "data.jsonl").exists())
+            self.assertTrue((custom_logs / "unrelated" / "keep.jsonl").exists())
             self.assertEqual(list((root / "cache" / "audio").iterdir()), [])
             self.assertEqual(list((root / "cache" / "temp_audio").iterdir()), [])
             self.assertIsNone(cached_translation(root / "cache" / "translation_cache.db", "local", "en", "zh", "hello"))
             self.assertFalse(custom_cache.exists())
+
+    def test_log_cleanup_rejects_root_relative_and_reparse_targets(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            ensure_app_dirs(root)
+
+            for unsafe in (root, root.parent, Path("."), Path(root.anchor)):
+                with self.subTest(unsafe=unsafe), self.assertRaises(ValueError):
+                    log_files_to_clear(root, unsafe)
+
+            with patch("realtime_audio_translator.config._has_reparse_point", return_value=True):
+                with self.assertRaisesRegex(ValueError, "符號連結或 junction"):
+                    log_files_to_clear(root, root / "linked-logs")
+
+    def test_reparse_point_detection_uses_windows_file_attribute(self):
+        fake_path = unittest.mock.MagicMock(spec=Path)
+        fake_path.parents = ()
+        fake_path.is_symlink.return_value = False
+        fake_path.lstat.return_value.st_file_attributes = getattr(__import__("stat"), "FILE_ATTRIBUTE_REPARSE_POINT", 1024)
+
+        self.assertTrue(_has_reparse_point(fake_path))
+
+    def test_external_log_cleanup_requires_confirmation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            external = root.parent / f"{root.name}-external-logs"
+            external.mkdir()
+            self.addCleanup(lambda: __import__("shutil").rmtree(external, ignore_errors=True))
+            log = ConversationLog(external, "session")
+            log.append("me", "en", "zh", "hello", "你好", "local")
+            (external / "notes.txt").write_text("keep", encoding="utf-8")
+            app = TranslatorApp.__new__(TranslatorApp)
+            app.config = {"log_dir": str(external)}
+            app._save = lambda: None
+
+            with patch("realtime_audio_translator.gui.APP_DIR", root), patch("realtime_audio_translator.gui.messagebox.askyesno", return_value=False) as confirm:
+                self.assertIsNone(app._confirm_log_cleanup())
+
+            self.assertIn(str(external), confirm.call_args.args[1])
+            self.assertIn("2 個", confirm.call_args.args[1])
+            self.assertTrue((external / "session.jsonl").exists())
+
+            clear_logs(root, external)
+
+            self.assertFalse((external / "session.jsonl").exists())
+            self.assertFalse((external / "session.md").exists())
+            self.assertEqual((external / "notes.txt").read_text(encoding="utf-8"), "keep")
 
     def test_app_log_appends_json_lines(self):
         with tempfile.TemporaryDirectory() as tmp:
