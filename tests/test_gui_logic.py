@@ -1,4 +1,5 @@
 import queue
+import threading
 import unittest
 from pathlib import Path
 from unittest.mock import Mock
@@ -9,6 +10,63 @@ from realtime_audio_translator.gui import LANGUAGE_CHOICES, PERFORMANCE_CHOICES,
 
 
 class GuiLogicTests(unittest.TestCase):
+    def test_background_ui_events_run_only_when_main_thread_drains_them(self):
+        app = TranslatorApp.__new__(TranslatorApp)
+        app._engine_events = queue.Queue()
+        app._closing = False
+        app.engine = None
+        app.after = lambda *args: None
+        calls = []
+
+        thread = threading.Thread(target=app._post_ui, args=("callback", calls.append, "done"))
+        thread.start()
+        thread.join()
+
+        self.assertEqual(calls, [])
+        app._drain_ui_events()
+        self.assertEqual(calls, ["done"])
+
+    def test_ui_event_pump_rejects_worker_thread_execution(self):
+        app = TranslatorApp.__new__(TranslatorApp)
+        app._engine_events = queue.Queue()
+        app._closing = False
+        errors = []
+
+        def drain():
+            try:
+                app._drain_ui_events()
+            except AssertionError as exc:
+                errors.append(exc)
+
+        thread = threading.Thread(target=drain)
+        thread.start()
+        thread.join()
+
+        self.assertEqual(len(errors), 1)
+
+    def test_ui_event_pump_handles_subtitle_stress_and_drops_events_after_close(self):
+        app = TranslatorApp.__new__(TranslatorApp)
+        app._engine_events = queue.Queue()
+        app._closing = False
+        app.after = lambda *args: None
+        engine = object()
+        app.engine = engine
+        overlays = []
+        app._overlay_update = lambda speaker, mine: overlays.append((speaker, mine))
+
+        threads = [threading.Thread(target=app._post_ui, args=("overlay", str(index), ""), kwargs={"engine": engine}) for index in range(1000)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        app._drain_ui_events()
+        self.assertEqual(len(overlays), 1000)
+
+        app._closing = True
+        app._post_ui("overlay", "stale", "", engine=engine)
+        app._drain_ui_events()
+        self.assertEqual(len(overlays), 1000)
+
     def test_config_from_vars_preserves_runtime_state(self):
         app = TranslatorApp.__new__(TranslatorApp)
         app.config = DEFAULT_CONFIG.copy()
@@ -287,7 +345,7 @@ class GuiLogicTests(unittest.TestCase):
         app = TranslatorApp.__new__(TranslatorApp)
         app.engine = type("Engine", (), {"stop": lambda self: "已停止"})()
         app._engine_events = queue.Queue()
-        app._engine_events.put((app.engine, "overlay", ("stale", "")))
+        app._post_ui("overlay", "stale", "", engine=app.engine)
         app._closing = False
         statuses = []
         app._engine_status = statuses.append

@@ -77,8 +77,8 @@ class ReleaseModelsTests(unittest.TestCase):
         self.assertIn('if not model_available(self.config["model"], self.repo_root / "_models", app_models):', gui_source)
         self.assertIn('messagebox.showerror("找不到模型", model_install_message(self.config["model"], app_models))', gui_source)
         self.assertIn('self._set_last_error("")', gui_source)
-        self.assertIn('self._engine_events.put((engine, "overlay"', gui_source)
-        self.assertIn('self._engine_events.put((engine, "status"', gui_source)
+        self.assertIn('self._post_ui("overlay", speaker, mine, engine=engine)', gui_source)
+        self.assertIn('self._post_ui("status", message, engine=engine)', gui_source)
 
     def test_runtime_status_uses_configured_model_folder(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
