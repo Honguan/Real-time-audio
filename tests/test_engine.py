@@ -4,14 +4,91 @@ import threading
 import time
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 from realtime_audio_translator.asr import TranscriptionResult
 from realtime_audio_translator.config import DEFAULT_CONFIG, _has_reparse_point, clear_cache, clear_logs, ensure_app_dirs, ensure_glossary_file, load_config, log_files_to_clear, save_audio_devices, save_config
+from realtime_audio_translator.audio import WorkerHealth
 from realtime_audio_translator.engine import RealtimeEngine, audio_devices_overlap, direction_label, drain_queue, overlay_text_from_config, safe_target_language
 from realtime_audio_translator.providers import TextToSpeech, TranslationResult, Translator, build_google_translate_request, build_openai_translation_request, google_access_token
 from tests.helpers import QueuedWorker, StaticTranscriber, StoppingTranslator, write_wav
 
 
 class EngineTests(unittest.TestCase):
+    def test_engine_stops_running_when_its_only_capture_direction_fails(self):
+        statuses = []
+        engine = RealtimeEngine(Path("."), DEFAULT_CONFIG.copy(), lambda speaker, mine: None, statuses.append)
+        engine.running = True
+        engine._session = "health"
+        engine._active_directions = {"me"}
+        error = OSError("device removed")
+        health = WorkerHealth("me", "failed", "audio_io_error", str(error), time.time(), 4, error)
+
+        engine._capture_health_changed(health, "health")
+
+        self.assertFalse(engine.running)
+        self.assertTrue(engine._cancel.is_set())
+        self.assertIs(engine.capture_health["me"].error, error)
+        self.assertIn("麥克風擷取失敗 [audio_io_error]：device removed；請停止後重新啟動", statuses)
+
+    def test_capture_thread_failure_is_wired_to_engine_health(self):
+        import realtime_audio_translator.audio as audio_module
+        import realtime_audio_translator.engine as engine_module
+
+        statuses = []
+        config = DEFAULT_CONFIG.copy()
+        config["record_logs"] = False
+        engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, statuses.append)
+        engine.running = True
+        engine._session = "health-thread"
+        engine.transcriber = StaticTranscriber("hello")
+
+        with patch.object(engine_module, "find_device", return_value=1), patch.object(audio_module, "capture_wav", side_effect=RuntimeError("device removed")):
+            self.assertTrue(engine._start_direction("me", "Microphone", False))
+            for thread in engine.threads:
+                thread.join(1)
+
+        self.assertFalse(any(thread.is_alive() for thread in engine.threads))
+        self.assertFalse(engine.running)
+        self.assertEqual(engine.capture_health["me"].state, "failed")
+        self.assertTrue(any("麥克風擷取失敗 [capture_fatal]：device removed" in status for status in statuses))
+
+    def test_engine_keeps_healthy_direction_running_when_other_capture_fails(self):
+        statuses = []
+        engine = RealtimeEngine(Path("."), DEFAULT_CONFIG.copy(), lambda speaker, mine: None, statuses.append)
+        engine.running = True
+        engine._session = "health"
+        engine._active_directions = {"speaker", "me"}
+        engine.capture_health["speaker"] = WorkerHealth("speaker", "capturing")
+        health = WorkerHealth("me", "failed", "portaudio_-9985", "device unavailable", time.time(), 4, OSError("device unavailable"))
+
+        engine._capture_health_changed(health, "health")
+
+        self.assertTrue(engine.running)
+        self.assertFalse(engine._cancel.is_set())
+        self.assertIn("麥克風擷取失敗 [portaudio_-9985]：device unavailable；請停止後重新啟動", statuses)
+
+        engine.set_paused(False)
+        engine.set_muted(False)
+
+        self.assertEqual(statuses[-2:], ["部分可用；麥克風擷取失敗；請停止後重新啟動"] * 2)
+
+    def test_start_status_rechecks_capture_health_after_waiting_for_callback_lock(self):
+        statuses = []
+        engine = RealtimeEngine(Path("."), DEFAULT_CONFIG.copy(), lambda speaker, mine: None, statuses.append)
+        engine.running = True
+        engine._session = "health-race"
+        engine._callback_lock.acquire()
+        publish = threading.Thread(target=engine._publish_capture_status, args=("health-race",))
+        try:
+            publish.start()
+            engine.capture_health["me"] = WorkerHealth("me", "failed")
+        finally:
+            engine._callback_lock.release()
+        publish.join(1)
+
+        self.assertFalse(publish.is_alive())
+        self.assertEqual(statuses, ["部分可用；麥克風擷取失敗；請停止後重新啟動"])
+
     def test_engine_rejects_identical_fixed_languages_before_start(self):
         statuses = []
         config = DEFAULT_CONFIG.copy()

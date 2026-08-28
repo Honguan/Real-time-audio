@@ -13,6 +13,89 @@ from tests.helpers import write_wav
 
 
 class AudioTests(unittest.TestCase):
+    def test_capture_wav_reports_sounddevice_input_overflow(self):
+        import realtime_audio_translator.audio as audio_module
+
+        class SoundDevice:
+            ignore_errors = None
+
+            def query_devices(self, index):
+                return {"default_samplerate": 48000, "max_input_channels": 1}
+
+            def rec(self, *args, **kwargs):
+                return object()
+
+            def wait(self, ignore_errors):
+                self.ignore_errors = ignore_errors
+                return type("Status", (), {"input_overflow": True})()
+
+        sounddevice = SoundDevice()
+        with tempfile.TemporaryDirectory() as tmp, patch.object(audio_module, "_sd", return_value=sounddevice):
+            with self.assertRaisesRegex(audio_module.CaptureOverflowError, "input overflow"):
+                audio_module.capture_wav(Path(tmp) / "clip.wav", 1, 0.1)
+
+        self.assertEqual(audio_module.capture_error_code(audio_module.CaptureOverflowError("overflow")), "audio_overflow")
+        self.assertIs(sounddevice.ignore_errors, False)
+
+    def test_segment_worker_recovers_from_temporary_capture_errors(self):
+        import realtime_audio_translator.audio as audio_module
+
+        events = []
+        attempts = 0
+        with tempfile.TemporaryDirectory() as tmp:
+            worker = SegmentWorker(Path(tmp), 1, 2, False, health_callback=events.append)
+
+            def capture(path, *_args):
+                nonlocal attempts
+                attempts += 1
+                if attempts < 3:
+                    raise OSError("device busy")
+                path.write_bytes(b"wav")
+                worker._stopped = True
+                return path
+
+            with patch.object(audio_module, "CAPTURE_RETRY_DELAYS", (0, 0, 0)), patch.object(audio_module, "capture_wav", side_effect=capture):
+                worker.run("me")
+
+        self.assertEqual(attempts, 3)
+        self.assertEqual([event.state for event in events], ["capturing", "degraded", "recovering", "degraded", "recovering", "capturing"])
+        self.assertEqual(events[1].error_code, "audio_io_error")
+        self.assertIsInstance(events[1].error, OSError)
+
+    def test_segment_worker_reports_permanent_portaudio_failure_without_raising(self):
+        import realtime_audio_translator.audio as audio_module
+
+        class PortAudioError(Exception):
+            pass
+
+        events = []
+        error = PortAudioError("device unavailable", -9985, (1, -1, "removed"))
+        with tempfile.TemporaryDirectory() as tmp:
+            worker = SegmentWorker(Path(tmp), 1, 2, False, health_callback=events.append)
+            with patch.object(audio_module, "CAPTURE_RETRY_DELAYS", (0, 0, 0)), patch.object(audio_module, "capture_wav", side_effect=error) as capture:
+                worker.run("speaker")
+
+        self.assertEqual(capture.call_count, 4)
+        self.assertTrue(worker._stopped)
+        self.assertEqual(worker.health.state, "failed")
+        self.assertEqual(worker.health.error_code, "portaudio_-9985")
+        self.assertEqual(worker.health.attempt, 4)
+        self.assertIs(worker.health.error, error)
+        self.assertIsNotNone(worker.health.failure_timestamp)
+
+    def test_segment_worker_does_not_retry_fatal_capture_error(self):
+        import realtime_audio_translator.audio as audio_module
+
+        error = RuntimeError("invalid capture configuration")
+        with tempfile.TemporaryDirectory() as tmp:
+            worker = SegmentWorker(Path(tmp), 1, 2, False)
+            with patch.object(audio_module, "capture_wav", side_effect=error) as capture:
+                worker.run("me")
+
+        self.assertEqual(capture.call_count, 1)
+        self.assertEqual(worker.health.state, "failed")
+        self.assertEqual(worker.health.error_code, "capture_fatal")
+
     def test_segment_worker_drops_oldest_segments_when_queue_is_full(self):
         import realtime_audio_translator.audio as audio_module
 

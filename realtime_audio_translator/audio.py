@@ -1,7 +1,9 @@
 import audioop
 import queue
 import threading
+import time
 import wave
+from dataclasses import dataclass, field
 from pathlib import Path
 
 
@@ -89,7 +91,9 @@ def capture_wav(path: Path, device_index: int, seconds: float, loopback: bool = 
     if cancel_event is not None and cancel_event.wait(seconds):
         sd.stop()
         raise InterruptedError
-    sd.wait()
+    status = sd.wait(ignore_errors=False)
+    if getattr(status, "input_overflow", False):
+        raise CaptureOverflowError("PortAudio input overflow")
     if cancel_event is not None and cancel_event.is_set():
         raise InterruptedError
     if channels > 1:
@@ -128,7 +132,7 @@ def _capture_loopback_wav(path: Path, output_device: dict, seconds: float, cance
                 if cancel_event is not None and cancel_event.is_set():
                     raise InterruptedError
                 count = min(1024, frames)
-                chunks.append(stream.read(count, exception_on_overflow=False))
+                chunks.append(stream.read(count, exception_on_overflow=True))
                 frames -= count
     data = np.frombuffer(b"".join(chunks), dtype=np.int16)
     if cancel_event is not None and cancel_event.is_set():
@@ -146,6 +150,33 @@ def _capture_loopback_wav(path: Path, output_device: dict, seconds: float, cance
 
 
 MAX_PENDING_SEGMENTS = 3
+CAPTURE_RETRY_DELAYS = (0.1, 0.25, 0.5)
+
+
+class CaptureOverflowError(OSError):
+    pass
+
+
+@dataclass(frozen=True)
+class WorkerHealth:
+    direction: str
+    state: str
+    error_code: str = ""
+    message: str = ""
+    failure_timestamp: float | None = None
+    attempt: int = 0
+    error: BaseException | None = field(default=None, compare=False, repr=False)
+
+
+def capture_error_code(error: BaseException) -> str:
+    if isinstance(error, CaptureOverflowError):
+        return "audio_overflow"
+    if type(error).__name__ == "PortAudioError":
+        code = error.args[1] if len(error.args) > 1 else "unknown"
+        return f"portaudio_{code}"
+    if isinstance(error, OSError):
+        return "audio_io_error"
+    return "capture_fatal"
 
 
 def discard_audio_segment(path: Path) -> bool:
@@ -157,16 +188,34 @@ def discard_audio_segment(path: Path) -> bool:
 
 
 class SegmentWorker:
-    def __init__(self, cache_dir: Path, device_index: int, seconds: float, loopback: bool, cancel_event=None):
+    def __init__(self, cache_dir: Path, device_index: int, seconds: float, loopback: bool, cancel_event=None, health_callback=None):
         self.cache_dir = cache_dir
         self.device_index = device_index
         self.seconds = seconds
         self.loopback = loopback
         self._cancel = cancel_event or threading.Event()
         self._stopped = False
+        self._health_callback = health_callback
         self._queue_lock = threading.Lock()
         self.queue: queue.Queue[Path] = queue.Queue(maxsize=MAX_PENDING_SEGMENTS)
         self.dropped_segments = 0
+        self.health = WorkerHealth("", "stopped")
+
+    def _emit_health(self, direction: str, state: str, error: BaseException | None = None, attempt: int = 0) -> None:
+        self.health = WorkerHealth(
+            direction,
+            state,
+            capture_error_code(error) if error else "",
+            str(error) if error else "",
+            time.time() if error else None,
+            attempt,
+            error,
+        )
+        if self._health_callback:
+            try:
+                self._health_callback(self.health)
+            except Exception:
+                pass
 
     def stop(self) -> None:
         self._stopped = True
@@ -205,6 +254,8 @@ class SegmentWorker:
 
     def run(self, prefix: str) -> None:
         count = 0
+        failures = 0
+        self._emit_health(prefix, "capturing")
         while not self._stopped:
             path = self.cache_dir / f"{prefix}-{count:06d}.wav"
             try:
@@ -213,11 +264,25 @@ class SegmentWorker:
                     discard_audio_segment(captured)
                     return
                 self._enqueue(captured)
+                if failures:
+                    self._emit_health(prefix, "capturing")
+                    failures = 0
             except InterruptedError:
                 discard_audio_segment(path)
                 return
-            except Exception:
+            except Exception as exc:
                 discard_audio_segment(path)
+                failures += 1
+                recoverable = isinstance(exc, OSError) or type(exc).__name__ == "PortAudioError"
+                if recoverable and failures <= len(CAPTURE_RETRY_DELAYS):
+                    self._emit_health(prefix, "degraded", exc, failures)
+                    if self._cancel.wait(CAPTURE_RETRY_DELAYS[failures - 1]):
+                        return
+                    self._emit_health(prefix, "recovering", exc, failures)
+                    continue
                 self._stopped = True
-                raise
+                with self._queue_lock:
+                    self._discard_pending()
+                self._emit_health(prefix, "failed", exc, failures)
+                return
             count += 1
