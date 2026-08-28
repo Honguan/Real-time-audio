@@ -122,7 +122,19 @@ class AudioTests(unittest.TestCase):
             self.assertEqual(worker.queue.maxsize, 3)
             self.assertEqual([path.name for path in pending], ["me-000997.wav", "me-000998.wav", "me-000999.wav"])
             self.assertEqual(worker.dropped_segments, 997)
+            self.assertEqual(worker.max_queue_depth, 3)
             self.assertEqual(sorted(path.name for path in root.glob("*.wav")), [path.name for path in pending])
+
+    def test_segment_worker_keeps_capture_and_enqueue_timestamps_until_dequeue(self):
+        worker = SegmentWorker(Path("cache"), 1, 2, False)
+        captured = Path("clip.wav")
+        worker._enqueue(captured, {"capture_started_at": 10.0, "capture_completed_at": 12.0})
+
+        self.assertEqual(worker.queue.get_nowait(), captured)
+        timing = worker.take_timing(captured)
+        self.assertEqual(timing["capture_started_at"], 10.0)
+        self.assertGreaterEqual(timing["enqueued_at"], timing["capture_completed_at"])
+        self.assertEqual(worker.timings, {})
 
     def test_segment_worker_cancels_capture_without_queuing_a_file(self):
         import realtime_audio_translator.audio as audio_module

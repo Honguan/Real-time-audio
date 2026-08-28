@@ -48,6 +48,15 @@ class SubtitleExportTests(unittest.TestCase):
             row = json.loads((Path(tmp) / "session.jsonl").read_text(encoding="utf-8").splitlines()[0])
             self.assertEqual(row["latency_seconds"], 1.25)
 
+    def test_conversation_log_writes_pipeline_performance_and_timestamps(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = ConversationLog(Path(tmp), "session")
+            log.append("speaker", "en", "zh-TW", "hello", "hi", "google", performance={"last_asr_latency_seconds": 0.4}, timestamps={"capture_started_at": 10.0, "subtitle_published_at": 11.2})
+            row = json.loads((Path(tmp) / "session.jsonl").read_text(encoding="utf-8").splitlines()[0])
+
+            self.assertEqual(row["performance"]["last_asr_latency_seconds"], 0.4)
+            self.assertEqual(row["timestamps"]["subtitle_published_at"], 11.2)
+
     def test_jsonl_log_exports_to_srt(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

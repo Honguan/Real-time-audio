@@ -7,6 +7,7 @@ from .audio import find_device, same_device_identity, virtual_mic_recaptures_tts
 from .config import APP_DIR
 from .models import model_available, models_dir
 from .offline_translation import translation_model_available, translation_models_dir
+from .performance import ASR_BUDGET_SECONDS, ASR_LATENCY, END_TO_END_P95, END_TO_END_P95_BUDGET_SECONDS, QUEUE_WAIT, QUEUE_WAIT_BUDGET_SECONDS, TRANSLATION_BUDGET_SECONDS, TRANSLATION_LATENCY, TTS_PLAYBACK, TTS_STAGE_BUDGET_SECONDS, TTS_SYNTHESIS, metric_value
 from .runtime import runtime_dir, runtime_status
 
 
@@ -18,6 +19,13 @@ class DiagnosticIssue:
     detail: str
     fix: str
     action: str
+
+
+def _count(config: dict, key: str) -> int:
+    try:
+        return max(0, int(float(config.get(key, 0) or 0)))
+    except (TypeError, ValueError):
+        return 0
 
 
 def _devices_overlap(left: str, right: str) -> bool:
@@ -202,17 +210,15 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
             "檢查「TTS 輸出」、VB-CABLE 與 TTS 服務設定",
             "audio_settings",
         ))
-    try:
-        tts_latency = float(config.get("last_tts_latency_seconds") or 0)
-    except Exception:
-        tts_latency = 0
-    if tts_latency > 2.0:
+    tts_synthesis = metric_value(config, TTS_SYNTHESIS) or 0
+    tts_playback = metric_value(config, TTS_PLAYBACK) or 0
+    if tts_synthesis > TTS_STAGE_BUDGET_SECONDS or tts_playback > TTS_STAGE_BUDGET_SECONDS:
         issues.append(DiagnosticIssue(
             "tts_latency_high",
             "warning",
             "TTS 延遲過高",
-            f"最近一次翻譯語音播放約 {tts_latency:.1f} 秒",
-            "改用本機 TTS、降低語音輸出頻率，或檢查「TTS 輸出」裝置",
+            f"合成約 {tts_synthesis:.1f} 秒；播放約 {tts_playback:.1f} 秒",
+            "合成慢時檢查 TTS 供應商；播放慢時檢查音訊輸出裝置",
             "audio_settings",
         ))
     if config.get("virtual_mic_enabled", False) and config.get("last_virtual_mic_failed"):
@@ -275,16 +281,25 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
                 "若字幕語言跳動，請把「來源語言」從 auto 改成固定語言。",
                 "language_settings",
             ))
-    try:
-        current_latency = float(config.get("last_latency_seconds", 0))
-    except Exception:
-        current_latency = 0
-    if current_latency > 3.0:
+    asr_latency = metric_value(config, ASR_LATENCY) or 0
+    translation_latency = metric_value(config, TRANSLATION_LATENCY) or 0
+    queue_wait = metric_value(config, QUEUE_WAIT) or 0
+    p95_latency = metric_value(config, END_TO_END_P95) or 0
+    if asr_latency > ASR_BUDGET_SECONDS:
+        issues.append(DiagnosticIssue("asr_latency_high", "warning", "ASR 推論過慢", f"最近一次 ASR 約 {asr_latency:.1f} 秒", "改用較小模型、GPU 或低延遲分段", "optimize_settings"))
+    rate_limits = _count(config, "last_rate_limit_count")
+    dropped_segments = _count(config, "last_dropped_segments")
+    if translation_latency > TRANSLATION_BUDGET_SECONDS or rate_limits > 0:
+        title = "翻譯網路或供應商過慢" if config.get("provider") in {"google", "openai"} else "本機翻譯過慢"
+        issues.append(DiagnosticIssue("translation_latency_high", "warning", title, f"最近一次翻譯約 {translation_latency:.1f} 秒；限流 {rate_limits} 次", "檢查網路、API 限流，或改用本機翻譯", "api_settings"))
+    if queue_wait > QUEUE_WAIT_BUDGET_SECONDS or dropped_segments > 0:
+        issues.append(DiagnosticIssue("audio_queue_backlog", "warning", "音訊佇列處理落後", f"等待約 {queue_wait:.1f} 秒；已略過 {dropped_segments} 段", "縮短分段、改用較快模型，或降低輸入負載", "optimize_settings"))
+    if p95_latency > END_TO_END_P95_BUDGET_SECONDS:
         issues.append(DiagnosticIssue(
             "subtitle_latency_high",
             "warning",
             "字幕延遲過高",
-            f"最近一次處理延遲約 {current_latency:.1f} 秒",
+            f"端到端 p95 延遲約 {p95_latency:.1f} 秒",
             "按「自動優化」套用低延遲分段與 VAD 設定",
             "optimize_settings",
         ))
@@ -321,12 +336,7 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
                 "optimize_settings",
             ))
     if config.get("ai_auto_optimize", True):
-        latency = config.get("last_latency_seconds")
-        try:
-            latency = float(latency) if latency not in (None, "") else None
-        except Exception:
-            latency = None
-        tuning = recommend_tuning(config, cuda_devices=tuning_cuda_devices, vram_gb=tuning_vram_gb, latency_seconds=latency)
+        tuning = recommend_tuning(config, cuda_devices=tuning_cuda_devices, vram_gb=tuning_vram_gb)
         if tuning:
             issues.append(DiagnosticIssue(
                 "auto_tune_recommended",

@@ -110,8 +110,9 @@ class AiTests(unittest.TestCase):
         config = DEFAULT_CONFIG.copy()
         config["performance_mode"] = "quality"
         config["segment_seconds"] = 3.0
+        config["last_end_to_end_p95_seconds"] = 4.2
 
-        recommendations = recommend_tuning(config, cuda_devices=1, vram_gb=6, latency_seconds=4.2)
+        recommendations = recommend_tuning(config, cuda_devices=1, vram_gb=6)
         tuned = apply_tuning(config, recommendations)
 
         self.assertIn("reduce_latency", [item.code for item in recommendations])
@@ -120,7 +121,7 @@ class AiTests(unittest.TestCase):
         self.assertEqual(tuned["speech_threshold"], 0.02)
 
         config["model"] = "large-v3-turbo"
-        tuned = apply_tuning(config, recommend_tuning(config, cuda_devices=1, vram_gb=6, latency_seconds=4.2))
+        tuned = apply_tuning(config, recommend_tuning(config, cuda_devices=1, vram_gb=6))
 
         self.assertEqual(tuned["model"], "medium")
 
@@ -152,7 +153,7 @@ class AiTests(unittest.TestCase):
         config = DEFAULT_CONFIG.copy()
         config["tts_provider"] = "openai"
         config["tts_engine"] = "openai"
-        config["last_tts_latency_seconds"] = 2.4
+        config["last_tts_synthesis_seconds"] = 2.4
 
         recommendations = recommend_tuning(config, cuda_devices=1, vram_gb=8)
         tuned = apply_tuning(config, recommendations)
@@ -165,7 +166,7 @@ class AiTests(unittest.TestCase):
         config = DEFAULT_CONFIG.copy()
         config["tts_provider"] = "local"
         config["tts_rate"] = 0
-        config["last_tts_latency_seconds"] = 2.4
+        config["last_tts_playback_seconds"] = 2.4
 
         recommendations = recommend_tuning(config, cuda_devices=1, vram_gb=8)
         tuned = apply_tuning(config, recommendations)

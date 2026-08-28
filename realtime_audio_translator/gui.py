@@ -1136,7 +1136,7 @@ class TranslatorApp(tk.Tk):
         config["last_vram_gb"] = vram_gb
         self.config.update({"last_cuda_devices": devices, "last_vram_gb": vram_gb})
         save_config_state(APP_DIR, config, {"last_cuda_devices", "last_vram_gb"})
-        recommendations = recommend_tuning(config, devices, vram_gb, latency_seconds_value(config.get("last_latency_seconds")))
+        recommendations = recommend_tuning(config, devices, vram_gb)
         if recommendations:
             self._load_config_into_widgets(apply_tuning(config, recommendations))
             self._save()
