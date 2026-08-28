@@ -76,14 +76,14 @@ class Translator:
             return ""
         provider = self.config.get("provider", "google")
         cache_key = (provider, source_language, target_language, text.strip())
-        if cache_key in self.cache:
+        if cache_key in self.cache and not self._unverified_local_passthrough(provider, text, self.cache[cache_key]):
             self.last_confidence = 1.0
             return self._apply_glossary(self.cache[cache_key])
         db_path = Path(self.config.get("translation_cache_path", ""))
         persistent_cache_enabled = self.config.get("translation_cache_enabled", True)
         if persistent_cache_enabled and db_path:
             cached = cached_translation(db_path, provider, source_language, target_language, text)
-            if cached is not None:
+            if cached is not None and not self._unverified_local_passthrough(provider, text, cached):
                 self.cache[cache_key] = cached
                 self.last_confidence = 1.0
                 return self._apply_glossary(cached)
@@ -103,6 +103,9 @@ class Translator:
         if persistent_cache_enabled and db_path and not (provider == "local" and not self.config.get("local_translate_url", "").strip() and translated == text):
             cache_translation(db_path, provider, source_language, target_language, text, translated)
         return self._apply_glossary(translated)
+
+    def _unverified_local_passthrough(self, provider: str, text: str, translated: str) -> bool:
+        return provider == "local" and not self.config.get("local_translate_url", "").strip() and translated.strip() == text.strip()
 
     def _remember_context(self, text: str, translated: str) -> None:
         if text.strip() and translated.strip():
@@ -133,7 +136,10 @@ class Translator:
     def _local_translate(self, text: str, source_language: str, target_language: str) -> str:
         url = self.config.get("local_translate_url", "").strip()
         if not url:
-            return translate_offline(self.config, text, source_language, target_language) or self._argos_translate(text, source_language, target_language) or text
+            translated = translate_offline(self.config, text, source_language, target_language) or self._argos_translate(text, source_language, target_language)
+            if translated:
+                return translated
+            raise RuntimeError(f"找不到 {source_language}→{target_language} 的本機翻譯模型；請下載離線翻譯模型或設定本機翻譯 URL")
         response = requests.post(
             url,
             json={"q": text, "source": source_language, "target": target_language, "format": "text"},
