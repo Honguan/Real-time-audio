@@ -1,6 +1,7 @@
 import queue
 import threading
 import time
+import uuid
 from pathlib import Path
 from typing import Callable
 
@@ -59,8 +60,13 @@ class RealtimeEngine:
         self.status = status
         self.state_root = state_root
         self.running = False
+        self._closed = False
         self.paused = False
         self.muted = bool(config.get("start_muted", False))
+        self._session: str | None = None
+        self._cancel = threading.Event()
+        self._lifecycle_lock = threading.Lock()
+        self._callback_lock = threading.Lock()
         self.threads: list[threading.Thread] = []
         self.workers: list[SegmentWorker] = []
         self.log = ConversationLog(Path(config.get("log_dir") or APP_DIR / "logs")) if config.get("record_logs") else None
@@ -69,16 +75,22 @@ class RealtimeEngine:
         self.transcriber: AudioTranscriber | None = None
 
     def start(self) -> None:
-        if self.running:
-            return
+        with self._lifecycle_lock:
+            if self.running or self._closed:
+                return
+            self._session = uuid.uuid4().hex
+            session = self._session
+            self._cancel = threading.Event()
+            self.running = True
         try:
             validate_language_pair(self.config)
         except ValueError as exc:
-            self.status(str(exc))
+            self.running = False
+            if self._session == session:
+                self.status(str(exc))
             return
-        self.running = True
         try:
-            self.transcriber = AudioTranscriber(
+            transcriber = AudioTranscriber(
                 self.repo_root,
                 self.config["model"],
                 models_dir(self.config),
@@ -87,6 +99,8 @@ class RealtimeEngine:
                 self.config,
             )
         except Exception as exc:
+            if not self._session_active(session):
+                return
             self.running = False
             self.config["last_asr_failed"] = True
             self._save_state({"last_asr_failed"})
@@ -95,6 +109,9 @@ class RealtimeEngine:
                 message = "找不到 runtime：" + message.removeprefix("Runtime missing: ")
             self.status(message)
             return
+        if not self._session_active(session):
+            return
+        self.transcriber = transcriber
         self.config["last_asr_failed"] = False
         self._save_state({"last_asr_failed"})
         started = []
@@ -116,18 +133,40 @@ class RealtimeEngine:
         if skipped_mic_feedback:
             skips.append("麥克風擷取已略過：和虛擬麥克風輸出相同")
         if any(started):
-            self.status("執行中" + (f"；{'；'.join(skips)}" if skips else ""))
-        else:
+            if self._session_active(session):
+                self.status("執行中" + (f"；{'；'.join(skips)}" if skips else ""))
+        elif self._session == session:
             self.running = False
-            self.status("沒有可用音訊裝置" + (f"；{'；'.join(skips)}" if skips else ""))
+            if not self._cancel.is_set():
+                self.status("沒有可用音訊裝置" + (f"；{'；'.join(skips)}" if skips else ""))
 
-    def stop(self) -> None:
-        self.running = False
-        for worker in self.workers:
+    def stop(self, join_timeout: float = 5.0) -> str:
+        deadline = time.monotonic() + max(0.0, join_timeout)
+        with self._lifecycle_lock:
+            self.running = False
+            self._closed = True
+            self._cancel.set()
+            workers = list(self.workers)
+            threads = list(self.threads)
+        callback_stopped = self._callback_lock.acquire(timeout=max(0.0, deadline - time.monotonic()))
+        if callback_stopped:
+            self._callback_lock.release()
+        for worker in workers:
             worker.stop()
-        self.workers.clear()
-        self.threads.clear()
-        self.status("已停止")
+            drain_queue(worker.queue)
+        current = threading.current_thread()
+        for thread in threads:
+            if thread is not current:
+                thread.join(max(0.0, deadline - time.monotonic()))
+        alive = [thread for thread in threads if thread.is_alive()]
+        with self._lifecycle_lock:
+            self.threads = [thread for thread in self.threads if thread not in threads or thread in alive]
+            if not alive:
+                self.workers = [worker for worker in self.workers if worker not in workers]
+        pending = len(alive) + (not callback_stopped)
+        message = f"停止逾時：仍有 {pending} 個背景工作" if pending else "已停止"
+        self.status(message)
+        return message
 
     def set_paused(self, paused: bool) -> None:
         self.paused = paused
@@ -144,16 +183,28 @@ class RealtimeEngine:
         if device is None:
             self.status(f"{direction_label(direction)}：找不到音訊裝置")
             return False
-        worker = SegmentWorker(APP_DIR / "cache" / "audio", device, float(self.config["segment_seconds"]), loopback)
-        self.workers.append(worker)
+        session = self._session
+        worker = SegmentWorker(APP_DIR / "cache" / "audio" / f"session-{session}", device, float(self.config["segment_seconds"]), loopback, self._cancel)
         capture_thread = threading.Thread(target=worker.run, args=(direction,), daemon=True)
-        process_thread = threading.Thread(target=self._process_segments, args=(direction, worker), daemon=True)
-        self.threads.extend([capture_thread, process_thread])
-        capture_thread.start()
-        process_thread.start()
+        process_thread = threading.Thread(target=self._process_segments, args=(direction, worker, session), daemon=True)
+        with self._lifecycle_lock:
+            if not self._session_active(session):
+                return False
+            self.workers.append(worker)
+            self.threads.extend([capture_thread, process_thread])
+            capture_thread.start()
+            process_thread.start()
         return True
 
-    def _process_segments(self, direction: str, worker: SegmentWorker) -> None:
+    def _session_active(self, session: str | None) -> bool:
+        return session is None or (self.running and session == self._session and not self._cancel.is_set())
+
+    def _publish(self, session: str | None, callback: Callable, *args) -> None:
+        with self._callback_lock:
+            if self._session_active(session):
+                callback(*args)
+
+    def _process_segments(self, direction: str, worker: SegmentWorker, session: str | None = None) -> None:
         assert self.transcriber is not None
         source = "auto" if direction == "speaker" else self.config["source_language"]
         fallback_source = safe_target_language(self.config["target_language"], DEFAULT_CONFIG["target_language"]) if direction == "speaker" else source
@@ -161,7 +212,7 @@ class RealtimeEngine:
             self.config["source_language"] if direction == "speaker" else self.config["target_language"],
             DEFAULT_CONFIG["source_language"] if direction == "speaker" else DEFAULT_CONFIG["target_language"],
         )
-        while self.running:
+        while self.running and self._session_active(session):
             if self.paused:
                 drain_queue(worker.queue)
                 time.sleep(0.1)
@@ -178,6 +229,8 @@ class RealtimeEngine:
                     continue
                 asr_started = time.perf_counter()
                 text = self.transcriber.transcribe(wav, source)
+                if not self._session_active(session):
+                    return
                 asr_latency = time.perf_counter() - asr_started
                 if not text:
                     continue
@@ -209,15 +262,19 @@ class RealtimeEngine:
                 try:
                     translation_started = time.perf_counter()
                     translated = self.translator.translate(text, source_for_output, target)
+                    if not self._session_active(session):
+                        return
                     translation_latency = time.perf_counter() - translation_started
                     translation_confidence = getattr(self.translator, "last_confidence", None)
                     if translation_confidence is not None:
                         self.config["last_translation_confidence"] = translation_confidence
                         state_keys.add("last_translation_confidence")
                 except Exception as exc:
+                    if not self._session_active(session):
+                        return
                     translated = ""
                     translation_failed = True
-                    self.status(f"{direction_label(direction)}：翻譯失敗：{exc}")
+                    self._publish(session, self.status, f"{direction_label(direction)}：翻譯失敗：{exc}")
                 self.config["last_translation_empty"] = not translation_failed and not bool(str(translated).strip())
                 state_keys.add("last_translation_empty")
                 if not translation_failed:
@@ -229,22 +286,34 @@ class RealtimeEngine:
                 else:
                     overlay_text = overlay_text_from_config(text, translated, source_for_output, target, self.config)
                 if direction == "speaker":
-                    self.overlay(overlay_text, "")
+                    if not self._session_active(session):
+                        return
+                    self._publish(session, self.overlay, overlay_text, "")
                     if self.config.get("tts_enabled", True) and self.config.get("speaker_tts_enabled", False) and not self.muted and translated and not translation_failed:
-                        tts_latency = self._speak_translation(direction, translated, target, self.config.get("speaker_tts_output_device", ""))
+                        tts_latency = self._speak_translation(direction, translated, target, self.config.get("speaker_tts_output_device", ""), session)
                 else:
-                    self.overlay("", overlay_text)
+                    if not self._session_active(session):
+                        return
+                    self._publish(session, self.overlay, "", overlay_text)
                     if self.config.get("tts_enabled", True) and self.config.get("virtual_mic_enabled", False) and not self.muted and translated and not translation_failed:
-                        tts_latency = self._speak_translation(direction, translated, target, self.config.get("tts_output_device", "CABLE Input"))
+                        tts_latency = self._speak_translation(direction, translated, target, self.config.get("tts_output_device", "CABLE Input"), session)
+                if not self._session_active(session):
+                    return
                 if tts_latency is not None:
                     self.config["last_tts_latency_seconds"] = tts_latency
                     state_keys.add("last_tts_latency_seconds")
                 latency = time.perf_counter() - started
                 self.config["last_latency_seconds"] = latency
                 state_keys.add("last_latency_seconds")
+                if not self._session_active(session):
+                    return
                 self._save_state(state_keys)
+                if not self._session_active(session):
+                    return
                 if self.log and not translation_failed:
                     self.log.append(direction, source_for_output, target, text, translated, self.config["provider"], latency_seconds=latency)
+                    if not self._session_active(session):
+                        return
                 if not translation_failed:
                     snapshot = build_confidence_snapshot(
                         self.config,
@@ -257,25 +326,36 @@ class RealtimeEngine:
                         asr_confidence=asr_confidence,
                         translation_confidence=translation_confidence,
                     )
-                    self.status(f"{direction_label(direction)}延遲 {latency:.2f} 秒；{format_confidence_status(snapshot, bool(self.config.get('advanced_mode')))}")
+                    self._publish(session, self.status, f"{direction_label(direction)}延遲 {latency:.2f} 秒；{format_confidence_status(snapshot, bool(self.config.get('advanced_mode')))}")
             except Exception as exc:
-                self.status(f"{direction_label(direction)}：{exc}")
+                self._publish(session, self.status, f"{direction_label(direction)}：{exc}")
 
-    def _speak_translation(self, direction: str, translated: str, target: str, tts_device: str) -> float:
+    def _speak_translation(self, direction: str, translated: str, target: str, tts_device: str, session: str | None = None) -> float | None:
         tts_started = time.perf_counter()
         try:
             if self.config.get("tts_provider") == "local":
-                self.tts.speak_local(translated, tts_device)
+                if session is None:
+                    self.tts.speak_local(translated, tts_device)
+                else:
+                    self.tts.speak_local(translated, tts_device, self._cancel)
             elif self.config.get("tts_provider") == "openai":
                 audio = self.tts.synthesize_openai_linear16(translated)
-                play_linear16(audio, tts_device)
+                if not self._session_active(session):
+                    return None
+                play_linear16(audio, tts_device) if session is None else play_linear16(audio, tts_device, cancel_event=self._cancel)
             else:
                 audio = self.tts.synthesize_google_linear16(translated, target)
-                play_linear16(audio, tts_device)
+                if not self._session_active(session):
+                    return None
+                play_linear16(audio, tts_device) if session is None else play_linear16(audio, tts_device, cancel_event=self._cancel)
+            if not self._session_active(session):
+                return None
             self.config["last_tts_failed"] = False
         except Exception as exc:
+            if not self._session_active(session):
+                return None
             self.config["last_tts_failed"] = True
-            self.status(f"{direction_label(direction)}：TTS 失敗：{exc}")
+            self._publish(session, self.status, f"{direction_label(direction)}：TTS 失敗：{exc}")
         self._save_state({"last_tts_failed"})
         return time.perf_counter() - tts_started
 

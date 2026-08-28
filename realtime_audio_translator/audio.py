@@ -1,5 +1,6 @@
 import audioop
 import queue
+import threading
 import wave
 from pathlib import Path
 
@@ -73,19 +74,24 @@ def find_device(name_part: str, want_output: bool) -> int | None:
     return None
 
 
-def capture_wav(path: Path, device_index: int, seconds: float, loopback: bool = False) -> Path:
+def capture_wav(path: Path, device_index: int, seconds: float, loopback: bool = False, cancel_event=None) -> Path:
     import numpy as np
 
     sd = _sd()
     device = sd.query_devices(device_index)
     if loopback:
-        return _capture_loopback_wav(path, device, seconds)
+        return _capture_loopback_wav(path, device, seconds, cancel_event)
     samplerate = int(device.get("default_samplerate") or 48000)
     channels = int(device["max_input_channels"])
     channels = max(1, min(channels, 2))
     frames = int(samplerate * seconds)
     data = sd.rec(frames, samplerate=samplerate, channels=channels, dtype="int16", device=device_index)
+    if cancel_event is not None and cancel_event.wait(seconds):
+        sd.stop()
+        raise InterruptedError
     sd.wait()
+    if cancel_event is not None and cancel_event.is_set():
+        raise InterruptedError
     if channels > 1:
         data = data.mean(axis=1).astype(np.int16)
         channels = 1
@@ -98,7 +104,7 @@ def capture_wav(path: Path, device_index: int, seconds: float, loopback: bool = 
     return path
 
 
-def _capture_loopback_wav(path: Path, output_device: dict, seconds: float) -> Path:
+def _capture_loopback_wav(path: Path, output_device: dict, seconds: float, cancel_event=None) -> Path:
     import numpy as np
     import pyaudiowpatch as pyaudio
 
@@ -119,10 +125,14 @@ def _capture_loopback_wav(path: Path, output_device: dict, seconds: float) -> Pa
             frames_per_buffer=min(1024, max(1, frames)),
         ) as stream:
             while frames > 0:
+                if cancel_event is not None and cancel_event.is_set():
+                    raise InterruptedError
                 count = min(1024, frames)
                 chunks.append(stream.read(count, exception_on_overflow=False))
                 frames -= count
     data = np.frombuffer(b"".join(chunks), dtype=np.int16)
+    if cancel_event is not None and cancel_event.is_set():
+        raise InterruptedError
     if channels > 1:
         data = data.reshape(-1, channels).mean(axis=1).astype(np.int16)
         channels = 1
@@ -136,23 +146,30 @@ def _capture_loopback_wav(path: Path, output_device: dict, seconds: float) -> Pa
 
 
 class SegmentWorker:
-    def __init__(self, cache_dir: Path, device_index: int, seconds: float, loopback: bool):
+    def __init__(self, cache_dir: Path, device_index: int, seconds: float, loopback: bool, cancel_event=None):
         self.cache_dir = cache_dir
         self.device_index = device_index
         self.seconds = seconds
         self.loopback = loopback
+        self._cancel = cancel_event or threading.Event()
         self._stopped = False
         self.queue: queue.Queue[Path] = queue.Queue()
 
     def stop(self) -> None:
         self._stopped = True
+        self._cancel.set()
 
     def run(self, prefix: str) -> None:
         count = 0
         while not self._stopped:
             path = self.cache_dir / f"{prefix}-{count:06d}.wav"
             try:
-                self.queue.put(capture_wav(path, self.device_index, self.seconds, self.loopback))
+                captured = capture_wav(path, self.device_index, self.seconds, self.loopback, self._cancel)
+                if self._cancel.is_set():
+                    return
+                self.queue.put(captured)
+            except InterruptedError:
+                return
             except Exception:
                 self._stopped = True
                 raise

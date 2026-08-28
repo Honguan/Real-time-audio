@@ -1,5 +1,7 @@
 import queue
 import tempfile
+import threading
+import time
 import unittest
 from pathlib import Path
 from realtime_audio_translator.config import DEFAULT_CONFIG, _has_reparse_point, clear_cache, clear_logs, ensure_app_dirs, ensure_glossary_file, load_config, log_files_to_clear, save_audio_devices, save_config
@@ -586,7 +588,7 @@ class EngineTests(unittest.TestCase):
             engine.running = True
             engine.transcriber = Transcriber()
             engine.translator = Translator()
-            engine._speak_translation = lambda direction, translated, target, device: 2.4
+            engine._speak_translation = lambda direction, translated, target, device, session=None: 2.4
             engine._process_segments("me", Worker(wav))
 
         self.assertEqual(engine.config["last_tts_latency_seconds"], 2.4)
@@ -813,6 +815,7 @@ class EngineTests(unittest.TestCase):
         class Worker:
             def __init__(self):
                 self.stopped = False
+                self.queue = queue.Queue()
 
             def stop(self):
                 self.stopped = True
@@ -820,15 +823,203 @@ class EngineTests(unittest.TestCase):
         worker = Worker()
         engine.running = True
         engine.workers = [worker]
-        engine.threads = [object()]
+        class Thread:
+            def __init__(self):
+                self.joined = False
+
+            def join(self, timeout=None):
+                self.joined = True
+
+            def is_alive(self):
+                return False
+
+        thread = Thread()
+        engine.threads = [thread]
 
         engine.stop()
 
         self.assertFalse(engine.running)
         self.assertTrue(worker.stopped)
+        self.assertTrue(thread.joined)
         self.assertEqual(engine.workers, [])
         self.assertEqual(engine.threads, [])
         self.assertEqual(statuses[-1], "已停止")
+
+    def test_stop_before_start_prevents_delayed_start(self):
+        import realtime_audio_translator.engine as engine_module
+
+        config = DEFAULT_CONFIG.copy()
+        config["record_logs"] = False
+        engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, lambda status: None)
+        transcribers = []
+        original_transcriber = engine_module.AudioTranscriber
+        engine_module.AudioTranscriber = lambda *args, **kwargs: transcribers.append(object())
+        try:
+            engine.stop()
+            engine.start()
+        finally:
+            engine_module.AudioTranscriber = original_transcriber
+
+        self.assertFalse(engine.running)
+        self.assertEqual(transcribers, [])
+
+    def test_stop_timeout_is_honored_when_callback_is_blocked(self):
+        config = DEFAULT_CONFIG.copy()
+        config["record_logs"] = False
+        statuses = []
+        engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, statuses.append)
+        engine.running = True
+        engine._callback_lock.acquire()
+        started = time.perf_counter()
+        try:
+            engine.stop(join_timeout=0.01)
+        finally:
+            engine._callback_lock.release()
+
+        self.assertLess(time.perf_counter() - started, 0.2)
+        self.assertEqual(statuses[-1], "停止逾時：仍有 1 個背景工作")
+
+    def test_stopped_sessions_cannot_publish_after_blocked_calls_return(self):
+        for blocked_stage in ("asr", "translation", "tts"):
+            with self.subTest(blocked_stage=blocked_stage), tempfile.TemporaryDirectory() as tmp:
+                config = DEFAULT_CONFIG.copy()
+                config["record_logs"] = False
+                config["speaker_tts_enabled"] = blocked_stage == "tts"
+                config["tts_provider"] = "local"
+                overlays = []
+                statuses = []
+                entered = threading.Event()
+                release = threading.Event()
+                engine = RealtimeEngine(Path("."), config, lambda speaker, mine: overlays.append((speaker, mine)), statuses.append)
+
+                def block(stage):
+                    if blocked_stage == stage:
+                        entered.set()
+                        release.wait()
+
+                class Transcriber:
+                    def transcribe(self, wav, source_language):
+                        block("asr")
+                        return "stale"
+
+                class Translator:
+                    def translate(self, text, source_language, target_language):
+                        block("translation")
+                        return "過期"
+
+                class Tts:
+                    def speak_local(self, text, device, cancel_event=None):
+                        if blocked_stage == "tts":
+                            entered.set()
+                            (cancel_event or release).wait()
+
+                wav = Path(tmp) / "clip.wav"
+                write_wav(wav, 12000)
+                engine.running = True
+                engine._session = 1
+                engine.transcriber = Transcriber()
+                engine.translator = Translator()
+                engine.tts = Tts()
+                worker = QueuedWorker(wav)
+                worker.stop = lambda: None
+                thread = threading.Thread(target=engine._process_segments, args=("speaker", worker, 1))
+                engine.workers = [worker]
+                engine.threads = [thread]
+                thread.start()
+                self.assertTrue(entered.wait(1))
+
+                engine.stop(join_timeout=0.01)
+                callbacks_after_stop = (len(overlays), len(statuses))
+                engine.running = True
+                engine._session = 2
+                engine._cancel = threading.Event()
+                release.set()
+                thread.join(1)
+
+                self.assertFalse(thread.is_alive())
+                self.assertEqual((len(overlays), len(statuses)), callbacks_after_stop)
+
+    def test_one_hundred_start_stop_cycles_leave_no_worker_threads(self):
+        import realtime_audio_translator.engine as engine_module
+
+        config = DEFAULT_CONFIG.copy()
+        config["record_logs"] = False
+        config["speaker_enabled"] = True
+        config["microphone_enabled"] = False
+        config["tts_enabled"] = False
+        class Worker:
+            def __init__(self):
+                self.queue = queue.Queue()
+
+            def stop(self):
+                return None
+
+        created_threads = []
+
+        def start_direction(direction, device_hint, loopback):
+            worker = Worker()
+            thread = threading.Thread(target=engine._cancel.wait)
+            created_threads.append(thread)
+            engine.workers.append(worker)
+            engine.threads.append(thread)
+            thread.start()
+            return True
+
+        original_transcriber = engine_module.AudioTranscriber
+        engine_module.AudioTranscriber = lambda *args, **kwargs: object()
+        sessions = set()
+        try:
+            for _ in range(100):
+                engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, lambda status: None)
+                engine._start_direction = start_direction
+                engine.start()
+                sessions.add(engine._session)
+                engine.stop(join_timeout=1)
+                self.assertEqual(engine.threads, [])
+        finally:
+            engine_module.AudioTranscriber = original_transcriber
+
+        self.assertEqual(len(sessions), 100)
+        self.assertFalse(any(thread.is_alive() for thread in created_threads))
+
+    def test_each_session_uses_its_own_audio_cache(self):
+        import realtime_audio_translator.engine as engine_module
+
+        config = DEFAULT_CONFIG.copy()
+        config["record_logs"] = False
+        cache_dirs = []
+        engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, lambda status: None)
+        engine.running = True
+        engine._session = "unique"
+
+        class Worker:
+            def __init__(self, cache_dir, *args):
+                cache_dirs.append(cache_dir)
+
+            def run(self, direction):
+                return None
+
+        class Thread:
+            def __init__(self, **kwargs):
+                return None
+
+            def start(self):
+                return None
+
+        original_find_device = engine_module.find_device
+        original_worker = engine_module.SegmentWorker
+        original_thread = engine_module.threading.Thread
+        engine_module.find_device = lambda *args, **kwargs: 1
+        engine_module.SegmentWorker = Worker
+        engine_module.threading.Thread = Thread
+        try:
+            self.assertTrue(engine._start_direction("speaker", "Speakers", True))
+        finally:
+            engine_module.find_device = original_find_device
+            engine_module.SegmentWorker = original_worker
+            engine_module.threading.Thread = original_thread
+
+        self.assertEqual(cache_dirs[0].name, "session-unique")
 
 
 if __name__ == "__main__":
