@@ -1,6 +1,7 @@
 import json
 import os
 import shutil
+import stat
 from pathlib import Path
 
 from .ai_memory import _ensure_cache
@@ -201,16 +202,70 @@ def save_audio_devices(root: Path, devices: list[dict]) -> Path:
     return path
 
 
+def _has_reparse_point(path: Path) -> bool:
+    for candidate in (path, *path.parents):
+        try:
+            info = candidate.lstat()
+        except OSError:
+            continue
+        if candidate.is_symlink() or getattr(info, "st_file_attributes", 0) & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0):
+            return True
+    return False
+
+
+def _safe_log_dir(root: Path, log_dir: Path) -> Path:
+    if not log_dir.is_absolute():
+        raise ValueError("紀錄資料夾必須使用絕對路徑")
+    if _has_reparse_point(log_dir):
+        raise ValueError("紀錄資料夾不可是符號連結或 junction")
+    target = log_dir.resolve()
+    app_root = root.resolve()
+    home = Path.home().resolve()
+    unsafe = {Path(target.anchor), app_root, home, home / "Desktop", home / "Documents", home / "Downloads"}
+    if target in unsafe or app_root.is_relative_to(target):
+        raise ValueError(f"拒絕清除高風險紀錄路徑：{target}")
+    return target
+
+
+def log_files_to_clear(root: Path = APP_DIR, log_dir: Path | None = None) -> list[Path]:
+    default_logs = _safe_log_dir(root, root / "logs")
+    targets = {_safe_log_dir(root, log_dir or root / "logs"), default_logs}
+    files = []
+    for target in targets:
+        if not target.is_dir():
+            continue
+        for path in target.iterdir():
+            if _is_managed_log_file(path, default_logs):
+                files.append(path)
+    return sorted(files)
+
+
+def _is_managed_log_file(path: Path, default_logs: Path) -> bool:
+    if path.is_symlink() or not path.is_file():
+        return False
+    if path == default_logs / "app.log":
+        return True
+    try:
+        if path.suffix == ".md":
+            with path.open("r", encoding="utf-8") as handle:
+                return handle.readline().rstrip() == f"# Conversation {path.stem}"
+        if path.suffix == ".jsonl":
+            with path.open("r", encoding="utf-8") as handle:
+                first = next((line for line in handle if line.strip()), "")
+            row = json.loads(first)
+            required = {"timestamp", "direction", "source_language", "target_language", "text", "translated_text", "provider"}
+            return isinstance(row, dict) and required <= row.keys() and row.get("session_id", path.stem) == path.stem
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        pass
+    return False
+
+
 def clear_logs(root: Path = APP_DIR, log_dir: Path | None = None) -> None:
-    target = log_dir or root / "logs"
-    shutil.rmtree(target, ignore_errors=True)
-    if log_dir and target != root / "logs":
-        shutil.rmtree(root / "logs", ignore_errors=True)
+    _safe_log_dir(root, log_dir or root / "logs")
+    for path in log_files_to_clear(root, log_dir):
+        path.unlink(missing_ok=True)
     shutil.rmtree(root / "exports" / "subtitles", ignore_errors=True)
     ensure_app_dirs(root)
-    if log_dir:
-        target.mkdir(parents=True, exist_ok=True)
-        (target / "app.log").write_text("", encoding="utf-8")
 
 
 def clear_cache(root: Path = APP_DIR, cache_path: Path | None = None) -> None:

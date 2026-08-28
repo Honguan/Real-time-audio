@@ -12,7 +12,7 @@ from .ai_memory import add_glossary_term
 from .ai_orchestrator import plan_session
 from .app_log import append_app_log
 from .commands import command_choices, refresh_commands
-from .config import APP_DIR, clear_cache, clear_logs, ensure_glossary_file, load_config, save_audio_devices, save_config
+from .config import APP_DIR, clear_cache, clear_logs, ensure_glossary_file, load_config, log_files_to_clear, save_audio_devices, save_config
 from .diagnostics import collect_diagnostics
 from .engine import RealtimeEngine
 from .models import cuda_hardware_from_check_output, download_model, list_models, model_available, model_install_message, models_dir, recommend_model
@@ -1319,15 +1319,34 @@ class TranslatorApp(tk.Tk):
         self.status.set(f"字幕已匯出：{srt}")
 
     def _clear_logs(self) -> None:
-        self._save()
-        clear_logs(APP_DIR, Path(self.config.get("log_dir") or APP_DIR / "logs"))
+        target = self._confirm_log_cleanup()
+        if target is None:
+            return
+        clear_logs(APP_DIR, target)
         self.status.set("紀錄已清除")
 
     def _clear_local_data(self) -> None:
-        self._save()
+        target = self._confirm_log_cleanup()
+        if target is None:
+            return
         clear_cache(APP_DIR, Path(self.config.get("translation_cache_path") or APP_DIR / "cache" / "translation_cache.db"))
-        clear_logs(APP_DIR, Path(self.config.get("log_dir") or APP_DIR / "logs"))
+        clear_logs(APP_DIR, target)
         self.status.set("本機快取與紀錄已清除")
+
+    def _confirm_log_cleanup(self) -> Path | None:
+        self._save()
+        target = Path(self.config.get("log_dir") or APP_DIR / "logs")
+        try:
+            files = log_files_to_clear(APP_DIR, target)
+        except ValueError as exc:
+            messagebox.showerror("無法清除紀錄", str(exc))
+            return None
+        if not target.resolve().is_relative_to(APP_DIR.resolve()) and not messagebox.askyesno(
+            "確認清除外部紀錄",
+            f"將從以下資料夾清除 {sum(path.parent == target.resolve() for path in files)} 個本程式紀錄檔：\n{target.resolve()}\n\n其他檔案與子資料夾不會刪除。是否繼續？",
+        ):
+            return None
+        return target
 
     def _overlay_update(self, speaker: str, mine: str) -> None:
         if self.engine and not subtitle_updates_allowed(self.engine.paused):
