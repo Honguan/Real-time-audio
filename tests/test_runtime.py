@@ -1,11 +1,15 @@
 import os
+import hashlib
+import io
 import tempfile
 import unittest
 import subprocess
 import zipfile
 from pathlib import Path
+from unittest.mock import patch
 
-from realtime_audio_translator.runtime import DEFAULT_RUNTIME_DIR, install_runtime_from, runtime_assets_from_json, runtime_dir, runtime_install_message, runtime_status, whisper_exe
+from realtime_audio_translator.archive_install import verify_install_manifest, write_install_manifest
+from realtime_audio_translator.runtime import DEFAULT_RUNTIME_DIR, download_runtime, install_runtime_from, runtime_assets_from_json, runtime_dir, runtime_install_message, runtime_status, whisper_exe
 
 
 class RuntimeTests(unittest.TestCase):
@@ -33,6 +37,7 @@ class RuntimeTests(unittest.TestCase):
 
             (root / "ffmpeg.exe").write_text("ff", encoding="utf-8")
             (root / "_xxl_data").mkdir()
+            write_install_manifest(root)
             self.assertTrue(runtime_status(root)["ready"])
             self.assertIn("cublasLt64_12.dll", runtime_status(root)["warnings"])
 
@@ -65,7 +70,8 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("runtime", message)
         self.assertIn("RealtimeAudioTranslator-runtime-cuda12-core-<version>.7z", message)
         self.assertIn("RealtimeAudioTranslator-runtime-cuda12-dlls-<version>.zip", message)
-        self.assertIn("兩個都", message)
+        self.assertIn("手動匯入 runtime", message)
+        self.assertIn("驗證內容後安全替換", message)
         self.assertIn("Faster-Whisper-XXL Windows runtime", message)
         self.assertIn("https://github.com/Honguan/Real-time-audio/releases", message)
         self.assertIn("https://github.com/Purfview/whisper-standalone-win/releases", message)
@@ -93,6 +99,8 @@ class RuntimeTests(unittest.TestCase):
             target = root / "target"
             source.mkdir()
             (source / "faster-whisper-xxl.exe").write_text("exe", encoding="utf-8")
+            (source / "ffmpeg.exe").write_text("ffmpeg", encoding="utf-8")
+            (source / "_xxl_data").mkdir()
             (source / "cublas64_12.dll").write_text("dll", encoding="utf-8")
 
             install_runtime_from(source, target)
@@ -108,6 +116,8 @@ class RuntimeTests(unittest.TestCase):
             target = root / "target"
             nested.mkdir(parents=True)
             (nested / "faster-whisper-xxl.exe").write_text("exe", encoding="utf-8")
+            (nested / "ffmpeg.exe").write_text("ffmpeg", encoding="utf-8")
+            (nested / "_xxl_data").mkdir()
 
             install_runtime_from(source, target)
 
@@ -118,8 +128,127 @@ class RuntimeTests(unittest.TestCase):
             runtime = Path(tmp) / "runtime"
             runtime.mkdir()
             (runtime / "faster-whisper-xxl.exe").write_text("exe", encoding="utf-8")
+            (runtime / "ffmpeg.exe").write_text("ffmpeg", encoding="utf-8")
+            (runtime / "_xxl_data").mkdir()
 
             self.assertEqual(install_runtime_from(runtime, runtime), runtime)
+
+    def test_incomplete_runtime_import_preserves_existing_install(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "source"
+            target = root / "runtime"
+            source.mkdir()
+            target.mkdir()
+            (source / "faster-whisper-xxl.exe").write_text("incomplete", encoding="utf-8")
+            current = target / "faster-whisper-xxl.exe"
+            current.write_text("working", encoding="utf-8")
+            (target / "ffmpeg.exe").write_text("ffmpeg", encoding="utf-8")
+            (target / "_xxl_data").mkdir()
+            write_install_manifest(target)
+
+            with self.assertRaisesRegex(RuntimeError, "ffmpeg.exe"):
+                install_runtime_from(source, target)
+
+            self.assertEqual(current.read_text(encoding="utf-8"), "working")
+            self.assertTrue(verify_install_manifest(target, verify_hashes=True))
+
+    def test_download_failure_preserves_existing_runtime(self):
+        class Response(io.BytesIO):
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                self.close()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "runtime"
+            target.mkdir()
+            executable = target / "faster-whisper-xxl.exe"
+            executable.write_text("working", encoding="utf-8")
+            archive_data = b"archive"
+            digest = hashlib.sha256(archive_data).hexdigest()
+
+            def fail_extraction(archive, destination):
+                (destination / "faster-whisper-xxl.exe").write_text("partial", encoding="utf-8")
+                raise subprocess.CalledProcessError(1, ["tar", str(archive)])
+
+            disk_usage = type("DiskUsage", (), {"free": 20 * 1024**3})()
+            with patch("realtime_audio_translator.runtime.shutil.disk_usage", return_value=disk_usage), patch(
+                "realtime_audio_translator.runtime.urllib.request.urlopen",
+                side_effect=[Response(b"{}"), Response(archive_data)],
+            ), patch(
+                "realtime_audio_translator.runtime.runtime_assets_from_json",
+                return_value=[("runtime.zip", "https://example.invalid/runtime.zip", digest)],
+            ), patch("realtime_audio_translator.runtime.safe_extract_archive", side_effect=fail_extraction):
+                with self.assertRaises(subprocess.CalledProcessError):
+                    download_runtime(target)
+
+            self.assertEqual(executable.read_text(encoding="utf-8"), "working")
+
+    def test_download_runtime_installs_valid_archives_atomically(self):
+        class Response(io.BytesIO):
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                self.close()
+
+        def zip_bytes(files):
+            output = io.BytesIO()
+            with zipfile.ZipFile(output, "w") as archive:
+                for name, content in files.items():
+                    archive.writestr(name, content)
+            return output.getvalue()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "runtime"
+            target.mkdir()
+            (target / "old.dll").write_text("old", encoding="utf-8")
+            core = zip_bytes({"faster-whisper-xxl.exe": b"exe", "ffmpeg.exe": b"ffmpeg", "_xxl_data/data.bin": b"data"})
+            dlls = zip_bytes({"cublas64_12.dll": b"cuda", "cublasLt64_12.dll": b"cuda", "cudnn64_9.dll": b"cuda"})
+            assets = [
+                ("runtime-core.zip", "https://example.invalid/core.zip", hashlib.sha256(core).hexdigest()),
+                ("runtime-dlls.zip", "https://example.invalid/dlls.zip", hashlib.sha256(dlls).hexdigest()),
+            ]
+            disk_usage = type("DiskUsage", (), {"free": 20 * 1024**3})()
+            with patch("realtime_audio_translator.runtime.shutil.disk_usage", return_value=disk_usage), patch(
+                "realtime_audio_translator.runtime.urllib.request.urlopen",
+                side_effect=[Response(b"{}"), Response(core), Response(dlls)],
+            ), patch("realtime_audio_translator.runtime.runtime_assets_from_json", return_value=assets):
+                self.assertEqual(download_runtime(target), target)
+
+            self.assertTrue(runtime_status(target)["ready"])
+            self.assertTrue(verify_install_manifest(target, verify_hashes=True))
+            self.assertFalse((target / "old.dll").exists())
+
+    def test_runtime_import_writes_verifiable_manifest(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "source"
+            target = root / "runtime"
+            (source / "_xxl_data").mkdir(parents=True)
+            (source / "faster-whisper-xxl.exe").write_text("exe", encoding="utf-8")
+            (source / "ffmpeg.exe").write_text("ffmpeg", encoding="utf-8")
+
+            install_runtime_from(source, target)
+
+            self.assertTrue(verify_install_manifest(target, verify_hashes=True))
+            self.assertTrue(runtime_status(target)["ready"])
+
+    def test_runtime_execution_status_rejects_same_size_tampering(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "_xxl_data").mkdir()
+            executable = root / "faster-whisper-xxl.exe"
+            executable.write_bytes(b"working")
+            (root / "ffmpeg.exe").write_bytes(b"ffmpeg!")
+            write_install_manifest(root)
+
+            executable.write_bytes(b"altered")
+
+            self.assertTrue(runtime_status(root)["ready"])
+            self.assertFalse(runtime_status(root, verify_hashes=True)["ready"])
 
     def test_package_script_is_zip_only(self):
         script = (Path(__file__).parents[1] / "scripts" / "package.ps1").read_text(encoding="utf-8")

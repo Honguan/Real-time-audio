@@ -6,9 +6,10 @@ import unittest
 import zipfile
 from pathlib import Path
 from unittest.mock import patch
+from realtime_audio_translator.archive_install import verify_install_manifest, write_install_manifest
 from realtime_audio_translator.config import DEFAULT_CONFIG, _has_reparse_point, clear_cache, clear_logs, ensure_app_dirs, ensure_glossary_file, load_config, log_files_to_clear, save_audio_devices, save_config
 from realtime_audio_translator.ai_memory import add_glossary_term, cache_translation, cached_translation
-from realtime_audio_translator.offline_translation import install_translation_models, normalize_translation_text, translation_model_available, translation_model_pairs, translation_models_dir
+from realtime_audio_translator.offline_translation import download_translation_models, install_translation_models, normalize_translation_text, translation_model_available, translation_model_pairs, translation_models_dir
 from realtime_audio_translator.providers import TextToSpeech, Translator, build_google_translate_request, build_openai_translation_request, google_access_token
 
 
@@ -105,10 +106,92 @@ class ProvidersTests(unittest.TestCase):
             model_file.parent.mkdir(parents=True)
             with zipfile.ZipFile(model_file, "w") as archive:
                 archive.writestr("translate-en_zh/metadata.json", '{"from_code":"en","to_code":"zh"}')
+                archive.writestr("translate-en_zh/model/model.bin", b"model")
+                archive.writestr("translate-en_zh/sentencepiece.model", b"sentencepiece")
 
             self.assertEqual(install_translation_models(config), 1)
 
-            self.assertTrue((translation_models_dir(config) / "packages" / "translate-en_zh" / "metadata.json").is_file())
+            package = translation_models_dir(config) / "packages" / "translate-en_zh"
+            self.assertTrue((package / "metadata.json").is_file())
+            self.assertTrue(verify_install_manifest(package, verify_hashes=True))
+
+    def test_argos_install_rejects_archive_escape(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = DEFAULT_CONFIG.copy()
+            config["models_path"] = str(Path(tmp) / "models")
+            models_path = translation_models_dir(config)
+            model_file = models_path / "malicious.argosmodel"
+            model_file.parent.mkdir(parents=True)
+            with zipfile.ZipFile(model_file, "w") as archive:
+                archive.writestr("../escape.txt", "escape")
+                archive.writestr("translate-en_zh/metadata.json", '{"from_code":"en","to_code":"zh"}')
+                archive.writestr("translate-en_zh/model/model.bin", b"model")
+                archive.writestr("translate-en_zh/sentencepiece.model", b"sentencepiece")
+
+            with self.assertRaises(RuntimeError):
+                install_translation_models(config)
+
+            self.assertFalse((models_path / "escape.txt").exists())
+
+    def test_argos_install_failure_preserves_existing_package(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = DEFAULT_CONFIG.copy()
+            config["models_path"] = str(Path(tmp) / "models")
+            models_path = translation_models_dir(config)
+            package = models_path / "packages" / "translate-en_zh"
+            package.mkdir(parents=True)
+            marker = package / "working.txt"
+            marker.write_text("working", encoding="utf-8")
+            model_file = models_path / "en_zh.argosmodel"
+            with zipfile.ZipFile(model_file, "w") as archive:
+                archive.writestr("translate-en_zh/metadata.json", '{"from_code":"en","to_code":"zh"}')
+                archive.writestr("translate-en_zh/model/model.bin", b"model")
+                archive.writestr("translate-en_zh/sentencepiece.model", b"sentencepiece")
+
+            with patch("realtime_audio_translator.offline_translation.atomic_replace_tree", side_effect=RuntimeError("swap failed")):
+                with self.assertRaisesRegex(RuntimeError, "swap failed"):
+                    install_translation_models(config)
+
+            self.assertEqual(marker.read_text(encoding="utf-8"), "working")
+
+    def test_argos_download_failure_leaves_no_partial_archive(self):
+        class IndexResponse:
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return [{"from_code": "en", "to_code": "zh", "links": ["https://example.invalid/en_zh.argosmodel"]}]
+
+        class DownloadResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return None
+
+            def raise_for_status(self):
+                return None
+
+            def iter_content(self, size):
+                yield b"partial"
+                raise RuntimeError("download failed")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            config = DEFAULT_CONFIG.copy()
+            config["models_path"] = str(Path(tmp) / "models")
+            models_path = translation_models_dir(config)
+            package = models_path / "packages" / "translate-en_zh"
+            package.mkdir(parents=True)
+            marker = package / "working.txt"
+            marker.write_text("working", encoding="utf-8")
+
+            with patch("realtime_audio_translator.offline_translation.requests.get", side_effect=[IndexResponse(), DownloadResponse()]):
+                with self.assertRaisesRegex(RuntimeError, "download failed"):
+                    download_translation_models(config, "en", "zh")
+
+            self.assertEqual(marker.read_text(encoding="utf-8"), "working")
+            self.assertFalse((models_path / "en_zh.argosmodel").exists())
+            self.assertEqual(list(models_path.glob("*.tmp")), [])
 
     def test_offline_translation_uses_english_pivot_for_basic_languages(self):
         self.assertEqual(
@@ -132,8 +215,28 @@ class ProvidersTests(unittest.TestCase):
                 (package / "metadata.json").write_text(
                     json.dumps({"from_code": source, "to_code": target}), encoding="utf-8"
                 )
+                write_install_manifest(package)
 
             self.assertTrue(translation_model_available(config, "zh", "ja"))
+
+    def test_translation_model_verification_rejects_same_size_tampering(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = DEFAULT_CONFIG.copy()
+            config["models_path"] = str(Path(tmp) / "models")
+            package = translation_models_dir(config) / "packages" / "translate-en_zh"
+            model = package / "model" / "model.bin"
+            model.parent.mkdir(parents=True)
+            model.write_bytes(b"good")
+            (package / "sentencepiece.model").write_bytes(b"sentencepiece")
+            (package / "metadata.json").write_text('{"from_code":"en","to_code":"zh"}', encoding="utf-8")
+            write_install_manifest(package)
+            self.assertTrue(translation_model_available(config, "en", "zh"))
+
+            modified = model.stat().st_mtime_ns + 1_000_000
+            model.write_bytes(b"evil")
+            os.utime(model, ns=(modified, modified))
+
+            self.assertFalse(translation_model_available(config, "en", "zh"))
 
     def test_local_argos_translation_persists_cache_without_url(self):
         class Translation:

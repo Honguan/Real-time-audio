@@ -48,14 +48,14 @@
 8. 可按「匯出字幕」把最新 JSONL 對話紀錄匯出成 SRT 與 TXT，檔案放在 `%USERPROFILE%\.realtime-audio\exports\subtitles`；也可按「清除本機資料」一次清除快取與紀錄。
 9. 預設是自動發話；勾選「啟動時先靜音」後可用「按住說話」（Push to talk）按住才送出我方翻譯語音。
 10. 切換到 Google 或 OpenAI 時，工具會先提示語音或文字可能傳送到第三方服務並可能產生費用。
-11. 若提示缺 runtime，按「一鍵安裝 runtime」自動下載、驗證與解壓；自動安裝失敗時，再手動下載並解壓兩個 runtime 壓縮檔：
+11. 若提示缺 runtime，按「一鍵安裝 runtime」自動下載、驗證與安裝；自動安裝失敗時，再手動下載兩個 runtime 壓縮檔：
 
 ```text
 RealtimeAudioTranslator-runtime-cuda12-core-<tag>.7z
 RealtimeAudioTranslator-runtime-cuda12-dlls-<tag>.zip
 ```
 
-兩個壓縮檔都解壓到：
+兩個壓縮檔解壓到同一個暫存資料夾，再於程式內按「手動匯入 runtime」選擇該資料夾；程式會驗證後安裝到：
 
 ```text
 %USERPROFILE%\.realtime-audio\runtime\cuda12
@@ -106,7 +106,7 @@ RealtimeAudioTranslator-runtime-cuda12-dlls-<tag>.zip
 
 - 沒有字幕：確認「顯示字幕」已開啟，並按「測試字幕」。
 - 聽不到對方聲音：確認喇叭來源選的是 Discord 或遊戲正在播放的裝置，再按「測試喇叭」。
-- 找不到 runtime：確認 core `.7z` 與 DLL `.zip` 都已解壓到 `%USERPROFILE%\.realtime-audio\runtime\cuda12`。
+- 找不到 runtime：把 core `.7z` 與 DLL `.zip` 解壓到同一暫存資料夾，再使用「手動匯入 runtime」完成驗證安裝。
 - 找不到模型：在工具內下載模型，或解壓模型 zip 到 `%USERPROFILE%\.realtime-audio\models`。
 - 找不到離線翻譯模型：按「下載離線翻譯模型」，或解壓 `RealtimeAudioTranslator-models-translation-<tag>.zip` 到 `%USERPROFILE%\.realtime-audio\models`。
 - 對方聽不到翻譯語音：確認「播放翻譯語音」與「輸出到虛擬麥克風」已開啟，且「TTS 輸出」選 `CABLE Input`。

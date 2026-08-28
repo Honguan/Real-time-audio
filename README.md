@@ -15,13 +15,13 @@ RealtimeAudioTranslator-runtime-cuda12-core-<tag>.7z
 RealtimeAudioTranslator-runtime-cuda12-dlls-<tag>.zip
 ```
 
-把兩個壓縮檔都解壓到：
+把兩個壓縮檔解壓到同一個暫存資料夾，再於程式內按「手動匯入 runtime」並選擇該資料夾；程式會驗證內容後安全安裝到：
 
 ```text
 %USERPROFILE%\.realtime-audio\runtime\cuda12
 ```
 
-該資料夾內應直接看到 `faster-whisper-xxl.exe` 與 CUDA12 DLL。主程式已包含 Python runtime，不需要另外安裝 Python。
+匯入來源資料夾內應直接看到 `faster-whisper-xxl.exe` 與 CUDA12 DLL。主程式已包含 Python runtime，不需要另外安裝 Python。
 若檔案總管無法開啟 core `.7z`，請使用 7-Zip 解壓。
 
 ## 需要下載哪些檔案
@@ -110,7 +110,7 @@ http://127.0.0.1:5000/translate
 
 - 沒有字幕：確認「顯示字幕」已開啟，並按「測試字幕」。
 - 聽不到對方聲音：確認喇叭來源選的是 Discord 或遊戲正在播放的裝置，再按「測試喇叭」。
-- 找不到 runtime：確認 core `.7z` 與 DLL `.zip` 都已解壓到 `%USERPROFILE%\.realtime-audio\runtime\cuda12`。
+- 找不到 runtime：把 core `.7z` 與 DLL `.zip` 解壓到同一暫存資料夾，再使用「手動匯入 runtime」完成驗證安裝。
 - 找不到模型：在工具內下載模型，或解壓模型 zip 到 `%USERPROFILE%\.realtime-audio\models`。
 - 找不到離線翻譯模型：在進階模式按「下載離線翻譯模型」，或把翻譯模型 zip 解壓到 `%USERPROFILE%\.realtime-audio\models`。
 - 對方聽不到翻譯語音：確認「播放翻譯語音」與「輸出到虛擬麥克風」已開啟，且「TTS 輸出」選 `CABLE Input`。

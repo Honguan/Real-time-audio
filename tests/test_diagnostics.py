@@ -2,6 +2,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from realtime_audio_translator.archive_install import write_install_manifest
 from realtime_audio_translator.config import DEFAULT_CONFIG, _has_reparse_point, clear_cache, clear_logs, ensure_app_dirs, ensure_glossary_file, load_config, log_files_to_clear, save_audio_devices, save_config
 from realtime_audio_translator.diagnostics import DiagnosticIssue, collect_diagnostics
 from realtime_audio_translator.gui import LANGUAGE_CHOICES, PERFORMANCE_CHOICES, PROVIDER_CHOICES, TARGET_LANGUAGE_CHOICES, TTS_PROVIDER_CHOICES, TranslatorApp, diagnostic_action_label, diagnostic_actions, first_diagnostic_action, first_run_setup_action, first_run_wizard_needed, format_overlay_line, language_lock_value, latency_seconds_value, main_status_summary, mode_notice, overlay_clipboard_text, overlay_font_size_value, overlay_hold_seconds_value, overlay_opacity_value, overlay_visibility_action, performance_segment_seconds, record_logs_requires_confirmation, setup_guide_actions, status_message_is_error, subtitle_updates_allowed, swap_language_values, troubleshooting_action, visible_button_texts, visible_setting_keys
@@ -100,6 +101,7 @@ class DiagnosticsTests(unittest.TestCase):
             (runtime / "faster-whisper-xxl.exe").write_text("exe", encoding="utf-8")
             (runtime / "ffmpeg.exe").write_text("ff", encoding="utf-8")
             (runtime / "_xxl_data").mkdir()
+            write_install_manifest(runtime)
             config = DEFAULT_CONFIG.copy()
             config["runtime_dir"] = str(runtime)
             config["model"] = "medium"
@@ -129,6 +131,7 @@ class DiagnosticsTests(unittest.TestCase):
             (runtime / "faster-whisper-xxl.exe").write_text("exe", encoding="utf-8")
             (runtime / "ffmpeg.exe").write_text("ff", encoding="utf-8")
             (runtime / "_xxl_data").mkdir()
+            write_install_manifest(runtime)
             config = DEFAULT_CONFIG.copy()
             config["runtime_dir"] = str(runtime)
             config["model"] = "medium"
@@ -159,6 +162,7 @@ class DiagnosticsTests(unittest.TestCase):
             (runtime / "faster-whisper-xxl.exe").write_text("exe", encoding="utf-8")
             (runtime / "ffmpeg.exe").write_text("ff", encoding="utf-8")
             (runtime / "_xxl_data").mkdir()
+            write_install_manifest(runtime)
             config = DEFAULT_CONFIG.copy()
             config["runtime_dir"] = str(runtime)
             config["model"] = "medium"
@@ -195,6 +199,7 @@ class DiagnosticsTests(unittest.TestCase):
             (runtime / "faster-whisper-xxl.exe").write_text("exe", encoding="utf-8")
             (runtime / "ffmpeg.exe").write_text("ff", encoding="utf-8")
             (runtime / "_xxl_data").mkdir()
+            write_install_manifest(runtime)
             config = DEFAULT_CONFIG.copy()
             config["runtime_dir"] = str(runtime)
             config["model"] = "medium"
@@ -221,6 +226,7 @@ class DiagnosticsTests(unittest.TestCase):
             (runtime / "faster-whisper-xxl.exe").write_text("exe", encoding="utf-8")
             (runtime / "ffmpeg.exe").write_text("ff", encoding="utf-8")
             (runtime / "_xxl_data").mkdir()
+            write_install_manifest(runtime)
             config = DEFAULT_CONFIG.copy()
             config["runtime_dir"] = str(runtime)
             config["model"] = "medium"
@@ -244,6 +250,7 @@ class DiagnosticsTests(unittest.TestCase):
             (runtime / "faster-whisper-xxl.exe").write_text("exe", encoding="utf-8")
             (runtime / "ffmpeg.exe").write_text("ff", encoding="utf-8")
             (runtime / "_xxl_data").mkdir()
+            write_install_manifest(runtime)
             config = DEFAULT_CONFIG.copy()
             config["runtime_dir"] = str(runtime)
             config["model"] = "medium"
@@ -266,6 +273,7 @@ class DiagnosticsTests(unittest.TestCase):
             (runtime / "faster-whisper-xxl.exe").write_text("exe", encoding="utf-8")
             (runtime / "ffmpeg.exe").write_text("ff", encoding="utf-8")
             (runtime / "_xxl_data").mkdir()
+            write_install_manifest(runtime)
             config = DEFAULT_CONFIG.copy()
             config["runtime_dir"] = str(runtime)
             config["model"] = "medium"
@@ -295,6 +303,7 @@ class DiagnosticsTests(unittest.TestCase):
             (runtime / "faster-whisper-xxl.exe").write_text("exe", encoding="utf-8")
             (runtime / "ffmpeg.exe").write_text("ff", encoding="utf-8")
             (runtime / "_xxl_data").mkdir()
+            write_install_manifest(runtime)
             config = DEFAULT_CONFIG.copy()
             config["runtime_dir"] = str(runtime)
             config["models_path"] = str(configured_models)
@@ -318,6 +327,7 @@ class DiagnosticsTests(unittest.TestCase):
             (runtime / "faster-whisper-xxl.exe").write_text("exe", encoding="utf-8")
             (runtime / "ffmpeg.exe").write_text("ff", encoding="utf-8")
             (runtime / "_xxl_data").mkdir()
+            write_install_manifest(runtime)
             config = DEFAULT_CONFIG.copy()
             config["runtime_dir"] = str(runtime)
             config["model"] = "medium"
@@ -339,6 +349,7 @@ class DiagnosticsTests(unittest.TestCase):
             (runtime / "faster-whisper-xxl.exe").write_text("exe", encoding="utf-8")
             (runtime / "ffmpeg.exe").write_text("ff", encoding="utf-8")
             (runtime / "_xxl_data").mkdir()
+            write_install_manifest(runtime)
             config = DEFAULT_CONFIG.copy()
             config["runtime_dir"] = str(runtime)
             config["model"] = "medium"
@@ -360,6 +371,7 @@ class DiagnosticsTests(unittest.TestCase):
             (runtime / "faster-whisper-xxl.exe").write_text("exe", encoding="utf-8")
             (runtime / "ffmpeg.exe").write_text("ff", encoding="utf-8")
             (runtime / "_xxl_data").mkdir()
+            write_install_manifest(runtime)
             config = DEFAULT_CONFIG.copy()
             config["runtime_dir"] = str(runtime)
             config["model"] = "medium"
@@ -383,6 +395,7 @@ class DiagnosticsTests(unittest.TestCase):
             (runtime / "faster-whisper-xxl.exe").write_text("exe", encoding="utf-8")
             (runtime / "ffmpeg.exe").write_text("ff", encoding="utf-8")
             (runtime / "_xxl_data").mkdir()
+            write_install_manifest(runtime)
             config = DEFAULT_CONFIG.copy()
             config["runtime_dir"] = str(runtime)
             config["model"] = "medium"
@@ -404,6 +417,7 @@ class DiagnosticsTests(unittest.TestCase):
             (runtime / "faster-whisper-xxl.exe").write_text("exe", encoding="utf-8")
             (runtime / "ffmpeg.exe").write_text("ff", encoding="utf-8")
             (runtime / "_xxl_data").mkdir()
+            write_install_manifest(runtime)
             config = DEFAULT_CONFIG.copy()
             config["runtime_dir"] = str(runtime)
             config["model"] = "medium"
@@ -425,6 +439,7 @@ class DiagnosticsTests(unittest.TestCase):
             (runtime / "faster-whisper-xxl.exe").write_text("exe", encoding="utf-8")
             (runtime / "ffmpeg.exe").write_text("ff", encoding="utf-8")
             (runtime / "_xxl_data").mkdir()
+            write_install_manifest(runtime)
             config = DEFAULT_CONFIG.copy()
             config["runtime_dir"] = str(runtime)
             config["model"] = "medium"
@@ -447,6 +462,7 @@ class DiagnosticsTests(unittest.TestCase):
             (runtime / "faster-whisper-xxl.exe").write_text("exe", encoding="utf-8")
             (runtime / "ffmpeg.exe").write_text("ff", encoding="utf-8")
             (runtime / "_xxl_data").mkdir()
+            write_install_manifest(runtime)
             config = DEFAULT_CONFIG.copy()
             config["runtime_dir"] = str(runtime)
             config["model"] = "medium"
@@ -469,6 +485,7 @@ class DiagnosticsTests(unittest.TestCase):
             (runtime / "faster-whisper-xxl.exe").write_text("exe", encoding="utf-8")
             (runtime / "ffmpeg.exe").write_text("ff", encoding="utf-8")
             (runtime / "_xxl_data").mkdir()
+            write_install_manifest(runtime)
             config = DEFAULT_CONFIG.copy()
             config["runtime_dir"] = str(runtime)
             config["device"] = "cuda"
@@ -501,6 +518,7 @@ class DiagnosticsTests(unittest.TestCase):
             (runtime / "faster-whisper-xxl.exe").write_text("exe", encoding="utf-8")
             (runtime / "ffmpeg.exe").write_text("ff", encoding="utf-8")
             (runtime / "_xxl_data").mkdir()
+            write_install_manifest(runtime)
             config = DEFAULT_CONFIG.copy()
             config["runtime_dir"] = str(runtime)
             config["model"] = "medium"
@@ -521,6 +539,7 @@ class DiagnosticsTests(unittest.TestCase):
             (runtime / "faster-whisper-xxl.exe").write_text("exe", encoding="utf-8")
             (runtime / "ffmpeg.exe").write_text("ff", encoding="utf-8")
             (runtime / "_xxl_data").mkdir()
+            write_install_manifest(runtime)
             config = DEFAULT_CONFIG.copy()
             config["runtime_dir"] = str(runtime)
             config["model"] = "medium"
@@ -541,6 +560,7 @@ class DiagnosticsTests(unittest.TestCase):
             (runtime / "faster-whisper-xxl.exe").write_text("exe", encoding="utf-8")
             (runtime / "ffmpeg.exe").write_text("ff", encoding="utf-8")
             (runtime / "_xxl_data").mkdir()
+            write_install_manifest(runtime)
             config = DEFAULT_CONFIG.copy()
             config["runtime_dir"] = str(runtime)
             config["model"] = "medium"
@@ -564,6 +584,7 @@ class DiagnosticsTests(unittest.TestCase):
             (runtime / "faster-whisper-xxl.exe").write_text("exe", encoding="utf-8")
             (runtime / "ffmpeg.exe").write_text("ff", encoding="utf-8")
             (runtime / "_xxl_data").mkdir()
+            write_install_manifest(runtime)
             config = DEFAULT_CONFIG.copy()
             config["runtime_dir"] = str(runtime)
             config["model"] = "medium"
