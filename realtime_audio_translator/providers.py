@@ -2,6 +2,7 @@ import base64
 import html
 import json
 import os
+import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -16,6 +17,13 @@ OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
 OPENAI_SPEECH_URL = "https://api.openai.com/v1/audio/speech"
 GOOGLE_TRANSLATE_URL = "https://translation.googleapis.com/v3/projects/{project}:translateText"
 GOOGLE_TTS_URL = "https://texttospeech.googleapis.com/v1/text:synthesize"
+_ARGOS_INFERENCE_LOCK = threading.Lock()
+
+
+@dataclass(frozen=True)
+class TranslationResult:
+    text: str
+    confidence: float
 
 
 def build_openai_translation_request(text: str, target_language: str, source_language: str, model: str = "gpt-4.1-mini", context: list[tuple[str, str]] | None = None, style: str = "plain", glossary: dict | None = None) -> dict:
@@ -68,41 +76,37 @@ class Translator:
     config: dict
     cache: dict[tuple[str, str, str, str], str] = field(default_factory=dict)
     context: list[tuple[str, str]] = field(default_factory=list)
-    last_confidence: float | None = None
 
-    def translate(self, text: str, source_language: str, target_language: str) -> str:
+    def translate(self, text: str, source_language: str, target_language: str) -> TranslationResult:
         if not text.strip():
-            self.last_confidence = 0.0
-            return ""
+            return TranslationResult("", 0.0)
         provider = self.config.get("provider", "google")
         cache_key = (provider, source_language, target_language, text.strip())
         if cache_key in self.cache and not self._unverified_local_passthrough(provider, text, self.cache[cache_key]):
-            self.last_confidence = 1.0
-            return self._apply_glossary(self.cache[cache_key])
+            return TranslationResult(self._apply_glossary(self.cache[cache_key]), 1.0)
         db_path = Path(self.config.get("translation_cache_path", ""))
         persistent_cache_enabled = self.config.get("translation_cache_enabled", True)
         if persistent_cache_enabled and db_path:
             cached = cached_translation(db_path, provider, source_language, target_language, text)
             if cached is not None and not self._unverified_local_passthrough(provider, text, cached):
                 self.cache[cache_key] = cached
-                self.last_confidence = 1.0
-                return self._apply_glossary(cached)
+                return TranslationResult(self._apply_glossary(cached), 1.0)
         if provider == "local":
             translated = self._local_translate(text, source_language, target_language)
-            self.last_confidence = 0.8 if self.config.get("local_translate_url", "").strip() or translated != text else 0.3
+            confidence = 0.8 if self.config.get("local_translate_url", "").strip() or translated != text else 0.3
         elif provider == "openai":
             translated = self._openai_translate(text, source_language, target_language)
-            self.last_confidence = 0.8
+            confidence = 0.8
         else:
             translated = self._google_translate(text, source_language, target_language)
-            self.last_confidence = 0.8
+            confidence = 0.8
         if not translated.strip():
-            self.last_confidence = 0.0
+            confidence = 0.0
         self.cache[cache_key] = translated
         self._remember_context(text, translated)
         if persistent_cache_enabled and db_path and not (provider == "local" and not self.config.get("local_translate_url", "").strip() and translated == text):
             cache_translation(db_path, provider, source_language, target_language, text, translated)
-        return self._apply_glossary(translated)
+        return TranslationResult(self._apply_glossary(translated), confidence)
 
     def _unverified_local_passthrough(self, provider: str, text: str, translated: str) -> bool:
         return provider == "local" and not self.config.get("local_translate_url", "").strip() and translated.strip() == text.strip()
@@ -151,18 +155,19 @@ class Translator:
     def _argos_translate(self, text: str, source_language: str, target_language: str) -> str:
         if source_language == "auto":
             return ""
-        try:
-            import argostranslate.translate as argos_translate
-        except Exception:
-            return ""
-        source_code = source_language.split("-")[0]
-        target_code = target_language.split("-")[0]
-        languages = argos_translate.get_installed_languages()
-        source = next((language for language in languages if language.code == source_code), None)
-        target = next((language for language in languages if language.code == target_code), None)
-        if not source or not target:
-            return ""
-        return source.get_translation(target).translate(text)
+        with _ARGOS_INFERENCE_LOCK:
+            try:
+                import argostranslate.translate as argos_translate
+            except Exception:
+                return ""
+            source_code = source_language.split("-")[0]
+            target_code = target_language.split("-")[0]
+            languages = argos_translate.get_installed_languages()
+            source = next((language for language in languages if language.code == source_code), None)
+            target = next((language for language in languages if language.code == target_code), None)
+            if not source or not target:
+                return ""
+            return source.get_translation(target).translate(text)
 
     def _openai_translate(self, text: str, source_language: str, target_language: str) -> str:
         request = build_openai_translation_request(text, target_language, source_language, self.config["openai_model"], self.context, self.config.get("translation_style", "plain"), self._glossary())

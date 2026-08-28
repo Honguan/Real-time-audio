@@ -1,9 +1,13 @@
 import os
 import subprocess
+import threading
 import wave
 from pathlib import Path
 
 from .audio import device_name_from_label, find_device
+
+
+_PLAYBACK_LOCK = threading.Lock()
 
 
 def write_linear16_wav(path: Path, audio: bytes, samplerate: int = 24000) -> Path:
@@ -20,18 +24,24 @@ def play_linear16(audio: bytes, device_name: str = "CABLE Input", samplerate: in
     import numpy as np
     import sounddevice as sd
 
-    device = find_device(device_name, want_output=True)
-    data = np.frombuffer(audio, dtype="int16")
-    if cancel_event is None:
-        sd.play(data, samplerate=samplerate, device=device, blocking=True)
-        return
-    if cancel_event.is_set():
-        return
-    sd.play(data, samplerate=samplerate, device=device, blocking=False)
-    while sd.get_stream().active:
-        if cancel_event.wait(0.05):
-            sd.stop()
+    while not _PLAYBACK_LOCK.acquire(timeout=0.05):
+        if cancel_event is not None and cancel_event.is_set():
             return
+    try:
+        device = find_device(device_name, want_output=True)
+        data = np.frombuffer(audio, dtype="int16")
+        if cancel_event is None:
+            sd.play(data, samplerate=samplerate, device=device, blocking=True)
+            return
+        if cancel_event.is_set():
+            return
+        sd.play(data, samplerate=samplerate, device=device, blocking=False)
+        while sd.get_stream().active:
+            if cancel_event.wait(0.05):
+                sd.stop()
+                return
+    finally:
+        _PLAYBACK_LOCK.release()
 
 
 def list_windows_sapi_voices() -> list[str]:

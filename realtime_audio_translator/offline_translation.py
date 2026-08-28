@@ -1,6 +1,7 @@
 import json
 import os
 import tempfile
+import threading
 import zipfile
 from pathlib import Path, PurePosixPath
 
@@ -14,6 +15,7 @@ ARGOS_INDEX_URL = "https://raw.githubusercontent.com/argosopentech/argospm-index
 _TRANSLATORS: dict[Path, object] = {}
 _TOKENIZERS: dict[Path, object] = {}
 _VERIFIED_PACKAGES: dict[Path, tuple[tuple[str, int, int], ...]] = {}
+_INFERENCE_LOCK = threading.Lock()
 
 
 def language_code(language: str) -> str:
@@ -211,25 +213,26 @@ def translate_offline(config: dict, text: str, source_language: str, target_lang
         return ""
     translated = text
     for metadata, package_path in packages:
-        tokenizer = _TOKENIZERS.get(package_path)
-        if tokenizer is None:
-            tokenizer = sentencepiece.SentencePieceProcessor(model_file=str(package_path / "sentencepiece.model"))
-            _TOKENIZERS[package_path] = tokenizer
-        translator = _TRANSLATORS.get(package_path)
-        if translator is None:
-            translator = ctranslate2.Translator(str(package_path / "model"), device="cpu")
-            _TRANSLATORS[package_path] = translator
-        target_prefix = str(metadata.get("target_prefix") or "")
-        results = translator.translate_batch(
-            [tokenizer.encode(translated, out_type=str)],
-            target_prefix=[[target_prefix]] if target_prefix else None,
-            replace_unknowns=True,
-            beam_size=4,
-            num_hypotheses=1,
-            length_penalty=0.2,
-            return_scores=True,
-        )
-        translated = normalize_translation_text(tokenizer.decode(results[0].hypotheses[0]))
+        with _INFERENCE_LOCK:
+            tokenizer = _TOKENIZERS.get(package_path)
+            if tokenizer is None:
+                tokenizer = sentencepiece.SentencePieceProcessor(model_file=str(package_path / "sentencepiece.model"))
+                _TOKENIZERS[package_path] = tokenizer
+            translator = _TRANSLATORS.get(package_path)
+            if translator is None:
+                translator = ctranslate2.Translator(str(package_path / "model"), device="cpu")
+                _TRANSLATORS[package_path] = translator
+            target_prefix = str(metadata.get("target_prefix") or "")
+            results = translator.translate_batch(
+                [tokenizer.encode(translated, out_type=str)],
+                target_prefix=[[target_prefix]] if target_prefix else None,
+                replace_unknowns=True,
+                beam_size=4,
+                num_hypotheses=1,
+                length_penalty=0.2,
+                return_scores=True,
+            )
+            translated = normalize_translation_text(tokenizer.decode(results[0].hypotheses[0]))
         if target_prefix and translated.startswith(target_prefix):
             translated = translated[len(target_prefix):]
         translated = translated.lstrip()

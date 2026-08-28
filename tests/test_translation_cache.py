@@ -33,8 +33,8 @@ class TranslationCacheTests(unittest.TestCase):
                 config["provider"] = "openai"
                 config["translation_cache_path"] = str(Path(tmp) / "translation_cache.db")
                 translator = Translator(config)
-                self.assertEqual(translator.translate("hello", "en", "zh-TW"), "你好")
-                self.assertEqual(translator.translate("hello", "en", "zh-TW"), "你好")
+                self.assertEqual(translator.translate("hello", "en", "zh-TW").text, "你好")
+                self.assertEqual(translator.translate("hello", "en", "zh-TW").text, "你好")
         finally:
             providers_module.requests.post = original_post
             if original_key is None:
@@ -160,8 +160,8 @@ class TranslationCacheTests(unittest.TestCase):
                 config = DEFAULT_CONFIG.copy()
                 config["provider"] = "openai"
                 config["translation_cache_path"] = str(Path(tmp) / "translation_cache.db")
-                self.assertEqual(Translator(config).translate("hello", "en", "zh-TW"), "你好")
-                self.assertEqual(Translator(config).translate("hello", "en", "zh-TW"), "你好")
+                self.assertEqual(Translator(config).translate("hello", "en", "zh-TW").text, "你好")
+                self.assertEqual(Translator(config).translate("hello", "en", "zh-TW").text, "你好")
         finally:
             providers_module.requests.post = original_post
             if original_key is None:
@@ -193,7 +193,7 @@ class TranslationCacheTests(unittest.TestCase):
             with patch("realtime_audio_translator.providers.translate_offline", return_value="Push mid lane near Dragon Pit"):
                 translated = Translator(config).translate("Push mid lane near Dragon Pit", "en", "zh-TW")
 
-        self.assertEqual(translated, "Push 中路 near 龍坑")
+        self.assertEqual(translated.text, "Push 中路 near 龍坑")
 
     def test_translator_applies_longer_glossary_terms_first(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -208,7 +208,7 @@ class TranslationCacheTests(unittest.TestCase):
             with patch("realtime_audio_translator.providers.translate_offline", return_value="Dragon Pit"):
                 translated = Translator(config).translate("Dragon Pit", "en", "zh-TW")
 
-        self.assertEqual(translated, "龍坑")
+        self.assertEqual(translated.text, "龍坑")
 
     def test_translator_ignores_empty_glossary_terms(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -223,7 +223,7 @@ class TranslationCacheTests(unittest.TestCase):
             with patch("realtime_audio_translator.providers.translate_offline", return_value="Dragon Pit"):
                 translated = Translator(config).translate("Dragon Pit", "en", "zh-TW")
 
-        self.assertEqual(translated, "龍坑")
+        self.assertEqual(translated.text, "龍坑")
 
     def test_translator_applies_glossary_to_cached_result(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -237,8 +237,8 @@ class TranslationCacheTests(unittest.TestCase):
             translator = Translator(config)
 
             with patch("realtime_audio_translator.providers.translate_offline", return_value="Dragon Pit"):
-                self.assertEqual(translator.translate("Dragon Pit", "en", "zh-TW"), "龍坑")
-                self.assertEqual(translator.translate("Dragon Pit", "en", "zh-TW"), "龍坑")
+                self.assertEqual(translator.translate("Dragon Pit", "en", "zh-TW").text, "龍坑")
+                self.assertEqual(translator.translate("Dragon Pit", "en", "zh-TW").text, "龍坑")
 
     def test_translator_ignores_invalid_glossary_json(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -253,7 +253,7 @@ class TranslationCacheTests(unittest.TestCase):
             with patch("realtime_audio_translator.providers.translate_offline", return_value="translated"):
                 translated = Translator(config).translate("Dragon Pit", "en", "zh-TW")
 
-        self.assertEqual(translated, "translated")
+        self.assertEqual(translated.text, "translated")
 
 
 if __name__ == "__main__":

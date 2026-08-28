@@ -1178,7 +1178,7 @@ class TranslatorApp(tk.Tk):
                 self.status.set("Google 驗證成功")
             else:
                 translated = Translator(self.config).translate("hello", "en", "zh")
-                self.status.set(translated[:80])
+                self.status.set(translated.text[:80])
         except Exception as exc:
             messagebox.showerror("API 測試失敗", str(exc))
 

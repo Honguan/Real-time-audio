@@ -20,6 +20,18 @@ class ProvidersTests(unittest.TestCase):
         self.assertEqual(openai["headers"]["Authorization"], "Bearer ${OPENAI_API_KEY}")
         self.assertIn("Translate", openai["json"]["input"])
 
+    def test_translation_returns_confidence_with_text(self):
+        config = DEFAULT_CONFIG.copy()
+        config["provider"] = "local"
+        config["translation_cache_enabled"] = False
+        translator = Translator(config)
+        translator._local_translate = lambda text, source, target: "你好"
+
+        result = translator.translate("hello", "en", "zh")
+
+        self.assertEqual(result.text, "你好")
+        self.assertEqual(result.confidence, 0.8)
+
         contextual = build_openai_translation_request("it", "zh-TW", "en", context=[("hello", "你好")])
         self.assertIn("Recent context", contextual["json"]["input"])
         self.assertIn("hello -> 你好", contextual["json"]["input"])
@@ -76,8 +88,8 @@ class ProvidersTests(unittest.TestCase):
                 config["translation_cache_path"] = str(Path(tmp) / "translation_cache.db")
                 translator = Translator(config)
 
-                self.assertEqual(translator.translate("hello", "en", "zh-TW"), "本機:hello")
-                self.assertEqual(translator.last_confidence, 0.8)
+                result = translator.translate("hello", "en", "zh-TW")
+                self.assertEqual((result.text, result.confidence), ("本機:hello", 0.8))
         finally:
             if original_package is None:
                 sys.modules.pop("argostranslate", None)
@@ -88,6 +100,46 @@ class ProvidersTests(unittest.TestCase):
             else:
                 sys.modules["argostranslate.translate"] = original_module
 
+    def test_argos_inference_is_serialized_across_translators(self):
+        active = 0
+        max_active = 0
+        active_lock = threading.Lock()
+
+        class Translation:
+            def translate(self, text):
+                nonlocal active, max_active
+                with active_lock:
+                    active += 1
+                    max_active = max(max_active, active)
+                threading.Event().wait(0.01)
+                with active_lock:
+                    active -= 1
+                return text
+
+        class Language:
+            def __init__(self, code):
+                self.code = code
+
+            def get_translation(self, target):
+                return Translation()
+
+        package = type(sys)("argostranslate")
+        module = type(sys)("argostranslate.translate")
+        package.translate = module
+        module.get_installed_languages = lambda: [Language("en"), Language("zh")]
+        with patch.dict(sys.modules, {"argostranslate": package, "argostranslate.translate": module}):
+            translators = [Translator(DEFAULT_CONFIG.copy()), Translator(DEFAULT_CONFIG.copy())]
+            threads = [
+                threading.Thread(target=translator._argos_translate, args=(str(index), "en", "zh"))
+                for index, translator in enumerate(translators * 10)
+            ]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
+
+        self.assertEqual(max_active, 1)
+
     def test_local_provider_uses_project_offline_translation_models_first(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = DEFAULT_CONFIG.copy()
@@ -96,8 +148,8 @@ class ProvidersTests(unittest.TestCase):
             with patch("realtime_audio_translator.providers.translate_offline", return_value="離線:hello"):
                 translator = Translator(config)
 
-                self.assertEqual(translator.translate("hello", "en", "zh"), "離線:hello")
-                self.assertEqual(translator.last_confidence, 0.8)
+                result = translator.translate("hello", "en", "zh")
+                self.assertEqual((result.text, result.confidence), ("離線:hello", 0.8))
 
     def test_local_translation_model_assets_import_from_configured_directory(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -267,7 +319,7 @@ class ProvidersTests(unittest.TestCase):
                 config["models_path"] = str(Path(tmp) / "models")
                 config["translation_cache_path"] = str(db)
 
-                self.assertEqual(Translator(config).translate("hello", "en", "zh-TW"), "本機:hello")
+                self.assertEqual(Translator(config).translate("hello", "en", "zh-TW").text, "本機:hello")
                 self.assertEqual(cached_translation(db, "local", "en", "zh-TW", "hello"), "本機:hello")
         finally:
             if original_package is None:
@@ -320,7 +372,7 @@ class ProvidersTests(unittest.TestCase):
                 with self.assertRaises(RuntimeError):
                     translator.translate("hello", "auto", "zh-TW")
 
-        self.assertIsNone(translator.last_confidence)
+        self.assertNotIn("last_confidence", translator.__dict__)
 
     def test_local_provider_can_call_libretranslate_endpoint(self):
         import realtime_audio_translator.providers as providers_module
@@ -344,7 +396,7 @@ class ProvidersTests(unittest.TestCase):
                 config["translation_cache_path"] = str(Path(tmp) / "translation_cache.db")
                 translator = Translator(config)
 
-                self.assertEqual(translator.translate("hello", "en", "zh-TW"), "你好")
+                self.assertEqual(translator.translate("hello", "en", "zh-TW").text, "你好")
         finally:
             providers_module.requests.post = original_post
 
