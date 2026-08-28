@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 from realtime_audio_translator.archive_install import write_install_manifest
-from realtime_audio_translator.audio import SegmentWorker, audio_segment_active, device_name_from_label, find_device, loopback_device_for_output, virtual_mic_recaptures_tts
+from realtime_audio_translator.audio import DeviceResolutionError, SegmentWorker, _pyaudio_output_for_device, audio_segment_active, device_identity, find_device, format_device_label, virtual_mic_recaptures_tts
 from realtime_audio_translator.asr import AudioTranscriber, add_runtime_dll_directory, add_xxl_data
 from realtime_audio_translator.engine import RealtimeEngine, audio_devices_overlap, direction_label, drain_queue, overlay_text_from_config, safe_target_language
 from tests.helpers import write_wav
@@ -229,35 +229,114 @@ class AudioTests(unittest.TestCase):
             self.assertTrue(worker.queue.empty())
             self.assertFalse(fresh.exists())
 
-    def test_device_label_strips_hostapi_suffix(self):
-        self.assertEqual(device_name_from_label("CABLE Input (VB-Audio Virtual Cable) [Windows WASAPI]"), "CABLE Input (VB-Audio Virtual Cable)")
+    @staticmethod
+    def _device(index, name="USB Audio", hostapi="Windows WASAPI", samplerate=48000.0):
+        return {
+            "index": index,
+            "name": name,
+            "hostapi": hostapi,
+            "input_channels": 2,
+            "output_channels": 2,
+            "default_samplerate": samplerate,
+        }
 
-    def test_find_device_ignores_empty_label(self):
-        devices = [{"index": 7, "name": "Speakers", "input_channels": 0, "output_channels": 2, "hostapi": "WASAPI"}]
-        with patch("realtime_audio_translator.audio.list_audio_devices", return_value=devices):
-            self.assertIsNone(find_device("", want_output=True))
-            self.assertEqual(find_device("Speakers", want_output=True), 7)
+    def test_find_device_empty_identity_uses_system_default_by_direction(self):
+        import realtime_audio_translator.audio as audio_module
 
-    def test_loopback_device_matches_selected_output_name(self):
-        loopbacks = [
-            {"index": 7, "name": "Headphones [Loopback]"},
-            {"index": 9, "name": "Speakers (USB Audio) [Loopback]"},
-        ]
+        class SoundDevice:
+            def __init__(self):
+                self.kinds = []
 
-        self.assertEqual(loopback_device_for_output(loopbacks, "Speakers (USB Audio) [Windows WASAPI]")["index"], 9)
-        self.assertIsNone(loopback_device_for_output(loopbacks, "Missing speakers"))
+            def query_devices(self, *, kind):
+                self.kinds.append(kind)
+                return {"index": 7 if kind == "output" else 11}
 
-    def test_audio_devices_overlap_matches_short_and_full_names(self):
-        self.assertTrue(audio_devices_overlap("CABLE Input", "CABLE Input (VB-Audio Virtual Cable) [Windows WASAPI]"))
-        self.assertFalse(audio_devices_overlap("Speakers", "CABLE Input"))
+        sounddevice = SoundDevice()
+        with patch.object(audio_module, "_sd", return_value=sounddevice):
+            self.assertEqual(find_device("", want_output=True), 7)
+            self.assertEqual(find_device("", want_output=False), 11)
+
+        self.assertEqual(sounddevice.kinds, ["output", "input"])
+
+    def test_find_device_restores_same_name_usb_devices_by_index(self):
+        devices = [self._device(7, "USB Headset"), self._device(9, "USB Headset")]
+        identities = [device_identity(device) for device in devices]
+
+        self.assertNotEqual(format_device_label(devices[0]), format_device_label(devices[1]))
+        self.assertEqual(find_device(identities[0], want_output=True, devices=devices), 7)
+        self.assertEqual(find_device(identities[1], want_output=True, devices=devices), 9)
+
+    def test_find_device_restores_unique_signature_after_index_changes(self):
+        identity = device_identity(self._device(7, "USB Headset"))
+        devices = [self._device(8, "USB Headset", samplerate=44100.0)]
+
+        self.assertEqual(find_device(identity, want_output=True, devices=devices), 8)
+
+    def test_find_device_reports_ambiguous_duplicate_signature_after_index_changes(self):
+        identity = device_identity(self._device(7, "USB Headset"))
+        devices = [self._device(8, "USB Headset"), self._device(9, "USB Headset")]
+
+        with self.assertRaisesRegex(DeviceResolutionError, "多個相同端點"):
+            find_device(identity, want_output=True, devices=devices)
+
+    def test_find_device_reports_missing_saved_device(self):
+        identity = device_identity(self._device(7, "USB Headset"))
+
+        with self.assertRaisesRegex(DeviceResolutionError, "找不到已儲存"):
+            find_device(identity, want_output=True, devices=[self._device(8, "Other Headset")])
+
+    def test_loopback_maps_across_audio_apis_by_unique_descriptor(self):
+        class PyAudio:
+            devices = [
+                {"index": 20, "name": "其他輸出", "hostApi": 0, "maxOutputChannels": 2, "defaultSampleRate": 48000.0},
+                {"index": 41, "name": "USB Headset", "hostApi": 0, "maxOutputChannels": 2, "defaultSampleRate": 48000.0},
+            ]
+
+            def get_device_count(self):
+                return len(self.devices)
+
+            def get_device_info_by_index(self, index):
+                return self.devices[index]
+
+            def get_host_api_info_by_index(self, _index):
+                return {"name": "Windows WASAPI"}
+
+        self.assertEqual(_pyaudio_output_for_device(PyAudio(), self._device(7, "USB Headset"))["index"], 41)
+
+    def test_loopback_rejects_ambiguous_cross_api_mapping(self):
+        class PyAudio:
+            devices = [
+                {"index": 20, "name": "USB Headset", "hostApi": 0, "maxOutputChannels": 2, "defaultSampleRate": 48000.0},
+                {"index": 41, "name": "USB Headset", "hostApi": 0, "maxOutputChannels": 2, "defaultSampleRate": 48000.0},
+            ]
+
+            def get_device_count(self):
+                return len(self.devices)
+
+            def get_device_info_by_index(self, index):
+                return self.devices[index]
+
+            def get_host_api_info_by_index(self, _index):
+                return {"name": "Windows WASAPI"}
+
+        with self.assertRaisesRegex(DeviceResolutionError, "多個相同端點"):
+            _pyaudio_output_for_device(PyAudio(), self._device(7, "USB Headset"))
+
+    def test_audio_devices_overlap_requires_exact_identity(self):
+        identity = device_identity(self._device(7, "CABLE Input"))
+
+        self.assertTrue(audio_devices_overlap(identity, identity))
+        self.assertFalse(audio_devices_overlap(identity, device_identity(self._device(8, "CABLE Input"))))
 
     def test_direction_label_is_user_facing(self):
         self.assertEqual(direction_label("speaker"), "喇叭")
         self.assertEqual(direction_label("me"), "麥克風")
 
-    def test_virtual_mic_recaptures_tts_matches_vb_cable_pair(self):
-        self.assertTrue(virtual_mic_recaptures_tts("CABLE Output (VB-Audio Virtual Cable)", "CABLE Input (VB-Audio Virtual Cable)"))
-        self.assertFalse(virtual_mic_recaptures_tts("Microphone", "CABLE Input"))
+    def test_virtual_mic_recaptures_tts_requires_exact_identity(self):
+        identity = device_identity(self._device(7, "CABLE Input"))
+
+        self.assertTrue(virtual_mic_recaptures_tts(identity, identity))
+        self.assertFalse(virtual_mic_recaptures_tts(identity, device_identity(self._device(8, "CABLE Input"))))
 
     def test_audio_segment_active_uses_rms_threshold(self):
         with tempfile.TemporaryDirectory() as tmp:

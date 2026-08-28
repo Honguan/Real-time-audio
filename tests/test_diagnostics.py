@@ -3,6 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from realtime_audio_translator.archive_install import write_install_manifest
+from realtime_audio_translator.audio import device_identity
 from realtime_audio_translator.config import DEFAULT_CONFIG, _has_reparse_point, clear_cache, clear_logs, ensure_app_dirs, ensure_glossary_file, load_config, log_files_to_clear, save_audio_devices, save_config
 from realtime_audio_translator.diagnostics import DiagnosticIssue, collect_diagnostics
 from realtime_audio_translator.gui import LANGUAGE_CHOICES, PERFORMANCE_CHOICES, PROVIDER_CHOICES, TARGET_LANGUAGE_CHOICES, TTS_PROVIDER_CHOICES, TranslatorApp, diagnostic_action_label, diagnostic_actions, first_diagnostic_action, first_run_setup_action, first_run_wizard_needed, format_overlay_line, language_lock_value, latency_seconds_value, main_status_summary, mode_notice, overlay_clipboard_text, overlay_font_size_value, overlay_hold_seconds_value, overlay_opacity_value, overlay_visibility_action, performance_segment_seconds, record_logs_requires_confirmation, setup_guide_actions, status_message_is_error, subtitle_updates_allowed, swap_language_values, troubleshooting_action, visible_button_texts, visible_setting_keys
@@ -46,8 +47,16 @@ class DiagnosticsTests(unittest.TestCase):
             config["runtime_dir"] = str(root / "runtime")
             config["model"] = "missing-model"
             config["provider"] = "google"
-            config["speaker_device"] = "CABLE Input [Windows WASAPI]"
-            config["tts_output_device"] = "CABLE Input"
+            feedback_device = device_identity({
+                "index": 1,
+                "name": "虛擬音訊輸出",
+                "hostapi": "Windows WASAPI",
+                "input_channels": 0,
+                "output_channels": 2,
+                "default_samplerate": 48000.0,
+            })
+            config["speaker_device"] = feedback_device
+            config["tts_output_device"] = feedback_device
 
             issues = collect_diagnostics(config, root)
             codes = [issue.code for issue in issues]
@@ -81,17 +90,25 @@ class DiagnosticsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             config = DEFAULT_CONFIG.copy()
             config["runtime_dir"] = str(Path(tmp) / "runtime")
-            config["speaker_device"] = "Speakers [Windows WASAPI]"
-            config["tts_output_device"] = "CABLE Input"
+            speaker_device = device_identity({
+                "index": 2,
+                "name": "播放輸出",
+                "hostapi": "Windows WASAPI",
+                "input_channels": 0,
+                "output_channels": 2,
+                "default_samplerate": 48000.0,
+            })
+            config["speaker_device"] = speaker_device
+            config["tts_output_device"] = ""
             config["speaker_tts_enabled"] = True
-            config["speaker_tts_output_device"] = "Speakers"
+            config["speaker_tts_output_device"] = speaker_device
 
             issues = collect_diagnostics(config, Path(tmp))
 
         issue = next(item for item in issues if item.code == "feedback_risk")
-        self.assertIn("對方翻譯播放輸出", issue.fix)
+        self.assertIn("輸出端點", issue.fix)
 
-    def test_diagnostics_warn_when_virtual_mic_output_is_not_cable_input(self):
+    def test_diagnostics_warn_when_virtual_mic_output_is_not_selected(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             runtime = root / "runtime"
@@ -106,7 +123,7 @@ class DiagnosticsTests(unittest.TestCase):
             config["runtime_dir"] = str(runtime)
             config["model"] = "medium"
             config["tts_enabled"] = True
-            config["tts_output_device"] = "Speakers"
+            config["tts_output_device"] = ""
 
             issues = collect_diagnostics(config, root)
             config["virtual_mic_enabled"] = True
@@ -115,10 +132,10 @@ class DiagnosticsTests(unittest.TestCase):
         self.assertNotIn("virtual_mic_route", [item.code for item in issues])
         issue = next(item for item in enabled_issues if item.code == "virtual_mic_route")
         self.assertEqual(issue.action, "audio_settings")
-        self.assertIn("CABLE Input", issue.fix)
-        self.assertIn("CABLE Output", issue.fix)
+        self.assertIn("輸出端點", issue.fix)
+        self.assertIn("輸入端點", issue.fix)
 
-    def test_diagnostics_warn_when_virtual_mic_cable_input_device_missing(self):
+    def test_diagnostics_warn_when_virtual_mic_output_device_missing(self):
         import realtime_audio_translator.diagnostics as diagnostics_module
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -136,9 +153,26 @@ class DiagnosticsTests(unittest.TestCase):
             config["runtime_dir"] = str(runtime)
             config["model"] = "medium"
             config["virtual_mic_enabled"] = True
-            config["tts_output_device"] = "CABLE Input"
+            output_device = device_identity({
+                "index": 3,
+                "name": "虛擬音訊輸出",
+                "hostapi": "Windows WASAPI",
+                "input_channels": 0,
+                "output_channels": 2,
+                "default_samplerate": 48000.0,
+            })
+            input_device = device_identity({
+                "index": 4,
+                "name": "虛擬音訊輸入",
+                "hostapi": "Windows WASAPI",
+                "input_channels": 2,
+                "output_channels": 0,
+                "default_samplerate": 48000.0,
+            })
+            config["tts_output_device"] = output_device
+            config["virtual_mic_input_device"] = input_device
             original_find_device = diagnostics_module.find_device
-            diagnostics_module.find_device = lambda _name, want_output: None
+            diagnostics_module.find_device = lambda _identity, _want_output: None
             try:
                 issues = collect_diagnostics(config, root)
             finally:
@@ -146,10 +180,10 @@ class DiagnosticsTests(unittest.TestCase):
 
         issue = next(item for item in issues if item.code == "virtual_mic_device_missing")
         self.assertEqual(issue.action, "audio_settings")
-        self.assertIn("VB-CABLE", issue.title)
-        self.assertIn("CABLE Input", issue.fix)
+        self.assertIn("虛擬音訊輸出", issue.title)
+        self.assertIn("輸出端點", issue.fix)
 
-    def test_diagnostics_warn_when_virtual_mic_cable_output_input_missing(self):
+    def test_diagnostics_warn_when_virtual_mic_input_device_missing(self):
         import realtime_audio_translator.diagnostics as diagnostics_module
 
         with tempfile.TemporaryDirectory() as tmp:
@@ -167,11 +201,28 @@ class DiagnosticsTests(unittest.TestCase):
             config["runtime_dir"] = str(runtime)
             config["model"] = "medium"
             config["virtual_mic_enabled"] = True
-            config["tts_output_device"] = "CABLE Input"
+            output_device = device_identity({
+                "index": 5,
+                "name": "虛擬音訊輸出",
+                "hostapi": "Windows WASAPI",
+                "input_channels": 0,
+                "output_channels": 2,
+                "default_samplerate": 48000.0,
+            })
+            input_device = device_identity({
+                "index": 6,
+                "name": "虛擬音訊輸入",
+                "hostapi": "Windows WASAPI",
+                "input_channels": 2,
+                "output_channels": 0,
+                "default_samplerate": 48000.0,
+            })
+            config["tts_output_device"] = output_device
+            config["virtual_mic_input_device"] = input_device
             original_find_device = diagnostics_module.find_device
 
-            def fake_find_device(name, want_output):
-                if name == "CABLE Input" and want_output:
+            def fake_find_device(identity, want_output):
+                if identity == output_device and want_output:
                     return 1
                 return None
 
@@ -183,8 +234,8 @@ class DiagnosticsTests(unittest.TestCase):
 
         issue = next(item for item in issues if item.code == "virtual_mic_input_missing")
         self.assertEqual(issue.action, "audio_settings")
-        self.assertIn("CABLE Output", issue.fix)
-        self.assertIn("Discord", issue.detail)
+        self.assertIn("輸入端點", issue.fix)
+        self.assertIn("輸入端點", issue.detail)
 
     def test_diagnostics_do_not_crash_when_audio_device_query_fails(self):
         import realtime_audio_translator.diagnostics as diagnostics_module
@@ -230,8 +281,25 @@ class DiagnosticsTests(unittest.TestCase):
             config = DEFAULT_CONFIG.copy()
             config["runtime_dir"] = str(runtime)
             config["model"] = "medium"
-            config["microphone_device"] = "CABLE Output (VB-Audio Virtual Cable) [Windows WASAPI]"
-            config["tts_output_device"] = "CABLE Input (VB-Audio Virtual Cable) [Windows WASAPI]"
+            virtual_input_device = device_identity({
+                "index": 7,
+                "name": "虛擬音訊輸入",
+                "hostapi": "Windows WASAPI",
+                "input_channels": 2,
+                "output_channels": 0,
+                "default_samplerate": 48000.0,
+            })
+            tts_output_device = device_identity({
+                "index": 8,
+                "name": "虛擬音訊輸出",
+                "hostapi": "Windows WASAPI",
+                "input_channels": 0,
+                "output_channels": 2,
+                "default_samplerate": 48000.0,
+            })
+            config["microphone_device"] = virtual_input_device
+            config["virtual_mic_input_device"] = virtual_input_device
+            config["tts_output_device"] = tts_output_device
             config["virtual_mic_enabled"] = True
 
             issues = collect_diagnostics(config, root)
@@ -450,7 +518,7 @@ class DiagnosticsTests(unittest.TestCase):
 
         issue = next(item for item in issues if item.code == "virtual_mic_no_output")
         self.assertIn("Discord", issue.title)
-        self.assertIn("CABLE Output", issue.fix)
+        self.assertIn("配對端點", issue.fix)
 
     def test_diagnostics_report_quiet_audio_tests(self):
         with tempfile.TemporaryDirectory() as tmp:

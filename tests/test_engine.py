@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 from realtime_audio_translator.asr import TranscriptionResult
 from realtime_audio_translator.config import DEFAULT_CONFIG, _has_reparse_point, clear_cache, clear_logs, ensure_app_dirs, ensure_glossary_file, load_config, log_files_to_clear, save_audio_devices, save_config
-from realtime_audio_translator.audio import WorkerHealth
+from realtime_audio_translator.audio import DeviceResolutionError, WorkerHealth, device_identity
 from realtime_audio_translator.engine import RealtimeEngine, audio_devices_overlap, direction_label, drain_queue, overlay_text_from_config, safe_target_language
 from realtime_audio_translator.providers import TextToSpeech, TranslationResult, Translator, build_google_translate_request, build_openai_translation_request, google_access_token
 from tests.helpers import QueuedWorker, StaticTranscriber, StoppingTranslator, write_wav
@@ -489,7 +489,7 @@ class EngineTests(unittest.TestCase):
         finally:
             engine_module.play_linear16 = original_play
 
-        self.assertEqual(played, [(b"\0\0", "CABLE Input")])
+        self.assertEqual(played, [(b"\0\0", "")])
 
     def test_engine_uses_local_tts_provider_for_mic_output(self):
         import realtime_audio_translator.engine as engine_module
@@ -539,7 +539,7 @@ class EngineTests(unittest.TestCase):
         finally:
             engine_module.play_linear16 = original_play
 
-        self.assertEqual(spoken, [("hi", "CABLE Input")])
+        self.assertEqual(spoken, [("hi", "")])
 
     def test_engine_can_speak_speaker_translation_to_listener_output(self):
         config = DEFAULT_CONFIG.copy()
@@ -808,8 +808,16 @@ class EngineTests(unittest.TestCase):
         statuses = []
         config = DEFAULT_CONFIG.copy()
         config["record_logs"] = False
-        config["speaker_device"] = "CABLE Input (VB-Audio Virtual Cable) [Windows WASAPI]"
-        config["tts_output_device"] = "CABLE Input"
+        identity = device_identity({
+            "index": 1,
+            "name": "CABLE Input",
+            "hostapi": "Windows WASAPI",
+            "input_channels": 0,
+            "output_channels": 2,
+            "default_samplerate": 48000,
+        })
+        config["speaker_device"] = identity
+        config["tts_output_device"] = identity
         engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, statuses.append)
         started = []
 
@@ -831,8 +839,16 @@ class EngineTests(unittest.TestCase):
         config = DEFAULT_CONFIG.copy()
         config["record_logs"] = False
         config["speaker_enabled"] = False
-        config["microphone_device"] = "CABLE Output (VB-Audio Virtual Cable) [Windows WASAPI]"
-        config["tts_output_device"] = "CABLE Input (VB-Audio Virtual Cable) [Windows WASAPI]"
+        identity = device_identity({
+            "index": 2,
+            "name": "CABLE Output",
+            "hostapi": "Windows WASAPI",
+            "input_channels": 2,
+            "output_channels": 0,
+            "default_samplerate": 48000,
+        })
+        config["microphone_device"] = identity
+        config["virtual_mic_input_device"] = identity
         config["virtual_mic_enabled"] = True
         engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, statuses.append)
         started = []
@@ -863,7 +879,10 @@ class EngineTests(unittest.TestCase):
         original_transcriber = engine_module.AudioTranscriber
         original_find_device = engine_module.find_device
         engine_module.AudioTranscriber = Transcriber
-        engine_module.find_device = lambda *args, **kwargs: None
+        def unavailable_device(*args, **kwargs):
+            raise DeviceResolutionError("找不到音訊裝置")
+
+        engine_module.find_device = unavailable_device
         try:
             engine.start()
         finally:
@@ -882,14 +901,17 @@ class EngineTests(unittest.TestCase):
         engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, lambda status: None)
 
         original_find_device = engine_module.find_device
-        engine_module.find_device = lambda name, want_output: calls.append((name, want_output)) or None
+        def unavailable_device(name, want_output):
+            calls.append((name, want_output))
+            raise DeviceResolutionError("找不到音訊裝置")
+
+        engine_module.find_device = unavailable_device
         try:
             engine._start_direction("me", "", False)
         finally:
             engine_module.find_device = original_find_device
 
-        self.assertIn(("Microphone", False), calls)
-        self.assertNotIn(("CABLE Output", False), calls)
+        self.assertEqual(calls, [("", False)])
 
     def test_engine_start_reports_transcriber_failure(self):
         import realtime_audio_translator.engine as engine_module
