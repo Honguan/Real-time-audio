@@ -202,7 +202,7 @@ class RealtimeEngine:
                     if translation_confidence is not None:
                         self.config["last_translation_confidence"] = translation_confidence
                 except Exception as exc:
-                    translated = text
+                    translated = ""
                     translation_failed = True
                     self.status(f"{direction_label(direction)}：翻譯失敗：{exc}")
                 self.config["last_translation_empty"] = not translation_failed and not bool(str(translated).strip())
@@ -225,7 +225,7 @@ class RealtimeEngine:
                     self.config["last_tts_latency_seconds"] = tts_latency
                 latency = time.perf_counter() - started
                 self.config["last_latency_seconds"] = latency
-                if self.log:
+                if self.log and not translation_failed:
                     self.log.append(direction, source_for_output, target, text, translated, self.config["provider"], latency_seconds=latency)
                 if not translation_failed:
                     snapshot = build_confidence_snapshot(

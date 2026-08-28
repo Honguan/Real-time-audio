@@ -1785,14 +1785,18 @@ class CoreTests(unittest.TestCase):
         self.assertIn("是否將這個修正加入術語表？", gui_source)
         self.assertIn("add_glossary_term", gui_source)
 
-    def test_local_provider_returns_text_without_cloud_request(self):
+    def test_local_provider_fails_without_translation_backend(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = DEFAULT_CONFIG.copy()
             config["provider"] = "local"
             config["translation_cache_path"] = str(Path(tmp) / "translation_cache.db")
             translator = Translator(config)
 
-            self.assertEqual(translator.translate("hello", "auto", "zh-TW"), "hello")
+            with patch("realtime_audio_translator.providers.translate_offline", return_value=""), patch.object(translator, "_argos_translate", return_value=""), patch("realtime_audio_translator.providers.requests.post") as post:
+                with self.assertRaisesRegex(RuntimeError, "找不到 zh→en 的本機翻譯模型"):
+                    translator.translate("你好", "zh", "en")
+
+            post.assert_not_called()
 
     def test_local_provider_can_use_installed_argos_without_url(self):
         class Translation:
@@ -1930,19 +1934,41 @@ class CoreTests(unittest.TestCase):
             config["provider"] = "local"
             config["translation_cache_path"] = str(db)
 
-            self.assertEqual(Translator(config).translate("hello", "auto", "zh-TW"), "hello")
+            translator = Translator(config)
+            with patch("realtime_audio_translator.providers.translate_offline", return_value=""), patch.object(translator, "_argos_translate", return_value=""):
+                with self.assertRaises(RuntimeError):
+                    translator.translate("hello", "auto", "zh-TW")
             self.assertIsNone(cached_translation(db, "local", "auto", "zh-TW", "hello"))
 
-    def test_translator_sets_confidence_for_local_fallback(self):
+    def test_local_provider_rejects_cached_source_text_when_backend_is_missing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "translation_cache.db"
+            config = DEFAULT_CONFIG.copy()
+            config["provider"] = "local"
+            config["translation_cache_path"] = str(db)
+            cache_translation(db, "local", "zh", "en", "你好", "你好")
+
+            for memory_cached in (False, True):
+                with self.subTest(memory_cached=memory_cached):
+                    translator = Translator(config)
+                    if memory_cached:
+                        translator.cache[("local", "zh", "en", "你好")] = "你好"
+                    with patch("realtime_audio_translator.providers.translate_offline", return_value=""), patch.object(translator, "_argos_translate", return_value=""):
+                        with self.assertRaises(RuntimeError):
+                            translator.translate("你好", "zh", "en")
+
+    def test_translator_does_not_set_success_confidence_without_local_backend(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = DEFAULT_CONFIG.copy()
             config["provider"] = "local"
             config["translation_cache_path"] = str(Path(tmp) / "translation_cache.db")
             translator = Translator(config)
 
-            translator.translate("hello", "auto", "zh-TW")
+            with patch("realtime_audio_translator.providers.translate_offline", return_value=""), patch.object(translator, "_argos_translate", return_value=""):
+                with self.assertRaises(RuntimeError):
+                    translator.translate("hello", "auto", "zh-TW")
 
-        self.assertEqual(translator.last_confidence, 0.3)
+        self.assertIsNone(translator.last_confidence)
 
     def test_translator_applies_glossary_json(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1954,7 +1980,8 @@ class CoreTests(unittest.TestCase):
             config["glossary_path"] = str(glossary)
             config["translation_cache_path"] = str(Path(tmp) / "translation_cache.db")
 
-            translated = Translator(config).translate("Push mid lane near Dragon Pit", "en", "zh-TW")
+            with patch("realtime_audio_translator.providers.translate_offline", return_value="Push mid lane near Dragon Pit"):
+                translated = Translator(config).translate("Push mid lane near Dragon Pit", "en", "zh-TW")
 
         self.assertEqual(translated, "Push 中路 near 龍坑")
 
@@ -1968,7 +1995,8 @@ class CoreTests(unittest.TestCase):
             config["glossary_path"] = str(glossary)
             config["translation_cache_path"] = str(Path(tmp) / "translation_cache.db")
 
-            translated = Translator(config).translate("Dragon Pit", "en", "zh-TW")
+            with patch("realtime_audio_translator.providers.translate_offline", return_value="Dragon Pit"):
+                translated = Translator(config).translate("Dragon Pit", "en", "zh-TW")
 
         self.assertEqual(translated, "龍坑")
 
@@ -1982,7 +2010,8 @@ class CoreTests(unittest.TestCase):
             config["glossary_path"] = str(glossary)
             config["translation_cache_path"] = str(Path(tmp) / "translation_cache.db")
 
-            translated = Translator(config).translate("Dragon Pit", "en", "zh-TW")
+            with patch("realtime_audio_translator.providers.translate_offline", return_value="Dragon Pit"):
+                translated = Translator(config).translate("Dragon Pit", "en", "zh-TW")
 
         self.assertEqual(translated, "龍坑")
 
@@ -1997,8 +2026,9 @@ class CoreTests(unittest.TestCase):
             config["translation_cache_path"] = str(Path(tmp) / "translation_cache.db")
             translator = Translator(config)
 
-            self.assertEqual(translator.translate("Dragon Pit", "en", "zh-TW"), "龍坑")
-            self.assertEqual(translator.translate("Dragon Pit", "en", "zh-TW"), "龍坑")
+            with patch("realtime_audio_translator.providers.translate_offline", return_value="Dragon Pit"):
+                self.assertEqual(translator.translate("Dragon Pit", "en", "zh-TW"), "龍坑")
+                self.assertEqual(translator.translate("Dragon Pit", "en", "zh-TW"), "龍坑")
 
     def test_translator_ignores_invalid_glossary_json(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -2010,9 +2040,10 @@ class CoreTests(unittest.TestCase):
             config["glossary_path"] = str(glossary)
             config["translation_cache_path"] = str(Path(tmp) / "translation_cache.db")
 
-            translated = Translator(config).translate("Dragon Pit", "en", "zh-TW")
+            with patch("realtime_audio_translator.providers.translate_offline", return_value="translated"):
+                translated = Translator(config).translate("Dragon Pit", "en", "zh-TW")
 
-        self.assertEqual(translated, "Dragon Pit")
+        self.assertEqual(translated, "translated")
 
     def test_local_provider_can_call_libretranslate_endpoint(self):
         import realtime_audio_translator.providers as providers_module
@@ -3063,9 +3094,15 @@ class CoreTests(unittest.TestCase):
 
     def test_engine_shows_original_when_translation_fails(self):
         overlays = []
+        statuses = []
+        spoken = []
+        logged = []
         config = DEFAULT_CONFIG.copy()
         config["record_logs"] = False
-        engine = RealtimeEngine(Path("."), config, lambda speaker, mine: overlays.append((speaker, mine)), lambda status: None)
+        config["source_language"] = "en"
+        config["target_language"] = "zh"
+        config["virtual_mic_enabled"] = True
+        engine = RealtimeEngine(Path("."), config, lambda speaker, mine: overlays.append((speaker, mine)), statuses.append)
 
         class Transcriber:
             def transcribe(self, wav, source_language):
@@ -3074,7 +3111,15 @@ class CoreTests(unittest.TestCase):
         class Translator:
             def translate(self, text, source_language, target_language):
                 engine.running = False
-                raise RuntimeError("translation down")
+                raise RuntimeError("找不到 en→zh 的本機翻譯模型")
+
+        class TTS:
+            def speak_local(self, text, device):
+                spoken.append((text, device))
+
+        class Log:
+            def append(self, *args, **kwargs):
+                logged.append((args, kwargs))
 
         class Worker:
             def __init__(self, wav):
@@ -3087,9 +3132,14 @@ class CoreTests(unittest.TestCase):
             engine.running = True
             engine.transcriber = Transcriber()
             engine.translator = Translator()
-            engine._process_segments("speaker", Worker(wav))
+            engine.tts = TTS()
+            engine.log = Log()
+            engine._process_segments("me", Worker(wav))
 
-        self.assertEqual(overlays[0][0], "en: hello")
+        self.assertEqual(overlays[0][1], "en: hello")
+        self.assertIn("麥克風：翻譯失敗：找不到 en→zh 的本機翻譯模型", statuses)
+        self.assertEqual(spoken, [])
+        self.assertEqual(logged, [])
 
     def test_engine_records_empty_translation_for_diagnostics(self):
         config = DEFAULT_CONFIG.copy()
