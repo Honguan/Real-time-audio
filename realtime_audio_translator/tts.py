@@ -2,6 +2,7 @@ import os
 import subprocess
 import tempfile
 import threading
+import time
 import wave
 from pathlib import Path
 
@@ -70,7 +71,7 @@ foreach ($candidate in $voice.GetVoices()) {
     return [line.strip() for line in result.stdout.splitlines() if line.strip()]
 
 
-def speak_windows_sapi(text: str, device_name: str = "", rate: int = 0, volume: int = 100, voice_name: str = "", cancel_event=None) -> None:
+def speak_windows_sapi(text: str, device_name: str = "", rate: int = 0, volume: int = 100, voice_name: str = "", cancel_event=None) -> dict[str, float]:
     script = r"""
 $voice = New-Object -ComObject SAPI.SpVoice
 $voice.Rate = [int]$env:RAT_TTS_RATE
@@ -105,6 +106,8 @@ if ($wavPath) {
         env["RAT_TTS_VOICE"] = voice_name
         creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
         command = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script]
+        stage_started = time.perf_counter()
+        stage_started_at = time.time()
         if cancel_event is None:
             subprocess.run(command, check=True, env=env, creationflags=creationflags)
         else:
@@ -117,8 +120,28 @@ if ($wavPath) {
                     except subprocess.TimeoutExpired:
                         process.kill()
                         process.wait()
-                    return
+                    return {}
             if process.returncode:
                 raise subprocess.CalledProcessError(process.returncode, command)
         if device_name:
+            synthesis_completed_at = time.time()
+            synthesis_seconds = time.perf_counter() - stage_started
+            playback_started = time.perf_counter()
+            playback_started_at = time.time()
             _play_wav(wav_path, device_name, cancel_event)
+            return {
+                "tts_synthesis_started_at": stage_started_at,
+                "tts_synthesis_completed_at": synthesis_completed_at,
+                "tts_playback_started_at": playback_started_at,
+                "tts_playback_completed_at": time.time(),
+                "last_tts_synthesis_seconds": synthesis_seconds,
+                "last_tts_playback_seconds": time.perf_counter() - playback_started,
+            }
+        return {
+            "tts_synthesis_started_at": stage_started_at,
+            "tts_synthesis_completed_at": stage_started_at,
+            "tts_playback_started_at": stage_started_at,
+            "tts_playback_completed_at": time.time(),
+            "last_tts_synthesis_seconds": 0.0,
+            "last_tts_playback_seconds": time.perf_counter() - stage_started,
+        }

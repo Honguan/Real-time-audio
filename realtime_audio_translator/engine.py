@@ -12,6 +12,7 @@ from .ai_confidence import build_confidence_snapshot, format_confidence_status
 from .config import APP_DIR, DEFAULT_CONFIG, STATE_KEYS, TARGET_LANGUAGE_CHOICES, save_config_state, validate_language_pair
 from .logbook import ConversationLog
 from .models import models_dir
+from .performance import LatencyWindow
 from .providers import TextToSpeech, Translator
 from .tts import play_linear16
 
@@ -80,6 +81,7 @@ class RealtimeEngine:
         self._health_lock = threading.Lock()
         self._log_lock = threading.Lock()
         self._tts_lock = threading.Lock()
+        self._latencies = LatencyWindow()
         self.threads: list[threading.Thread] = []
         self.workers: list[SegmentWorker] = []
         self.capture_health: dict[str, WorkerHealth] = {}
@@ -104,6 +106,10 @@ class RealtimeEngine:
             if self._session == session:
                 self.status(str(exc))
             return
+        session_counters = {"last_provider_error_count": 0, "last_rate_limit_count": 0, "last_max_queue_depth": 0, "last_dropped_segments": 0}
+        self.config.update(session_counters)
+        self._save_state(set(session_counters))
+        model_load_started = time.perf_counter()
         try:
             transcriber = AudioTranscriber(
                 self.repo_root,
@@ -127,8 +133,9 @@ class RealtimeEngine:
         if not self._session_active(session):
             return
         self.transcriber = transcriber
+        self.config["last_model_load_seconds"] = time.perf_counter() - model_load_started
         self.config["last_asr_failed"] = False
-        self._save_state({"last_asr_failed"})
+        self._save_state({"last_asr_failed", "last_model_load_seconds"})
         started = []
         self._starting_directions = True
         skipped_feedback = False
@@ -294,7 +301,7 @@ class RealtimeEngine:
         )
         while self.running and self._session_active(session) and not getattr(worker, "_stopped", False):
             if self.paused:
-                drain_queue(worker.queue)
+                worker.discard_pending() if hasattr(worker, "discard_pending") else drain_queue(worker.queue)
                 time.sleep(0.1)
                 continue
             try:
@@ -304,6 +311,9 @@ class RealtimeEngine:
             try:
                 if not config.get("speaker_enabled" if direction == "speaker" else "microphone_enabled", True):
                     continue
+                dequeued_perf = time.perf_counter()
+                timing = worker.take_timing(wav) if hasattr(worker, "take_timing") else {}
+                timing["dequeued_at"] = time.time()
                 previous_dropped = metrics.get("last_dropped_segments", 0)
                 queue_depth = worker.queue.qsize()
                 dropped_segments = getattr(worker, "dropped_segments", 0)
@@ -313,17 +323,27 @@ class RealtimeEngine:
                     processing_lag = 0.0
                 backlog_metrics = {
                     "last_queue_depth": queue_depth,
+                    "last_max_queue_depth": max(int(metrics.get("last_max_queue_depth", 0)), int(getattr(worker, "max_queue_depth", queue_depth))),
                     "last_dropped_segments": dropped_segments,
                     "last_processing_lag_seconds": processing_lag,
+                    "last_capture_seconds": max(0.0, timing.get("_capture_completed_perf", dequeued_perf) - timing.get("_capture_started_perf", dequeued_perf)),
+                    "last_queue_wait_seconds": max(0.0, dequeued_perf - timing.get("_enqueued_perf", dequeued_perf - processing_lag)),
                 }
                 self._record_metrics(direction, backlog_metrics, set(backlog_metrics))
                 if dropped_segments > previous_dropped or queue_depth >= max(1, worker.queue.maxsize - 1):
                     self._publish(session, self.status, f"{direction_label(direction)}：處理落後，已略過 {dropped_segments} 段；佇列 {queue_depth}/{worker.queue.maxsize}")
                 started = time.perf_counter()
-                if not audio_segment_active(wav, config.get("speech_threshold", 0.01)):
+                cpu_started = time.thread_time()
+                timing["vad_started_at"] = time.time()
+                active = audio_segment_active(wav, config.get("speech_threshold", 0.01))
+                timing["vad_completed_at"] = time.time()
+                vad_latency = time.perf_counter() - started
+                if not active:
                     continue
                 asr_started = time.perf_counter()
+                timing["asr_started_at"] = time.time()
                 transcription = self.transcriber.transcribe(wav, source)
+                timing["asr_completed_at"] = time.time()
                 if not self._session_active(session):
                     return
                 text = transcription.text
@@ -357,7 +377,9 @@ class RealtimeEngine:
                 translation_failed = False
                 try:
                     translation_started = time.perf_counter()
+                    timing["translation_started_at"] = time.time()
                     translation = translator.translate(text, source_for_output, target)
+                    timing["translation_completed_at"] = time.time()
                     if not self._session_active(session):
                         return
                     translated = translation.text
@@ -367,8 +389,11 @@ class RealtimeEngine:
                         metrics["last_translation_confidence"] = translation_confidence
                         state_keys.add("last_translation_confidence")
                 except Exception as exc:
+                    timing["translation_completed_at"] = time.time()
+                    translation_latency = time.perf_counter() - translation_started
                     if not self._session_active(session):
                         return
+                    self._record_provider_error(direction, exc)
                     translated = ""
                     translation_failed = True
                     self._publish(session, self.status, f"{direction_label(direction)}：翻譯失敗：{exc}")
@@ -386,20 +411,39 @@ class RealtimeEngine:
                     if not self._session_active(session):
                         return
                     self._publish(session, self.overlay, overlay_text, "")
+                    timing["subtitle_published_at"] = time.time()
                     if config.get("tts_enabled", True) and config.get("speaker_tts_enabled", False) and not self.muted and translated and not translation_failed:
-                        tts_latency = self._speak_translation(direction, translated, target, config.get("speaker_tts_output_device", ""), session)
+                        tts_latency = self._speak_translation(direction, translated, target, config.get("speaker_tts_output_device", ""), session, timing)
                 else:
                     if not self._session_active(session):
                         return
                     self._publish(session, self.overlay, "", overlay_text)
+                    timing["subtitle_published_at"] = time.time()
                     if config.get("tts_enabled", True) and config.get("virtual_mic_enabled", False) and not self.muted and translated and not translation_failed:
-                        tts_latency = self._speak_translation(direction, translated, target, config.get("tts_output_device", ""), session)
+                        tts_latency = self._speak_translation(direction, translated, target, config.get("tts_output_device", ""), session, timing)
                 if not self._session_active(session):
                     return
                 if tts_latency is not None:
                     metrics["last_tts_latency_seconds"] = tts_latency
                     state_keys.add("last_tts_latency_seconds")
                 latency = time.perf_counter() - started
+                end_to_end = max(latency, time.perf_counter() - timing.get("_capture_started_perf", started))
+                with self._metrics_lock:
+                    self._latencies.add(end_to_end)
+                    latency_percentiles = self._latencies.snapshot()
+                stage_metrics = {
+                    "last_vad_seconds": vad_latency,
+                    "last_asr_latency_seconds": asr_latency,
+                    "last_translation_latency_seconds": translation_latency or 0.0,
+                    "last_end_to_end_latency_seconds": end_to_end,
+                    "last_real_time_factor": latency / segment_seconds,
+                    "last_cpu_percent": 100.0 * (time.thread_time() - cpu_started) / max(latency, 0.001),
+                    "last_tts_synthesis_seconds": metrics.get("last_tts_synthesis_seconds", 0.0) if tts_latency is not None else 0.0,
+                    "last_tts_playback_seconds": metrics.get("last_tts_playback_seconds", 0.0) if tts_latency is not None else 0.0,
+                    **latency_percentiles,
+                }
+                metrics.update(stage_metrics)
+                state_keys.update(stage_metrics)
                 metrics["last_latency_seconds"] = latency
                 state_keys.add("last_latency_seconds")
                 if not self._session_active(session):
@@ -409,7 +453,11 @@ class RealtimeEngine:
                     return
                 if self.log and not translation_failed:
                     with self._log_lock:
-                        self.log.append(direction, source_for_output, target, text, translated, config["provider"], latency_seconds=latency)
+                        public_timing = {key: value for key, value in timing.items() if not key.startswith("_")}
+                        performance_keys = set(backlog_metrics) | set(stage_metrics) | {"last_provider_error_count", "last_rate_limit_count"}
+                        performance = {key: metrics[key] for key in performance_keys if key in metrics}
+                        performance.update({key: self.config[key] for key in ("last_cuda_devices", "last_vram_gb", "last_model_load_seconds") if self.config.get(key) not in (None, "")})
+                        self.log.append(direction, source_for_output, target, text, translated, config["provider"], latency_seconds=latency, performance=performance, timestamps=public_timing)
                     if not self._session_active(session):
                         return
                 if not translation_failed:
@@ -430,51 +478,104 @@ class RealtimeEngine:
             finally:
                 discard_audio_segment(wav)
 
-    def _speak_translation(self, direction: str, translated: str, target: str, tts_device: str, session: str | None = None) -> float | None:
+    def _speak_translation(self, direction: str, translated: str, target: str, tts_device: str, session: str | None = None, timing: dict | None = None) -> float | None:
         while not self._tts_lock.acquire(timeout=0.05):
             if not self._session_active(session):
                 return None
         try:
-            return self._speak_translation_locked(direction, translated, target, tts_device, session)
+            return self._speak_translation_locked(direction, translated, target, tts_device, session, timing or {})
         finally:
             self._tts_lock.release()
 
-    def _speak_translation_locked(self, direction: str, translated: str, target: str, tts_device: str, session: str | None) -> float | None:
+    def _speak_translation_locked(self, direction: str, translated: str, target: str, tts_device: str, session: str | None, timing: dict) -> float | None:
         tts_started = time.perf_counter()
+        synthesis_seconds = 0.0
+        playback_seconds = 0.0
         pipeline = self._pipeline(direction)
         config = pipeline.config
         tts = pipeline.tts
         try:
             if config.get("tts_provider") == "local":
+                local_started = time.perf_counter()
+                local_started_at = time.time()
                 if session is None:
-                    tts.speak_local(translated, tts_device)
+                    local_timing = tts.speak_local(translated, tts_device)
                 else:
-                    tts.speak_local(translated, tts_device, self._cancel)
+                    local_timing = tts.speak_local(translated, tts_device, self._cancel)
+                if isinstance(local_timing, dict):
+                    timing.update({key: value for key, value in local_timing.items() if key.endswith("_at")})
+                    synthesis_seconds = float(local_timing.get("last_tts_synthesis_seconds", 0.0))
+                    playback_seconds = float(local_timing.get("last_tts_playback_seconds", 0.0))
+                else:
+                    timing.update({"tts_synthesis_started_at": local_started_at, "tts_synthesis_completed_at": local_started_at, "tts_playback_started_at": local_started_at, "tts_playback_completed_at": time.time()})
+                    playback_seconds = time.perf_counter() - local_started
             elif config.get("tts_provider") == "openai":
+                synthesis_started = time.perf_counter()
+                timing["tts_synthesis_started_at"] = time.time()
                 audio = tts.synthesize_openai_linear16(translated)
+                synthesis_seconds = time.perf_counter() - synthesis_started
+                timing["tts_synthesis_completed_at"] = time.time()
                 if not self._session_active(session):
                     return None
+                playback_started = time.perf_counter()
+                timing["tts_playback_started_at"] = time.time()
                 play_linear16(audio, tts_device) if session is None else play_linear16(audio, tts_device, cancel_event=self._cancel)
+                playback_seconds = time.perf_counter() - playback_started
+                timing["tts_playback_completed_at"] = time.time()
             else:
+                synthesis_started = time.perf_counter()
+                timing["tts_synthesis_started_at"] = time.time()
                 audio = tts.synthesize_google_linear16(translated, target)
+                synthesis_seconds = time.perf_counter() - synthesis_started
+                timing["tts_synthesis_completed_at"] = time.time()
                 if not self._session_active(session):
                     return None
+                playback_started = time.perf_counter()
+                timing["tts_playback_started_at"] = time.time()
                 play_linear16(audio, tts_device) if session is None else play_linear16(audio, tts_device, cancel_event=self._cancel)
+                playback_seconds = time.perf_counter() - playback_started
+                timing["tts_playback_completed_at"] = time.time()
             if not self._session_active(session):
                 return None
             tts_failed = False
         except Exception as exc:
             if not self._session_active(session):
                 return None
+            now = time.time()
+            if "tts_synthesis_started_at" in timing:
+                timing.setdefault("tts_synthesis_completed_at", now)
+            if "tts_playback_started_at" in timing:
+                timing.setdefault("tts_playback_completed_at", now)
             tts_failed = True
+            self._record_provider_error(direction, exc)
             self._publish(session, self.status, f"{direction_label(direction)}：TTS 失敗：{exc}")
-        self._record_metrics(direction, {"last_tts_failed": tts_failed}, {"last_tts_failed"})
+        tts_metrics = {
+            "last_tts_failed": tts_failed,
+            "last_tts_synthesis_seconds": synthesis_seconds,
+            "last_tts_playback_seconds": playback_seconds,
+        }
+        self._record_metrics(direction, tts_metrics, set(tts_metrics))
         return time.perf_counter() - tts_started
 
-    def _record_metrics(self, direction: str, values: dict, keys: set[str]) -> None:
-        self._pipeline(direction).metrics.update(values)
+    def _record_provider_error(self, direction: str, error: Exception) -> None:
+        status_code = getattr(error, "status_code", None) or getattr(getattr(error, "response", None), "status_code", None)
         with self._metrics_lock:
-            self.config.update({key: values[key] for key in keys})
+            provider_errors = int(self.config.get("last_provider_error_count", 0)) + 1
+            rate_limits = int(self.config.get("last_rate_limit_count", 0)) + (status_code == 429)
+            values = {"last_provider_error_count": provider_errors, "last_rate_limit_count": rate_limits}
+            self._pipeline(direction).metrics.update(values)
+            self.config.update(values)
+            self._save_state(set(values))
+
+    def _record_metrics(self, direction: str, values: dict, keys: set[str]) -> None:
+        with self._metrics_lock:
+            self._pipeline(direction).metrics.update(values)
+            updates = {key: values[key] for key in keys}
+            if "last_max_queue_depth" in keys:
+                updates["last_max_queue_depth"] = max(int(pipeline.metrics.get("last_max_queue_depth", 0)) for pipeline in self.pipelines.values())
+            if "last_dropped_segments" in keys:
+                updates["last_dropped_segments"] = sum(int(pipeline.metrics.get("last_dropped_segments", 0)) for pipeline in self.pipelines.values())
+            self.config.update(updates)
             self._save_state(keys)
 
     def _save_state(self, keys: set[str]) -> None:

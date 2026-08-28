@@ -322,7 +322,7 @@ class DiagnosticsTests(unittest.TestCase):
             config = DEFAULT_CONFIG.copy()
             config["runtime_dir"] = str(runtime)
             config["model"] = "medium"
-            config["last_latency_seconds"] = 4.2
+            config["last_end_to_end_p95_seconds"] = 4.2
 
             issues = collect_diagnostics(config, root)
 
@@ -330,6 +330,21 @@ class DiagnosticsTests(unittest.TestCase):
         self.assertEqual(issue.action, "optimize_settings")
         self.assertIn("4.2", issue.detail)
         self.assertIn("自動優化", issue.fix)
+
+    def test_diagnostics_distinguish_asr_network_and_queue_backlog(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = DEFAULT_CONFIG.copy()
+            config.update({
+                "last_asr_latency_seconds": 2.5,
+                "last_translation_latency_seconds": 2.6,
+                "last_queue_wait_seconds": 1.4,
+                "last_dropped_segments": 3,
+                "last_rate_limit_count": 1,
+            })
+
+            codes = {issue.code for issue in collect_diagnostics(config, Path(tmp))}
+
+        self.assertTrue({"asr_latency_high", "translation_latency_high", "audio_queue_backlog"}.issubset(codes))
 
     def test_local_provider_without_translate_url_is_info_not_fatal(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -489,13 +504,13 @@ class DiagnosticsTests(unittest.TestCase):
             config = DEFAULT_CONFIG.copy()
             config["runtime_dir"] = str(runtime)
             config["model"] = "medium"
-            config["last_tts_latency_seconds"] = 2.4
+            config["last_tts_synthesis_seconds"] = 2.4
 
             issues = collect_diagnostics(config, root)
 
         issue = next(item for item in issues if item.code == "tts_latency_high")
         self.assertEqual(issue.action, "audio_settings")
-        self.assertIn("本機 TTS", issue.fix)
+        self.assertIn("TTS 供應商", issue.fix)
 
     def test_diagnostics_report_virtual_mic_failure(self):
         with tempfile.TemporaryDirectory() as tmp:

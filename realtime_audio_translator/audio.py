@@ -271,7 +271,9 @@ class SegmentWorker:
         self._health_callback = health_callback
         self._queue_lock = threading.Lock()
         self.queue: queue.Queue[Path] = queue.Queue(maxsize=MAX_PENDING_SEGMENTS)
+        self.timings: dict[Path, dict[str, float]] = {}
         self.dropped_segments = 0
+        self.max_queue_depth = 0
         self.health = WorkerHealth("", "stopped")
 
     def _emit_health(self, direction: str, state: str, error: BaseException | None = None, attempt: int = 0) -> None:
@@ -300,27 +302,41 @@ class SegmentWorker:
         with self._queue_lock:
             return self._discard_pending()
 
+    def take_timing(self, captured: Path) -> dict[str, float]:
+        with self._queue_lock:
+            return self.timings.pop(captured, {})
+
     def _discard_pending(self) -> int:
         discarded = 0
         while True:
             try:
-                discard_audio_segment(self.queue.get_nowait())
+                pending = self.queue.get_nowait()
+                self.timings.pop(pending, None)
+                discard_audio_segment(pending)
                 discarded += 1
             except queue.Empty:
                 return discarded
 
-    def _enqueue(self, captured: Path) -> None:
+    def _enqueue(self, captured: Path, timing: dict[str, float] | None = None) -> None:
         with self._queue_lock:
             if self._stopped or self._cancel.is_set():
                 discard_audio_segment(captured)
                 return
             while True:
                 try:
+                    timing = dict(timing or {})
+                    timing["enqueued_at"] = time.time()
+                    timing["_enqueued_perf"] = time.perf_counter()
+                    self.timings[captured] = timing
                     self.queue.put_nowait(captured)
+                    self.max_queue_depth = max(self.max_queue_depth, self.queue.qsize())
                     return
                 except queue.Full:
+                    self.timings.pop(captured, None)
                     try:
-                        discard_audio_segment(self.queue.get_nowait())
+                        dropped = self.queue.get_nowait()
+                        self.timings.pop(dropped, None)
+                        discard_audio_segment(dropped)
                         self.dropped_segments += 1
                     except queue.Empty:
                         continue
@@ -332,11 +348,15 @@ class SegmentWorker:
         while not self._stopped:
             path = self.cache_dir / f"{prefix}-{count:06d}.wav"
             try:
+                capture_started_perf = time.perf_counter()
+                timing = {"capture_started_at": time.time(), "_capture_started_perf": capture_started_perf}
                 captured = capture_wav(path, self.device_index, self.seconds, self.loopback, self._cancel)
+                timing["capture_completed_at"] = time.time()
+                timing["_capture_completed_perf"] = time.perf_counter()
                 if self._cancel.is_set():
                     discard_audio_segment(captured)
                     return
-                self._enqueue(captured)
+                self._enqueue(captured, timing)
                 if failures:
                     self._emit_health(prefix, "capturing")
                     failures = 0

@@ -22,6 +22,8 @@ class ConversationLog:
         translated_text: str,
         provider: str,
         latency_seconds: float | None = None,
+        performance: dict | None = None,
+        timestamps: dict | None = None,
     ) -> None:
         row = {
             "session_id": self.session_id,
@@ -35,6 +37,10 @@ class ConversationLog:
         }
         if latency_seconds is not None:
             row["latency_seconds"] = latency_seconds
+        if performance:
+            row["performance"] = performance
+        if timestamps:
+            row["timestamps"] = timestamps
         with self.jsonl_path.open("a", encoding="utf-8", newline="\n") as handle:
             handle.write(json.dumps(row, ensure_ascii=False) + "\n")
         with self.md_path.open("a", encoding="utf-8", newline="\n") as handle:
@@ -44,3 +50,5 @@ class ConversationLog:
             handle.write(f"- {target_language}: {translated_text}\n\n")
             if latency_seconds is not None:
                 handle.write(f"- latency: {latency_seconds:.2f}s\n\n")
+            if performance:
+                handle.write(f"- performance: {json.dumps(performance, ensure_ascii=False)}\n\n")

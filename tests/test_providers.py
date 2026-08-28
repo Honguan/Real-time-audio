@@ -513,12 +513,15 @@ class ProvidersTests(unittest.TestCase):
         try:
             identity = device_identity({"index": 4, "name": "虛擬輸出", "hostapi": "Windows WASAPI", "input_channels": 0, "output_channels": 2, "default_samplerate": 48000.0})
             with patch.object(tts_module, "_play_wav") as play:
-                tts_module.speak_windows_sapi("hello", identity)
+                timing = tts_module.speak_windows_sapi("hello", identity)
         finally:
             tts_module.subprocess.run = original_run
 
         self.assertTrue(calls[0][1]["env"]["RAT_TTS_WAV"].endswith("sapi.wav"))
         self.assertEqual(play.call_args.args[1], identity)
+        self.assertLessEqual(timing["tts_synthesis_completed_at"], timing["tts_playback_started_at"])
+        self.assertGreaterEqual(timing["last_tts_synthesis_seconds"], 0.0)
+        self.assertGreaterEqual(timing["last_tts_playback_seconds"], 0.0)
 
     def test_windows_sapi_terminates_when_cancelled(self):
         import realtime_audio_translator.tts as tts_module

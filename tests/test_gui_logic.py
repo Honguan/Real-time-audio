@@ -413,7 +413,7 @@ class GuiLogicTests(unittest.TestCase):
             "source_language": "zh",
             "target_language": "en",
             "virtual_mic_enabled": False,
-            "last_latency_seconds": "4.2",
+            "last_end_to_end_p95_seconds": "4.2",
             "performance_mode": "quality",
             "segment_seconds": 3.0,
         }

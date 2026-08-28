@@ -125,8 +125,23 @@ class EngineTests(unittest.TestCase):
             engine.running = True
             engine.transcriber = StaticTranscriber("hello")
             engine._pipeline("speaker").translator = StoppingTranslator(engine, "你好")
-            engine._process_segments("speaker", QueuedWorker(wav))
-            self.assertIsInstance(load_config(state_root)["last_latency_seconds"], float)
+            worker = QueuedWorker(wav)
+            now = time.perf_counter()
+            worker.take_timing = lambda _wav: {
+                "capture_started_at": time.time() - 2.0,
+                "capture_completed_at": time.time() - 1.0,
+                "enqueued_at": time.time() - 0.5,
+                "_capture_started_perf": now - 2.0,
+                "_capture_completed_perf": now - 1.0,
+                "_enqueued_perf": now - 0.5,
+            }
+            engine._process_segments("speaker", worker)
+            saved = load_config(state_root)
+            for key in ("last_latency_seconds", "last_vad_seconds", "last_asr_latency_seconds", "last_translation_latency_seconds", "last_end_to_end_p50_seconds", "last_end_to_end_p95_seconds", "last_end_to_end_p99_seconds", "last_real_time_factor", "last_cpu_percent"):
+                self.assertIsInstance(saved[key], float)
+            self.assertAlmostEqual(saved["last_capture_seconds"], 1.0, places=3)
+            self.assertGreaterEqual(saved["last_queue_wait_seconds"], 0.5)
+            self.assertGreaterEqual(saved["last_end_to_end_latency_seconds"], 2.0)
             self.assertFalse(wav.exists())
 
         self.assertTrue(any(status.startswith("喇叭延遲 ") for status in statuses))
@@ -146,6 +161,7 @@ class EngineTests(unittest.TestCase):
             for wav in wavs:
                 worker.queue.put_nowait(wav)
             worker.dropped_segments = 4
+            worker.max_queue_depth = 3
             engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, statuses.append)
             engine.running = True
             engine.transcriber = StaticTranscriber("hello")
@@ -155,9 +171,42 @@ class EngineTests(unittest.TestCase):
 
             self.assertEqual(engine.pipelines["speaker"].metrics["last_queue_depth"], 2)
             self.assertEqual(engine.pipelines["speaker"].metrics["last_dropped_segments"], 4)
+            self.assertEqual(engine.config["last_max_queue_depth"], 3)
             self.assertTrue(any("處理落後，已略過 4 段；佇列 2/3" in status for status in statuses))
             self.assertFalse(wavs[0].exists())
             drain_queue(worker.queue)
+
+    def test_engine_counts_provider_errors_and_rate_limits(self):
+        config = DEFAULT_CONFIG.copy()
+        engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, lambda status: None)
+
+        class RateLimitError(RuntimeError):
+            status_code = 429
+
+        class Translator:
+            def translate(self, *_args):
+                engine.running = False
+                raise RateLimitError("limited")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            wav = Path(tmp) / "clip.wav"
+            write_wav(wav, 12000)
+            engine.running = True
+            engine.transcriber = StaticTranscriber("hello")
+            engine._pipeline("speaker").translator = Translator()
+            engine._process_segments("speaker", QueuedWorker(wav))
+
+        self.assertEqual(engine.config["last_provider_error_count"], 1)
+        self.assertEqual(engine.config["last_rate_limit_count"], 1)
+
+    def test_engine_aggregates_session_queue_metrics_across_directions(self):
+        engine = RealtimeEngine(Path("."), DEFAULT_CONFIG.copy(), lambda speaker, mine: None, lambda status: None)
+
+        engine._record_metrics("speaker", {"last_dropped_segments": 2, "last_max_queue_depth": 3}, {"last_dropped_segments", "last_max_queue_depth"})
+        engine._record_metrics("me", {"last_dropped_segments": 4, "last_max_queue_depth": 2}, {"last_dropped_segments", "last_max_queue_depth"})
+
+        self.assertEqual(engine.config["last_dropped_segments"], 6)
+        self.assertEqual(engine.config["last_max_queue_depth"], 3)
 
     def test_engine_can_overlay_original_and_translation(self):
         overlays = []
@@ -490,6 +539,8 @@ class EngineTests(unittest.TestCase):
             engine_module.play_linear16 = original_play
 
         self.assertEqual(played, [(b"\0\0", "")])
+        self.assertIsInstance(engine.config["last_tts_synthesis_seconds"], float)
+        self.assertIsInstance(engine.config["last_tts_playback_seconds"], float)
 
     def test_engine_uses_local_tts_provider_for_mic_output(self):
         import realtime_audio_translator.engine as engine_module
@@ -540,6 +591,8 @@ class EngineTests(unittest.TestCase):
             engine_module.play_linear16 = original_play
 
         self.assertEqual(spoken, [("hi", "")])
+        self.assertEqual(engine.config["last_tts_synthesis_seconds"], 0.0)
+        self.assertIsInstance(engine.config["last_tts_playback_seconds"], float)
 
     def test_engine_can_speak_speaker_translation_to_listener_output(self):
         config = DEFAULT_CONFIG.copy()
@@ -700,7 +753,7 @@ class EngineTests(unittest.TestCase):
             engine.running = True
             engine.transcriber = Transcriber()
             engine._pipeline("me").translator = Translator()
-            engine._speak_translation = lambda direction, translated, target, device, session=None: 2.4
+            engine._speak_translation = lambda direction, translated, target, device, session=None, timing=None: 2.4
             engine._process_segments("me", Worker(wav))
 
         self.assertEqual(engine.config["last_tts_latency_seconds"], 2.4)
