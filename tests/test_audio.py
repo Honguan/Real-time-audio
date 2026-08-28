@@ -13,6 +13,34 @@ from tests.helpers import write_wav
 
 
 class AudioTests(unittest.TestCase):
+    def test_segment_worker_drops_oldest_segments_when_queue_is_full(self):
+        import realtime_audio_translator.audio as audio_module
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            worker = SegmentWorker(root, 1, 2, False)
+            captured = 0
+
+            def capture(path, *_args):
+                nonlocal captured
+                if captured == 1000:
+                    raise InterruptedError
+                path.write_bytes(b"wav")
+                captured += 1
+                return path
+
+            with patch.object(audio_module, "capture_wav", side_effect=capture):
+                worker.run("me")
+
+            pending = []
+            while not worker.queue.empty():
+                pending.append(worker.queue.get_nowait())
+
+            self.assertEqual(worker.queue.maxsize, 3)
+            self.assertEqual([path.name for path in pending], ["me-000997.wav", "me-000998.wav", "me-000999.wav"])
+            self.assertEqual(worker.dropped_segments, 997)
+            self.assertEqual(sorted(path.name for path in root.glob("*.wav")), [path.name for path in pending])
+
     def test_segment_worker_cancels_capture_without_queuing_a_file(self):
         import realtime_audio_translator.audio as audio_module
 
@@ -38,6 +66,85 @@ class AudioTests(unittest.TestCase):
 
         self.assertFalse(thread.is_alive())
         self.assertTrue(worker.queue.empty())
+
+    def test_segment_worker_deletes_capture_cancelled_before_enqueue(self):
+        import realtime_audio_translator.audio as audio_module
+
+        with tempfile.TemporaryDirectory() as tmp:
+            worker = SegmentWorker(Path(tmp), 1, 2, False)
+
+            def capture(path, *_args):
+                path.write_bytes(b"wav")
+                worker.stop()
+                return path
+
+            with patch.object(audio_module, "capture_wav", side_effect=capture):
+                worker.run("me")
+
+            self.assertEqual(list(Path(tmp).glob("*.wav")), [])
+
+    def test_segment_worker_deletes_partial_interrupted_capture(self):
+        import realtime_audio_translator.audio as audio_module
+
+        with tempfile.TemporaryDirectory() as tmp:
+            worker = SegmentWorker(Path(tmp), 1, 2, False)
+
+            def capture(path, *_args):
+                path.write_bytes(b"partial")
+                raise InterruptedError
+
+            with patch.object(audio_module, "capture_wav", side_effect=capture):
+                worker.run("me")
+
+            self.assertEqual(list(Path(tmp).glob("*.wav")), [])
+
+    def test_segment_worker_stop_deletes_pending_segments(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            pending = Path(tmp) / "pending.wav"
+            pending.write_bytes(b"wav")
+            worker = SegmentWorker(Path(tmp), 1, 2, False)
+            worker.queue.put_nowait(pending)
+
+            worker.stop()
+
+            self.assertTrue(worker.queue.empty())
+            self.assertFalse(pending.exists())
+
+    def test_segment_worker_keeps_capturing_when_stale_file_is_locked(self):
+        worker = SegmentWorker(Path("cache"), 1, 2, False)
+        for index in range(worker.queue.maxsize):
+            worker.queue.put_nowait(Path(f"old-{index}.wav"))
+
+        with patch.object(Path, "unlink", side_effect=PermissionError):
+            worker._enqueue(Path("fresh.wav"))
+
+        self.assertEqual(worker.queue.qsize(), worker.queue.maxsize)
+        self.assertEqual(worker.queue.get_nowait(), Path("old-1.wav"))
+        self.assertEqual(worker.dropped_segments, 1)
+
+    def test_segment_worker_does_not_enqueue_after_stop(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fresh = Path(tmp) / "fresh.wav"
+            fresh.write_bytes(b"wav")
+            worker = SegmentWorker(Path(tmp), 1, 2, False)
+            worker._queue_lock.acquire()
+            enqueue = threading.Thread(target=worker._enqueue, args=(fresh,))
+            stop = threading.Thread(target=worker.stop)
+            try:
+                enqueue.start()
+                stop.start()
+                deadline = time.monotonic() + 1
+                while not worker._stopped and time.monotonic() < deadline:
+                    time.sleep(0.001)
+            finally:
+                worker._queue_lock.release()
+            enqueue.join(1)
+            stop.join(1)
+
+            self.assertFalse(enqueue.is_alive())
+            self.assertFalse(stop.is_alive())
+            self.assertTrue(worker.queue.empty())
+            self.assertFalse(fresh.exists())
 
     def test_device_label_strips_hostapi_suffix(self):
         self.assertEqual(device_name_from_label("CABLE Input (VB-Audio Virtual Cable) [Windows WASAPI]"), "CABLE Input (VB-Audio Virtual Cable)")

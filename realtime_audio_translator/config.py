@@ -76,6 +76,9 @@ DEFAULT_CONFIG = {
     "last_tts_latency_seconds": "",
     "last_latency_seconds": "",
     "last_speech_units_per_second": "",
+    "last_queue_depth": 0,
+    "last_dropped_segments": 0,
+    "last_processing_lag_seconds": "",
     "last_source_text": "",
     "last_translated_text": "",
     "google_project_id": "",
@@ -134,6 +137,9 @@ NUMERIC_STATE_KEYS = {
     "last_tts_latency_seconds",
     "last_latency_seconds",
     "last_speech_units_per_second",
+    "last_queue_depth",
+    "last_dropped_segments",
+    "last_processing_lag_seconds",
 }
 SETTING_RANGES = {
     "overlay_opacity": (0.2, 1.0),

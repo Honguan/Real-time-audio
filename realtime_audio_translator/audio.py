@@ -145,6 +145,17 @@ def _capture_loopback_wav(path: Path, output_device: dict, seconds: float, cance
     return path
 
 
+MAX_PENDING_SEGMENTS = 3
+
+
+def discard_audio_segment(path: Path) -> bool:
+    try:
+        path.unlink(missing_ok=True)
+        return True
+    except OSError:
+        return False
+
+
 class SegmentWorker:
     def __init__(self, cache_dir: Path, device_index: int, seconds: float, loopback: bool, cancel_event=None):
         self.cache_dir = cache_dir
@@ -153,11 +164,44 @@ class SegmentWorker:
         self.loopback = loopback
         self._cancel = cancel_event or threading.Event()
         self._stopped = False
-        self.queue: queue.Queue[Path] = queue.Queue()
+        self._queue_lock = threading.Lock()
+        self.queue: queue.Queue[Path] = queue.Queue(maxsize=MAX_PENDING_SEGMENTS)
+        self.dropped_segments = 0
 
     def stop(self) -> None:
         self._stopped = True
         self._cancel.set()
+        with self._queue_lock:
+            self._discard_pending()
+
+    def discard_pending(self) -> int:
+        with self._queue_lock:
+            return self._discard_pending()
+
+    def _discard_pending(self) -> int:
+        discarded = 0
+        while True:
+            try:
+                discard_audio_segment(self.queue.get_nowait())
+                discarded += 1
+            except queue.Empty:
+                return discarded
+
+    def _enqueue(self, captured: Path) -> None:
+        with self._queue_lock:
+            if self._stopped or self._cancel.is_set():
+                discard_audio_segment(captured)
+                return
+            while True:
+                try:
+                    self.queue.put_nowait(captured)
+                    return
+                except queue.Full:
+                    try:
+                        discard_audio_segment(self.queue.get_nowait())
+                        self.dropped_segments += 1
+                    except queue.Empty:
+                        continue
 
     def run(self, prefix: str) -> None:
         count = 0
@@ -166,11 +210,14 @@ class SegmentWorker:
             try:
                 captured = capture_wav(path, self.device_index, self.seconds, self.loopback, self._cancel)
                 if self._cancel.is_set():
+                    discard_audio_segment(captured)
                     return
-                self.queue.put(captured)
+                self._enqueue(captured)
             except InterruptedError:
+                discard_audio_segment(path)
                 return
             except Exception:
+                discard_audio_segment(path)
                 self._stopped = True
                 raise
             count += 1
