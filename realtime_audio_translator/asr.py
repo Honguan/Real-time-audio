@@ -4,12 +4,22 @@ import os
 import subprocess
 import sys
 import tempfile
+import threading
+from dataclasses import dataclass
 from pathlib import Path
 
 from .runtime import runtime_dir, runtime_status, whisper_exe
 
 
 DLL_DIRECTORIES = []
+
+
+@dataclass(frozen=True)
+class TranscriptionResult:
+    text: str
+    language: str | None
+    language_probability: float | None = None
+    confidence: float | None = None
 
 
 def add_runtime_dll_directory(runtime_root: Path) -> None:
@@ -34,9 +44,7 @@ class AudioTranscriber:
         self.model_dir = model_dir
         self.exe_path = whisper_exe(runtime_root)
         self.model = None
-        self.last_language: str | None = None
-        self.last_language_probability: float | None = None
-        self.last_confidence: float | None = None
+        self._inference_lock = threading.Lock()
         try:
             from faster_whisper import WhisperModel
 
@@ -52,40 +60,40 @@ class AudioTranscriber:
                 return str(path)
         return self.model_name
 
-    def transcribe(self, wav_path: Path, language: str | None = None) -> str:
+    def transcribe(self, wav_path: Path, language: str | None = None) -> TranscriptionResult:
         if language == "auto":
             language = None
-        self.last_language_probability = None
-        self.last_confidence = None
-        if self.model is None:
-            return self._transcribe_with_exe(wav_path, language)
-        segments, info = self.model.transcribe(
-            str(wav_path),
-            language=language or None,
-            vad_filter=True,
-            beam_size=1,
-            condition_on_previous_text=False,
-            without_timestamps=True,
-        )
-        self.last_language = getattr(info, "language", None) or language
-        self.last_language_probability = getattr(info, "language_probability", None)
-        texts = []
-        confidences = []
-        for segment in segments:
-            texts.append(segment.text.strip())
-            avg_logprob = getattr(segment, "avg_logprob", None)
-            if avg_logprob is not None:
-                try:
-                    confidences.append(min(1.0, max(0.0, math.exp(float(avg_logprob)))))
-                except Exception:
-                    pass
-        self.last_confidence = sum(confidences) / len(confidences) if confidences else None
-        return " ".join(text for text in texts if text).strip()
+        with self._inference_lock:
+            if self.model is None:
+                return self._transcribe_with_exe(wav_path, language)
+            segments, info = self.model.transcribe(
+                str(wav_path),
+                language=language or None,
+                vad_filter=True,
+                beam_size=1,
+                condition_on_previous_text=False,
+                without_timestamps=True,
+            )
+            texts = []
+            confidences = []
+            for segment in segments:
+                texts.append(segment.text.strip())
+                avg_logprob = getattr(segment, "avg_logprob", None)
+                if avg_logprob is not None:
+                    try:
+                        confidences.append(min(1.0, max(0.0, math.exp(float(avg_logprob)))))
+                    except Exception:
+                        pass
+            return TranscriptionResult(
+                " ".join(text for text in texts if text).strip(),
+                getattr(info, "language", None) or language,
+                getattr(info, "language_probability", None),
+                sum(confidences) / len(confidences) if confidences else None,
+            )
 
-    def _transcribe_with_exe(self, wav_path: Path, language: str | None = None) -> str:
+    def _transcribe_with_exe(self, wav_path: Path, language: str | None = None) -> TranscriptionResult:
         if language == "auto":
             language = None
-        self.last_language = language
         with tempfile.TemporaryDirectory() as tmp:
             out_dir = Path(tmp)
             command = [
@@ -108,7 +116,6 @@ class AudioTranscriber:
                 raise RuntimeError((result.stderr or result.stdout).strip())
             json_files = list(out_dir.glob("*.json"))
             if not json_files:
-                return ""
+                return TranscriptionResult("", language)
             data = json.loads(json_files[0].read_text(encoding="utf-8", errors="replace"))
-            self.last_language = data.get("language") or language
-            return str(data.get("text") or "").strip()
+            return TranscriptionResult(str(data.get("text") or "").strip(), data.get("language") or language)

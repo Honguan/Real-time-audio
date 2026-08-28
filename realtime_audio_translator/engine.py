@@ -2,13 +2,14 @@ import queue
 import threading
 import time
 import uuid
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
 from .asr import AudioTranscriber
 from .audio import SegmentWorker, audio_segment_active, device_name_from_label, find_device, virtual_mic_recaptures_tts
 from .ai_confidence import build_confidence_snapshot, format_confidence_status
-from .config import APP_DIR, DEFAULT_CONFIG, TARGET_LANGUAGE_CHOICES, save_config_state, validate_language_pair
+from .config import APP_DIR, DEFAULT_CONFIG, STATE_KEYS, TARGET_LANGUAGE_CHOICES, save_config_state, validate_language_pair
 from .logbook import ConversationLog
 from .models import models_dir
 from .providers import TextToSpeech, Translator
@@ -17,6 +18,14 @@ from .tts import play_linear16
 
 OverlayCallback = Callable[[str, str], None]
 StatusCallback = Callable[[str], None]
+
+
+@dataclass
+class PipelineContext:
+    config: dict
+    translator: Translator
+    tts: TextToSpeech
+    metrics: dict = field(default_factory=dict)
 
 
 def direction_label(direction: str) -> str:
@@ -67,11 +76,13 @@ class RealtimeEngine:
         self._cancel = threading.Event()
         self._lifecycle_lock = threading.Lock()
         self._callback_lock = threading.Lock()
+        self._metrics_lock = threading.Lock()
+        self._log_lock = threading.Lock()
+        self._tts_lock = threading.Lock()
         self.threads: list[threading.Thread] = []
         self.workers: list[SegmentWorker] = []
         self.log = ConversationLog(Path(config.get("log_dir") or APP_DIR / "logs")) if config.get("record_logs") else None
-        self.translator = Translator(config)
-        self.tts = TextToSpeech(config)
+        self.pipelines: dict[str, PipelineContext] = {}
         self.transcriber: AudioTranscriber | None = None
 
     def start(self) -> None:
@@ -185,6 +196,7 @@ class RealtimeEngine:
             return False
         session = self._session
         worker = SegmentWorker(APP_DIR / "cache" / "audio" / f"session-{session}", device, float(self.config["segment_seconds"]), loopback, self._cancel)
+        self._pipeline(direction)
         capture_thread = threading.Thread(target=worker.run, args=(direction,), daemon=True)
         process_thread = threading.Thread(target=self._process_segments, args=(direction, worker, session), daemon=True)
         with self._lifecycle_lock:
@@ -199,6 +211,12 @@ class RealtimeEngine:
     def _session_active(self, session: str | None) -> bool:
         return session is None or (self.running and session == self._session and not self._cancel.is_set())
 
+    def _pipeline(self, direction: str) -> PipelineContext:
+        if direction not in self.pipelines:
+            config = {key: value for key, value in self.config.items() if key not in STATE_KEYS}
+            self.pipelines[direction] = PipelineContext(config, Translator(config), TextToSpeech(config))
+        return self.pipelines[direction]
+
     def _publish(self, session: str | None, callback: Callable, *args) -> None:
         with self._callback_lock:
             if self._session_active(session):
@@ -206,10 +224,14 @@ class RealtimeEngine:
 
     def _process_segments(self, direction: str, worker: SegmentWorker, session: str | None = None) -> None:
         assert self.transcriber is not None
-        source = "auto" if direction == "speaker" else self.config["source_language"]
-        fallback_source = safe_target_language(self.config["target_language"], DEFAULT_CONFIG["target_language"]) if direction == "speaker" else source
+        pipeline = self._pipeline(direction)
+        config = pipeline.config
+        translator = pipeline.translator
+        metrics = pipeline.metrics
+        source = "auto" if direction == "speaker" else config["source_language"]
+        fallback_source = safe_target_language(config["target_language"], DEFAULT_CONFIG["target_language"]) if direction == "speaker" else source
         target = safe_target_language(
-            self.config["source_language"] if direction == "speaker" else self.config["target_language"],
+            config["source_language"] if direction == "speaker" else config["target_language"],
             DEFAULT_CONFIG["source_language"] if direction == "speaker" else DEFAULT_CONFIG["target_language"],
         )
         while self.running and self._session_active(session):
@@ -221,39 +243,40 @@ class RealtimeEngine:
                 wav = worker.queue.get(timeout=0.5)
             except Exception:
                 continue
-            if not self.config.get("speaker_enabled" if direction == "speaker" else "microphone_enabled", True):
+            if not config.get("speaker_enabled" if direction == "speaker" else "microphone_enabled", True):
                 continue
             try:
                 started = time.perf_counter()
-                if not audio_segment_active(wav, self.config.get("speech_threshold", 0.01)):
+                if not audio_segment_active(wav, config.get("speech_threshold", 0.01)):
                     continue
                 asr_started = time.perf_counter()
-                text = self.transcriber.transcribe(wav, source)
+                transcription = self.transcriber.transcribe(wav, source)
                 if not self._session_active(session):
                     return
+                text = transcription.text
                 asr_latency = time.perf_counter() - asr_started
                 if not text:
                     continue
                 try:
-                    segment_seconds = max(float(self.config.get("segment_seconds", 2.0)), 0.1)
+                    segment_seconds = max(float(config.get("segment_seconds", 2.0)), 0.1)
                 except Exception:
                     segment_seconds = 2.0
                 clean_text = text.strip()
                 speech_units = len(clean_text.split()) if " " in clean_text else len(clean_text)
-                self.config["last_speech_units_per_second"] = speech_units / segment_seconds
+                metrics["last_speech_units_per_second"] = speech_units / segment_seconds
                 state_keys = {"last_speech_units_per_second"}
-                detected_source = getattr(self.transcriber, "last_language", None) if source == "auto" else None
+                detected_source = transcription.language if source == "auto" else None
                 source_for_output = detected_source or fallback_source
-                language_confidence = getattr(self.transcriber, "last_language_probability", None)
+                language_confidence = transcription.language_probability
                 if detected_source:
-                    self.config["last_detected_language"] = detected_source
+                    metrics["last_detected_language"] = detected_source
                     state_keys.add("last_detected_language")
                 if language_confidence is not None:
-                    self.config["last_language_confidence"] = language_confidence
+                    metrics["last_language_confidence"] = language_confidence
                     state_keys.add("last_language_confidence")
-                asr_confidence = getattr(self.transcriber, "last_confidence", None)
+                asr_confidence = transcription.confidence
                 if asr_confidence is not None:
-                    self.config["last_asr_confidence"] = asr_confidence
+                    metrics["last_asr_confidence"] = asr_confidence
                     state_keys.add("last_asr_confidence")
                 translation_confidence = None
                 translation_latency = None
@@ -261,13 +284,14 @@ class RealtimeEngine:
                 translation_failed = False
                 try:
                     translation_started = time.perf_counter()
-                    translated = self.translator.translate(text, source_for_output, target)
+                    translation = translator.translate(text, source_for_output, target)
                     if not self._session_active(session):
                         return
+                    translated = translation.text
                     translation_latency = time.perf_counter() - translation_started
-                    translation_confidence = getattr(self.translator, "last_confidence", None)
+                    translation_confidence = translation.confidence
                     if translation_confidence is not None:
-                        self.config["last_translation_confidence"] = translation_confidence
+                        metrics["last_translation_confidence"] = translation_confidence
                         state_keys.add("last_translation_confidence")
                 except Exception as exc:
                     if not self._session_active(session):
@@ -275,48 +299,49 @@ class RealtimeEngine:
                     translated = ""
                     translation_failed = True
                     self._publish(session, self.status, f"{direction_label(direction)}：翻譯失敗：{exc}")
-                self.config["last_translation_empty"] = not translation_failed and not bool(str(translated).strip())
+                metrics["last_translation_empty"] = not translation_failed and not bool(str(translated).strip())
                 state_keys.add("last_translation_empty")
                 if not translation_failed:
-                    self.config["last_source_text"] = text
-                    self.config["last_translated_text"] = translated
+                    metrics["last_source_text"] = text
+                    metrics["last_translated_text"] = translated
                     state_keys.update({"last_source_text", "last_translated_text"})
                 if translation_failed:
-                    overlay_text = f"{source_for_output}: {text}" if self.config.get("show_language_labels") else text
+                    overlay_text = f"{source_for_output}: {text}" if config.get("show_language_labels") else text
                 else:
-                    overlay_text = overlay_text_from_config(text, translated, source_for_output, target, self.config)
+                    overlay_text = overlay_text_from_config(text, translated, source_for_output, target, config)
                 if direction == "speaker":
                     if not self._session_active(session):
                         return
                     self._publish(session, self.overlay, overlay_text, "")
-                    if self.config.get("tts_enabled", True) and self.config.get("speaker_tts_enabled", False) and not self.muted and translated and not translation_failed:
-                        tts_latency = self._speak_translation(direction, translated, target, self.config.get("speaker_tts_output_device", ""), session)
+                    if config.get("tts_enabled", True) and config.get("speaker_tts_enabled", False) and not self.muted and translated and not translation_failed:
+                        tts_latency = self._speak_translation(direction, translated, target, config.get("speaker_tts_output_device", ""), session)
                 else:
                     if not self._session_active(session):
                         return
                     self._publish(session, self.overlay, "", overlay_text)
-                    if self.config.get("tts_enabled", True) and self.config.get("virtual_mic_enabled", False) and not self.muted and translated and not translation_failed:
-                        tts_latency = self._speak_translation(direction, translated, target, self.config.get("tts_output_device", "CABLE Input"), session)
+                    if config.get("tts_enabled", True) and config.get("virtual_mic_enabled", False) and not self.muted and translated and not translation_failed:
+                        tts_latency = self._speak_translation(direction, translated, target, config.get("tts_output_device", "CABLE Input"), session)
                 if not self._session_active(session):
                     return
                 if tts_latency is not None:
-                    self.config["last_tts_latency_seconds"] = tts_latency
+                    metrics["last_tts_latency_seconds"] = tts_latency
                     state_keys.add("last_tts_latency_seconds")
                 latency = time.perf_counter() - started
-                self.config["last_latency_seconds"] = latency
+                metrics["last_latency_seconds"] = latency
                 state_keys.add("last_latency_seconds")
                 if not self._session_active(session):
                     return
-                self._save_state(state_keys)
+                self._record_metrics(direction, metrics, state_keys)
                 if not self._session_active(session):
                     return
                 if self.log and not translation_failed:
-                    self.log.append(direction, source_for_output, target, text, translated, self.config["provider"], latency_seconds=latency)
+                    with self._log_lock:
+                        self.log.append(direction, source_for_output, target, text, translated, config["provider"], latency_seconds=latency)
                     if not self._session_active(session):
                         return
                 if not translation_failed:
                     snapshot = build_confidence_snapshot(
-                        self.config,
+                        {**config, **metrics},
                         source_for_output,
                         target,
                         asr_latency_seconds=asr_latency,
@@ -326,38 +351,56 @@ class RealtimeEngine:
                         asr_confidence=asr_confidence,
                         translation_confidence=translation_confidence,
                     )
-                    self._publish(session, self.status, f"{direction_label(direction)}延遲 {latency:.2f} 秒；{format_confidence_status(snapshot, bool(self.config.get('advanced_mode')))}")
+                    self._publish(session, self.status, f"{direction_label(direction)}延遲 {latency:.2f} 秒；{format_confidence_status(snapshot, bool(config.get('advanced_mode')))}")
             except Exception as exc:
                 self._publish(session, self.status, f"{direction_label(direction)}：{exc}")
 
     def _speak_translation(self, direction: str, translated: str, target: str, tts_device: str, session: str | None = None) -> float | None:
-        tts_started = time.perf_counter()
+        while not self._tts_lock.acquire(timeout=0.05):
+            if not self._session_active(session):
+                return None
         try:
-            if self.config.get("tts_provider") == "local":
+            return self._speak_translation_locked(direction, translated, target, tts_device, session)
+        finally:
+            self._tts_lock.release()
+
+    def _speak_translation_locked(self, direction: str, translated: str, target: str, tts_device: str, session: str | None) -> float | None:
+        tts_started = time.perf_counter()
+        pipeline = self._pipeline(direction)
+        config = pipeline.config
+        tts = pipeline.tts
+        try:
+            if config.get("tts_provider") == "local":
                 if session is None:
-                    self.tts.speak_local(translated, tts_device)
+                    tts.speak_local(translated, tts_device)
                 else:
-                    self.tts.speak_local(translated, tts_device, self._cancel)
-            elif self.config.get("tts_provider") == "openai":
-                audio = self.tts.synthesize_openai_linear16(translated)
+                    tts.speak_local(translated, tts_device, self._cancel)
+            elif config.get("tts_provider") == "openai":
+                audio = tts.synthesize_openai_linear16(translated)
                 if not self._session_active(session):
                     return None
                 play_linear16(audio, tts_device) if session is None else play_linear16(audio, tts_device, cancel_event=self._cancel)
             else:
-                audio = self.tts.synthesize_google_linear16(translated, target)
+                audio = tts.synthesize_google_linear16(translated, target)
                 if not self._session_active(session):
                     return None
                 play_linear16(audio, tts_device) if session is None else play_linear16(audio, tts_device, cancel_event=self._cancel)
             if not self._session_active(session):
                 return None
-            self.config["last_tts_failed"] = False
+            tts_failed = False
         except Exception as exc:
             if not self._session_active(session):
                 return None
-            self.config["last_tts_failed"] = True
+            tts_failed = True
             self._publish(session, self.status, f"{direction_label(direction)}：TTS 失敗：{exc}")
-        self._save_state({"last_tts_failed"})
+        self._record_metrics(direction, {"last_tts_failed": tts_failed}, {"last_tts_failed"})
         return time.perf_counter() - tts_started
+
+    def _record_metrics(self, direction: str, values: dict, keys: set[str]) -> None:
+        self._pipeline(direction).metrics.update(values)
+        with self._metrics_lock:
+            self.config.update({key: values[key] for key in keys})
+            self._save_state(keys)
 
     def _save_state(self, keys: set[str]) -> None:
         if self.state_root is not None:

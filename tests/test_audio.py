@@ -1,6 +1,7 @@
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -115,12 +116,14 @@ class AudioTests(unittest.TestCase):
             transcriber.exe_path = Path("fw.exe")
             transcriber.model_name = "medium"
             transcriber.model_dir = Path("models")
-            self.assertEqual(transcriber._transcribe_with_exe(Path("clip.wav"), "en"), "hello world")
+            result = transcriber._transcribe_with_exe(Path("clip.wav"), "en")
+            self.assertEqual((result.text, result.language), ("hello world", "en"))
         finally:
             asr_module.subprocess.run = original_run
 
     def test_whisper_model_records_language_probability_and_confidence(self):
         transcriber = AudioTranscriber.__new__(AudioTranscriber)
+        transcriber._inference_lock = threading.Lock()
 
         class Model:
             def transcribe(self, *_args, **_kwargs):
@@ -132,12 +135,39 @@ class AudioTests(unittest.TestCase):
                 return segments, info
 
         transcriber.model = Model()
-        text = transcriber.transcribe(Path("clip.wav"), "auto")
+        result = transcriber.transcribe(Path("clip.wav"), "auto")
 
-        self.assertEqual(text, "hello world")
-        self.assertEqual(transcriber.last_language, "en")
-        self.assertEqual(transcriber.last_language_probability, 0.91)
-        self.assertAlmostEqual(transcriber.last_confidence, (1.0 + 0.36787944117144233) / 2)
+        self.assertEqual(result.text, "hello world")
+        self.assertEqual(result.language, "en")
+        self.assertEqual(result.language_probability, 0.91)
+        self.assertAlmostEqual(result.confidence, (1.0 + 0.36787944117144233) / 2)
+
+    def test_shared_whisper_model_serializes_inference_and_returns_isolated_results(self):
+        transcriber = AudioTranscriber.__new__(AudioTranscriber)
+        transcriber._inference_lock = threading.Lock()
+        active = 0
+        max_active = 0
+
+        class Model:
+            def transcribe(self, path, **kwargs):
+                nonlocal active, max_active
+                active += 1
+                max_active = max(max_active, active)
+                time.sleep(0.005)
+                active -= 1
+                language = Path(path).stem
+                return [type("Segment", (), {"text": f" {language} ", "avg_logprob": 0.0})()], type("Info", (), {"language": language, "language_probability": 0.9})()
+
+        transcriber.model = Model()
+        results = []
+        threads = [threading.Thread(target=lambda language=language: results.append(transcriber.transcribe(Path(f"{language}.wav"), "auto"))) for language in ("en", "ja") * 10]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+
+        self.assertEqual(max_active, 1)
+        self.assertEqual(sorted((result.text, result.language) for result in results), sorted((language, language) for language in ("en", "ja") * 10))
 
     def test_add_xxl_data_prefers_runtime_folder(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -192,6 +222,7 @@ class AudioTests(unittest.TestCase):
 
     def test_whisper_model_stores_detected_language(self):
         transcriber = AudioTranscriber.__new__(AudioTranscriber)
+        transcriber._inference_lock = threading.Lock()
         transcriber.model_name = "medium"
         transcriber.model_dir = Path("models")
 
@@ -204,8 +235,8 @@ class AudioTests(unittest.TestCase):
 
         transcriber.model = Model()
 
-        self.assertEqual(transcriber.transcribe(Path("clip.wav"), "auto"), "hello")
-        self.assertEqual(transcriber.last_language, "ja")
+        result = transcriber.transcribe(Path("clip.wav"), "auto")
+        self.assertEqual((result.text, result.language), ("hello", "ja"))
 
     def test_runtime_controls_link_cuda12_dependency(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")

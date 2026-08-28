@@ -2,6 +2,9 @@ import queue
 import wave
 from pathlib import Path
 
+from realtime_audio_translator.asr import TranscriptionResult
+from realtime_audio_translator.providers import TranslationResult
+
 
 def write_wav(path: Path, sample: int) -> None:
     with wave.open(str(path), "wb") as handle:
@@ -23,7 +26,12 @@ class StaticTranscriber:
         self.__dict__.update(state)
 
     def transcribe(self, wav, source_language):
-        return self.text
+        return TranscriptionResult(
+            self.text,
+            getattr(self, "last_language", source_language),
+            getattr(self, "last_language_probability", None),
+            getattr(self, "last_confidence", None),
+        )
 
 
 class StoppingTranslator:
@@ -34,4 +42,4 @@ class StoppingTranslator:
 
     def translate(self, text, source_language, target_language):
         self.engine.running = False
-        return self.text
+        return TranslationResult(self.text, getattr(self, "last_confidence", 0.8))
