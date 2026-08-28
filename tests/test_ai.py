@@ -45,6 +45,14 @@ class AiTests(unittest.TestCase):
         self.assertEqual(scenario_key("discord_chat"), "discord_chat")
         self.assertEqual(scenario_label("custom"), "custom")
 
+    def test_scenario_rejects_identical_fixed_languages(self):
+        config = DEFAULT_CONFIG.copy()
+        config["source_language"] = "ko"
+        config["target_language"] = "ko"
+
+        with self.assertRaisesRegex(ValueError, "來源與目標語言不可相同"):
+            apply_scenario(config, "meeting")
+
     def test_ai_orchestrator_combines_scenario_tuning_and_diagnostics_without_enabling_cloud(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -183,6 +191,7 @@ class AiTests(unittest.TestCase):
     def test_auto_tuner_locks_high_confidence_detected_language(self):
         config = DEFAULT_CONFIG.copy()
         config["source_language"] = "auto"
+        config["target_language"] = "zh"
         config["last_detected_language"] = "en"
         config["last_language_confidence"] = 0.92
 
@@ -192,6 +201,20 @@ class AiTests(unittest.TestCase):
         self.assertIn("lock_detected_language", [item.code for item in recommendations])
         self.assertIn("鎖定穩定偵測語言", [item.title for item in recommendations])
         self.assertEqual(tuned["source_language"], "en")
+
+    def test_auto_tuner_does_not_lock_source_to_target_language(self):
+        config = DEFAULT_CONFIG.copy()
+        config["source_language"] = "auto"
+        config["target_language"] = "en"
+        config["last_detected_language"] = "en"
+        config["last_language_confidence"] = 0.92
+
+        recommendations = recommend_tuning(config, cuda_devices=1, vram_gb=8)
+        tuned = apply_tuning(config, recommendations)
+
+        self.assertNotIn("lock_detected_language", [item.code for item in recommendations])
+        self.assertEqual(tuned["source_language"], "auto")
+        self.assertEqual(tuned["target_language"], "en")
 
     def test_confidence_status_reports_local_mode_latency_and_provider(self):
         config = DEFAULT_CONFIG.copy()

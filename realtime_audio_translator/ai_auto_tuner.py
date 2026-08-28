@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 
+from .config import validate_language_pair
+
 
 @dataclass(frozen=True)
 class TuningRecommendation:
@@ -101,7 +103,7 @@ def recommend_tuning(config: dict, cuda_devices: int, vram_gb: int, latency_seco
     except Exception:
         language_confidence = 0
     detected_language = str(config.get("last_detected_language") or "")
-    if config.get("source_language") == "auto" and detected_language in {"zh", "en", "ja", "ko"} and language_confidence >= 0.85:
+    if config.get("source_language") == "auto" and detected_language in {"zh", "en", "ja", "ko"} and detected_language != config.get("target_language") and language_confidence >= 0.85:
         recommendations.append(TuningRecommendation(
             "lock_detected_language",
             "鎖定穩定偵測語言",
@@ -122,4 +124,5 @@ def apply_tuning(config: dict, recommendations: list[TuningRecommendation]) -> d
     updated = config.copy()
     for recommendation in recommendations:
         updated.update(recommendation.changes)
+    validate_language_pair(updated)
     return updated

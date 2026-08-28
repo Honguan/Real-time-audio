@@ -109,6 +109,19 @@ class ConfigTests(unittest.TestCase):
             self.assertEqual(config["source_language"], DEFAULT_CONFIG["source_language"])
             self.assertEqual(config["target_language"], DEFAULT_CONFIG["target_language"])
 
+    def test_load_config_repairs_identical_fixed_languages(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ensure_app_dirs(root)
+            (root / "config" / "settings.json").write_text(
+                json.dumps({"source_language": "en", "target_language": "en"}), encoding="utf-8"
+            )
+
+            config = load_config(root)
+
+            self.assertEqual(config["source_language"], DEFAULT_CONFIG["source_language"])
+            self.assertEqual(config["target_language"], DEFAULT_CONFIG["target_language"])
+
     def test_load_config_accepts_public_ui_mode_alias(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -203,6 +216,15 @@ class ConfigTests(unittest.TestCase):
             self.assertEqual(saved["tts_provider"], "local")
             self.assertEqual(saved["translation_engine"], "local")
             self.assertEqual(saved["tts_engine"], "system")
+
+    def test_save_config_rejects_identical_fixed_languages(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = DEFAULT_CONFIG.copy()
+            config["source_language"] = "ja"
+            config["target_language"] = "ja"
+
+            with self.assertRaisesRegex(ValueError, "來源與目標語言不可相同"):
+                save_config(Path(tmp), config)
 
     def test_ensure_glossary_file_creates_parent_and_preserves_existing(self):
         with tempfile.TemporaryDirectory() as tmp:

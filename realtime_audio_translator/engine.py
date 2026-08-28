@@ -7,7 +7,7 @@ from typing import Callable
 from .asr import AudioTranscriber
 from .audio import SegmentWorker, audio_segment_active, device_name_from_label, find_device, virtual_mic_recaptures_tts
 from .ai_confidence import build_confidence_snapshot, format_confidence_status
-from .config import APP_DIR, DEFAULT_CONFIG, TARGET_LANGUAGE_CHOICES
+from .config import APP_DIR, DEFAULT_CONFIG, TARGET_LANGUAGE_CHOICES, validate_language_pair
 from .logbook import ConversationLog
 from .models import models_dir
 from .providers import TextToSpeech, Translator
@@ -69,6 +69,11 @@ class RealtimeEngine:
 
     def start(self) -> None:
         if self.running:
+            return
+        try:
+            validate_language_pair(self.config)
+        except ValueError as exc:
+            self.status(str(exc))
             return
         self.running = True
         try:

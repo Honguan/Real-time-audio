@@ -12,7 +12,7 @@ from .ai_memory import add_glossary_term
 from .ai_orchestrator import plan_session
 from .app_log import append_app_log
 from .commands import command_choices, refresh_commands
-from .config import APP_DIR, clear_cache, clear_logs, ensure_glossary_file, load_config, log_files_to_clear, save_audio_devices, save_config
+from .config import APP_DIR, clear_cache, clear_logs, ensure_glossary_file, load_config, log_files_to_clear, save_audio_devices, save_config, validate_language_pair
 from .diagnostics import collect_diagnostics
 from .engine import RealtimeEngine
 from .models import cuda_hardware_from_check_output, download_model, list_models, model_available, model_install_message, models_dir, recommend_model
@@ -206,13 +206,13 @@ def subtitle_updates_allowed(paused: bool) -> bool:
 
 def swap_language_values(source_language: str, target_language: str) -> tuple[str, str]:
     if source_language == "auto":
-        return target_language, target_language
+        return source_language, target_language
     return target_language, source_language
 
 
-def language_lock_value(source_language: str, detected_language: str) -> str:
+def language_lock_value(source_language: str, detected_language: str, target_language: str = "") -> str:
     detected = str(detected_language or "").strip()
-    return detected if source_language == "auto" and detected in LANGUAGE_CHOICES and detected != "auto" else source_language
+    return detected if source_language == "auto" and detected in LANGUAGE_CHOICES and detected not in {"auto", target_language} else source_language
 
 
 def troubleshooting_action(issue: str) -> tuple[str, str]:
@@ -561,6 +561,9 @@ class TranslatorApp(tk.Tk):
         self.status.set("; ".join(voices) if voices else "找不到 Windows TTS 聲音")
 
     def _swap_languages(self) -> None:
+        if self.vars["source_language"].get() == "auto":
+            self.status.set("自動偵測來源語言時無法交換；請先選擇固定來源語言")
+            return
         source, target = swap_language_values(self.vars["source_language"].get(), self.vars["target_language"].get())
         self.vars["source_language"].set(source)
         self.vars["target_language"].set(target)
@@ -608,20 +611,26 @@ class TranslatorApp(tk.Tk):
             config["tts_volume"] = 100
         return config
 
-    def _save(self) -> None:
+    def _save(self) -> bool:
         config = self._config_from_vars()
+        try:
+            validate_language_pair(config)
+        except ValueError as exc:
+            self.status.set(str(exc))
+            return False
         cloud_enabled = bool({config["provider"], config["tts_provider"]} & set(CLOUD_PROVIDERS))
         if cloud_activation_requires_confirmation(self.config.get("provider", "local"), self.config.get("tts_provider", "local"), config["provider"], config["tts_provider"]):
             if not messagebox.askyesno("啟用雲端 API？", mode_notice(config["provider"], config["tts_provider"], bool(config["record_logs"]), config.get("local_translate_url", ""))):
                 self._load_config_into_widgets(self.config)
                 self.status.set("雲端 API 未啟用")
-                return
+                return False
         config["cloud_api_enabled"] = cloud_enabled
         self.config = config
         self.mode_text.set(self._mode_text())
         save_config(APP_DIR, self.config)
         if self.engine:
             self.engine.config = self.config
+        return True
 
     def _set_last_error(self, message: str) -> None:
         self.config["last_error"] = message
@@ -919,7 +928,11 @@ class TranslatorApp(tk.Tk):
             self._open_logs()
 
     def _lock_language(self) -> None:
-        locked = language_lock_value(self.vars["source_language"].get(), self.config.get("last_detected_language", ""))
+        locked = language_lock_value(
+            self.vars["source_language"].get(),
+            self.config.get("last_detected_language", ""),
+            self.vars["target_language"].get(),
+        )
         if locked == self.vars["source_language"].get():
             self.status.set("沒有偵測到可鎖定的語言")
             return
@@ -977,7 +990,11 @@ class TranslatorApp(tk.Tk):
 
     def _apply_scenario(self) -> None:
         config = self._config_from_vars()
-        updated = apply_scenario(config, config["scenario"])
+        try:
+            updated = apply_scenario(config, config["scenario"])
+        except ValueError as exc:
+            self.status.set(str(exc))
+            return
         if record_logs_requires_confirmation(bool(self.config.get("record_logs", False)), bool(updated.get("record_logs", False))):
             if not messagebox.askyesno("啟用對話紀錄？", "這個場景會開啟對話紀錄。\n是否允許本機保存本次對話紀錄？"):
                 updated["record_logs"] = False
@@ -1003,7 +1020,11 @@ class TranslatorApp(tk.Tk):
         self.record_logs.set(bool(updated.get("record_logs", self.record_logs.get())))
 
     def _optimize_settings(self) -> None:
-        decision = self._planned_session()
+        try:
+            decision = self._planned_session()
+        except ValueError as exc:
+            self.status.set(str(exc))
+            return
         if not decision.recommendations:
             self.status.set("設定已是建議值")
             return
@@ -1228,7 +1249,8 @@ class TranslatorApp(tk.Tk):
         self.status.set("已開啟修復說明")
 
     def _start(self) -> None:
-        self._save()
+        if not self._save():
+            return
         self._auto_optimize_before_start()
         status = runtime_status(runtime_dir(self.config), verify_hashes=True)
         if not status["ready"]:
