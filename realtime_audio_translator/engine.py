@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Callable
 
 from .asr import AudioTranscriber
-from .audio import SegmentWorker, audio_segment_active, device_name_from_label, discard_audio_segment, find_device, virtual_mic_recaptures_tts
+from .audio import SegmentWorker, WorkerHealth, audio_segment_active, device_name_from_label, discard_audio_segment, find_device, virtual_mic_recaptures_tts
 from .ai_confidence import build_confidence_snapshot, format_confidence_status
 from .config import APP_DIR, DEFAULT_CONFIG, STATE_KEYS, TARGET_LANGUAGE_CHOICES, save_config_state, validate_language_pair
 from .logbook import ConversationLog
@@ -79,10 +79,14 @@ class RealtimeEngine:
         self._lifecycle_lock = threading.Lock()
         self._callback_lock = threading.Lock()
         self._metrics_lock = threading.Lock()
+        self._health_lock = threading.Lock()
         self._log_lock = threading.Lock()
         self._tts_lock = threading.Lock()
         self.threads: list[threading.Thread] = []
         self.workers: list[SegmentWorker] = []
+        self.capture_health: dict[str, WorkerHealth] = {}
+        self._active_directions: set[str] = set()
+        self._starting_directions = False
         self.log = ConversationLog(Path(config.get("log_dir") or APP_DIR / "logs")) if config.get("record_logs") else None
         self.pipelines: dict[str, PipelineContext] = {}
         self.transcriber: AudioTranscriber | None = None
@@ -128,6 +132,7 @@ class RealtimeEngine:
         self.config["last_asr_failed"] = False
         self._save_state({"last_asr_failed"})
         started = []
+        self._starting_directions = True
         skipped_feedback = False
         skipped_mic_feedback = False
         if self.config.get("speaker_enabled", True):
@@ -140,14 +145,18 @@ class RealtimeEngine:
                 skipped_mic_feedback = True
             else:
                 started.append(self._start_direction("me", self.config.get("microphone_device", ""), False))
+        self._starting_directions = False
+        if self._all_captures_failed():
+            self.running = False
+            self._cancel.set()
         skips = []
         if skipped_feedback:
             skips.append("喇叭擷取已略過：和 TTS 輸出相同")
         if skipped_mic_feedback:
             skips.append("麥克風擷取已略過：和虛擬麥克風輸出相同")
-        if any(started):
+        if any(started) and self.running:
             if self._session_active(session):
-                self.status("執行中" + (f"；{'；'.join(skips)}" if skips else ""))
+                self.status(self._capture_status("執行中") + (f"；{'；'.join(skips)}" if skips else ""))
         elif self._session == session:
             self.running = False
             if not self._cancel.is_set():
@@ -183,11 +192,21 @@ class RealtimeEngine:
 
     def set_paused(self, paused: bool) -> None:
         self.paused = paused
-        self.status("已暫停" if paused else "執行中")
+        self.status("已暫停" if paused else self._capture_status("執行中"))
 
     def set_muted(self, muted: bool) -> None:
         self.muted = muted
-        self.status("已靜音" if muted else "執行中")
+        self.status("已靜音" if muted else self._capture_status("執行中"))
+
+    def _capture_status(self, healthy: str) -> str:
+        with self._health_lock:
+            failed = [direction_label(direction) for direction, health in self.capture_health.items() if health.state == "failed"]
+            recovering = [direction_label(direction) for direction, health in self.capture_health.items() if health.state in {"degraded", "recovering"}]
+        if failed:
+            return f"部分可用；{'、'.join(failed)}擷取失敗；請停止後重新啟動"
+        if recovering:
+            return f"音訊降級；{'、'.join(recovering)}擷取恢復中"
+        return healthy
 
     def _start_direction(self, direction: str, device_hint: str, loopback: bool) -> bool:
         device = find_device(device_hint, want_output=loopback) if device_hint else None
@@ -197,7 +216,14 @@ class RealtimeEngine:
             self.status(f"{direction_label(direction)}：找不到音訊裝置")
             return False
         session = self._session
-        worker = SegmentWorker(APP_DIR / "cache" / "audio" / f"session-{session}", device, float(self.config["segment_seconds"]), loopback, self._cancel)
+        worker = SegmentWorker(
+            APP_DIR / "cache" / "audio" / f"session-{session}",
+            device,
+            float(self.config["segment_seconds"]),
+            loopback,
+            self._cancel,
+            lambda event: self._capture_health_changed(event, session),
+        )
         self._pipeline(direction)
         capture_thread = threading.Thread(target=worker.run, args=(direction,), daemon=True)
         process_thread = threading.Thread(target=self._process_segments, args=(direction, worker, session), daemon=True)
@@ -205,10 +231,38 @@ class RealtimeEngine:
             if not self._session_active(session):
                 return False
             self.workers.append(worker)
+            with self._health_lock:
+                self._active_directions.add(direction)
             self.threads.extend([capture_thread, process_thread])
             capture_thread.start()
             process_thread.start()
         return True
+
+    def _all_captures_failed(self) -> bool:
+        with self._health_lock:
+            return bool(self._active_directions) and all(
+                self.capture_health.get(direction, WorkerHealth(direction, "capturing")).state == "failed"
+                for direction in self._active_directions
+            )
+
+    def _capture_health_changed(self, health: WorkerHealth, session: str | None) -> None:
+        if not self._session_active(session):
+            return
+        with self._health_lock:
+            previous = self.capture_health.get(health.direction)
+            self.capture_health[health.direction] = health
+        label = direction_label(health.direction)
+        if health.state == "degraded":
+            self._publish(session, self.status, f"{label}擷取暫時失敗 [{health.error_code}]：{health.message}；第 {health.attempt} 次重試")
+        elif health.state == "recovering":
+            self._publish(session, self.status, f"{label}擷取恢復中；第 {health.attempt} 次重試")
+        elif health.state == "capturing" and previous and previous.state != "capturing":
+            self._publish(session, self.status, f"{label}擷取已恢復")
+        elif health.state == "failed":
+            self._publish(session, self.status, f"{label}擷取失敗 [{health.error_code}]：{health.message}；請停止後重新啟動")
+            if not self._starting_directions and self._all_captures_failed():
+                self.running = False
+                self._cancel.set()
 
     def _session_active(self, session: str | None) -> bool:
         return session is None or (self.running and session == self._session and not self._cancel.is_set())
@@ -236,7 +290,7 @@ class RealtimeEngine:
             config["source_language"] if direction == "speaker" else config["target_language"],
             DEFAULT_CONFIG["source_language"] if direction == "speaker" else DEFAULT_CONFIG["target_language"],
         )
-        while self.running and self._session_active(session):
+        while self.running and self._session_active(session) and not getattr(worker, "_stopped", False):
             if self.paused:
                 drain_queue(worker.queue)
                 time.sleep(0.1)
