@@ -8,6 +8,26 @@ from realtime_audio_translator.gui import LANGUAGE_CHOICES, PERFORMANCE_CHOICES,
 
 
 class GuiLogicTests(unittest.TestCase):
+    def test_config_from_vars_preserves_runtime_state(self):
+        app = TranslatorApp.__new__(TranslatorApp)
+        app.config = DEFAULT_CONFIG.copy()
+        app.config["last_error"] = "new runtime error"
+        stale = Mock()
+        stale.get.return_value = "old widget error"
+        app.vars = {"last_error": stale}
+        for name in (
+            "overlay_visible", "overlay_topmost", "show_language_labels", "show_original_text",
+            "show_translated_text", "tts_enabled", "speaker_tts_enabled", "start_muted",
+            "virtual_mic_enabled", "speaker_enabled", "microphone_enabled", "record_logs", "advanced_mode",
+        ):
+            variable = Mock()
+            variable.get.return_value = app.config[name]
+            setattr(app, name, variable)
+
+        config = app._config_from_vars()
+
+        self.assertEqual(config["last_error"], "new runtime error")
+
     def test_conversation_logs_are_off_by_default(self):
         self.assertFalse(DEFAULT_CONFIG["record_logs"])
         self.assertEqual(DEFAULT_CONFIG["log_dir"], str(Path.home() / ".realtime-audio" / "logs"))

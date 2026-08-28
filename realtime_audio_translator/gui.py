@@ -12,7 +12,7 @@ from .ai_memory import add_glossary_term
 from .ai_orchestrator import plan_session
 from .app_log import append_app_log
 from .commands import command_choices, refresh_commands
-from .config import APP_DIR, clear_cache, clear_logs, ensure_glossary_file, load_config, log_files_to_clear, save_audio_devices, save_config, validate_language_pair
+from .config import APP_DIR, clear_cache, clear_logs, ensure_glossary_file, load_config, log_files_to_clear, save_audio_devices, save_config, save_config_state, validate_language_pair
 from .diagnostics import collect_diagnostics
 from .engine import RealtimeEngine
 from .models import cuda_hardware_from_check_output, download_model, list_models, model_available, model_install_message, models_dir, recommend_model
@@ -572,6 +572,8 @@ class TranslatorApp(tk.Tk):
     def _config_from_vars(self) -> dict:
         config = self.config.copy()
         for key, variable in self.vars.items():
+            if key.startswith("last_"):
+                continue
             config[key] = variable.get()
         config["scenario"] = scenario_key(config["scenario"])
         config["overlay_visible"] = self.overlay_visible.get()
@@ -637,7 +639,7 @@ class TranslatorApp(tk.Tk):
         if "last_error" in self.vars:
             self.vars["last_error"].set(message)
         self.mode_text.set(self._mode_text())
-        save_config(APP_DIR, self.config)
+        save_config_state(APP_DIR, self.config, {"last_error"})
 
     def _engine_status(self, message: str) -> None:
         self.status.set(message)
@@ -820,7 +822,7 @@ class TranslatorApp(tk.Tk):
                 config["last_ffmpeg_failed"] = True
             self.vars["last_ffmpeg_failed"].set(str(config["last_ffmpeg_failed"]))
             self.config = config
-            save_config(APP_DIR, self.config)
+            save_config_state(APP_DIR, self.config, {"last_ffmpeg_failed"})
             note = "runtime 已就緒"
             if status["warnings"]:
                 note += f"；建議 CUDA 套件：{status['cuda_package']}"
@@ -982,6 +984,8 @@ class TranslatorApp(tk.Tk):
             devices, vram_gb = 0, 0
         config["last_cuda_devices"] = devices
         config["last_vram_gb"] = vram_gb
+        self.config.update({"last_cuda_devices": devices, "last_vram_gb": vram_gb})
+        save_config_state(APP_DIR, config, {"last_cuda_devices", "last_vram_gb"})
         self.vars["last_cuda_devices"].set(str(devices))
         self.vars["last_vram_gb"].set(str(vram_gb))
         prefer_quality = self.vars["performance_mode"].get() == "quality"
@@ -1037,6 +1041,8 @@ class TranslatorApp(tk.Tk):
         devices, vram_gb = self._cuda_hardware(config)
         config["last_cuda_devices"] = devices
         config["last_vram_gb"] = vram_gb
+        self.config.update({"last_cuda_devices": devices, "last_vram_gb": vram_gb})
+        save_config_state(APP_DIR, config, {"last_cuda_devices", "last_vram_gb"})
         return plan_session(config, self.repo_root, devices, vram_gb)
 
     def _cuda_hardware(self, config: dict) -> tuple[int, int]:
@@ -1058,6 +1064,8 @@ class TranslatorApp(tk.Tk):
         devices, vram_gb = self._cuda_hardware(config)
         config["last_cuda_devices"] = devices
         config["last_vram_gb"] = vram_gb
+        self.config.update({"last_cuda_devices": devices, "last_vram_gb": vram_gb})
+        save_config_state(APP_DIR, config, {"last_cuda_devices", "last_vram_gb"})
         recommendations = recommend_tuning(config, devices, vram_gb, latency_seconds_value(config.get("last_latency_seconds")))
         if recommendations:
             self._load_config_into_widgets(apply_tuning(config, recommendations))
@@ -1154,12 +1162,12 @@ class TranslatorApp(tk.Tk):
             self._play_tts_test(config)
             config["last_tts_failed"] = False
             self.config = config
-            save_config(APP_DIR, self.config)
+            save_config_state(APP_DIR, self.config, {"last_tts_failed"})
             self.status.set("TTS 輸出測試完成")
         except Exception as exc:
             config["last_tts_failed"] = True
             self.config = config
-            save_config(APP_DIR, self.config)
+            save_config_state(APP_DIR, self.config, {"last_tts_failed"})
             messagebox.showerror("TTS 測試失敗", str(exc))
 
     def _test_virtual_mic(self) -> None:
@@ -1177,12 +1185,12 @@ class TranslatorApp(tk.Tk):
             active = audio_segment_active(path, float(config["speech_threshold"]))
             config["last_virtual_mic_failed"] = not active
             self.config = config
-            save_config(APP_DIR, self.config)
+            save_config_state(APP_DIR, self.config, {"last_virtual_mic_failed"})
             self.status.set("虛擬麥克風已偵測到聲音" if active else "虛擬麥克風沒有偵測到聲音")
         except Exception as exc:
             config["last_virtual_mic_failed"] = True
             self.config = config
-            save_config(APP_DIR, self.config)
+            save_config_state(APP_DIR, self.config, {"last_virtual_mic_failed"})
             messagebox.showerror("虛擬麥克風測試失敗", str(exc))
 
     def _play_tts_test(self, config: dict) -> None:
@@ -1207,7 +1215,7 @@ class TranslatorApp(tk.Tk):
             active = audio_segment_active(path, float(config["speech_threshold"]))
             config["last_speaker_quiet"] = not active
             self.config = config
-            save_config(APP_DIR, self.config)
+            save_config_state(APP_DIR, self.config, {"last_speaker_quiet"})
             self.status.set("喇叭已偵測到聲音" if active else "喇叭目前沒有偵測到聲音")
         except Exception as exc:
             messagebox.showerror("喇叭測試失敗", str(exc))
@@ -1224,7 +1232,7 @@ class TranslatorApp(tk.Tk):
             level = float(np.sqrt(np.mean(np.square(data))))
             config["last_mic_quiet"] = level < float(self.vars["speech_threshold"].get())
             self.config = config
-            save_config(APP_DIR, self.config)
+            save_config_state(APP_DIR, self.config, {"last_mic_quiet"})
             self.status.set(f"麥克風音量 {level:.4f}")
         except Exception as exc:
             messagebox.showerror("麥克風測試失敗", str(exc))
@@ -1270,7 +1278,7 @@ class TranslatorApp(tk.Tk):
             return
         self._set_last_error("")
         append_app_log(APP_DIR, "start", model=self.config["model"], provider=self.config["provider"])
-        self.engine = RealtimeEngine(self.repo_root, self.config, self._overlay_update, self._engine_status)
+        self.engine = RealtimeEngine(self.repo_root, self.config, self._overlay_update, self._engine_status, APP_DIR)
         threading.Thread(target=self.engine.start, daemon=True).start()
 
     def _stop(self) -> None:

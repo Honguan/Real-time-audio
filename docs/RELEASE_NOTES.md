@@ -1,5 +1,7 @@
 # Realtime Audio Translator 發布說明
 
+- 設定改用單一具 schema 版本的 `config/settings.json`，透過原子寫入與備份復原避免中斷或並行保存造成損毀；執行狀態分離至 `config/state.json`。
+
 ## v0.1.34
 
 - 修正 runtime ASR 輸出時間戳混入字幕，以及離線翻譯的 SentencePiece 空白標記。
