@@ -89,6 +89,15 @@ SOURCE_LANGUAGE_CHOICES = ("auto", "zh", "en", "ja", "ko")
 TARGET_LANGUAGE_CHOICES = ("zh", "en", "ja", "ko")
 
 
+def validate_language_pair(config: dict) -> None:
+    source = config.get("source_language")
+    target = config.get("target_language")
+    if source not in SOURCE_LANGUAGE_CHOICES or target not in TARGET_LANGUAGE_CHOICES:
+        raise ValueError("不支援的來源或目標語言")
+    if source != "auto" and source == target:
+        raise ValueError("來源與目標語言不可相同")
+
+
 def ensure_app_dirs(root: Path = APP_DIR) -> None:
     root.mkdir(parents=True, exist_ok=True)
     for relative in (
@@ -164,6 +173,11 @@ def load_config(root: Path = APP_DIR) -> dict:
         config["source_language"] = DEFAULT_CONFIG["source_language"]
     if config.get("target_language") not in TARGET_LANGUAGE_CHOICES:
         config["target_language"] = DEFAULT_CONFIG["target_language"]
+    try:
+        validate_language_pair(config)
+    except ValueError:
+        config["source_language"] = DEFAULT_CONFIG["source_language"]
+        config["target_language"] = DEFAULT_CONFIG["target_language"]
     if not settings_path.exists():
         save_config(root, config)
     return config
@@ -188,6 +202,7 @@ def save_config(root: Path, config: dict) -> None:
         config["source_language"] = DEFAULT_CONFIG["source_language"]
     if config.get("target_language") not in TARGET_LANGUAGE_CHOICES:
         config["target_language"] = DEFAULT_CONFIG["target_language"]
+    validate_language_pair(config)
     with (root / "config.json").open("w", encoding="utf-8", newline="\n") as handle:
         json.dump(config, handle, ensure_ascii=False, indent=2)
     with (root / "config" / "settings.json").open("w", encoding="utf-8", newline="\n") as handle:

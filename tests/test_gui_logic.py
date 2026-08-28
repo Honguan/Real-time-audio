@@ -1,5 +1,6 @@
 import unittest
 from pathlib import Path
+from unittest.mock import Mock
 from realtime_audio_translator.config import DEFAULT_CONFIG, _has_reparse_point, clear_cache, clear_logs, ensure_app_dirs, ensure_glossary_file, load_config, log_files_to_clear, save_audio_devices, save_config
 from realtime_audio_translator.diagnostics import DiagnosticIssue, collect_diagnostics
 from realtime_audio_translator.engine import RealtimeEngine, audio_devices_overlap, direction_label, drain_queue, overlay_text_from_config, safe_target_language
@@ -314,6 +315,8 @@ class GuiLogicTests(unittest.TestCase):
             "ai_auto_optimize": True,
             "device": "cuda",
             "model": "large-v3-turbo",
+            "source_language": "zh",
+            "target_language": "en",
             "virtual_mic_enabled": False,
             "last_latency_seconds": "4.2",
             "performance_mode": "quality",
@@ -479,7 +482,19 @@ class GuiLogicTests(unittest.TestCase):
 
     def test_swap_language_values(self):
         self.assertEqual(swap_language_values("zh", "en"), ("en", "zh"))
-        self.assertEqual(swap_language_values("auto", "zh"), ("zh", "zh"))
+        self.assertEqual(swap_language_values("auto", "zh"), ("auto", "zh"))
+
+        app = TranslatorApp.__new__(TranslatorApp)
+        source = Mock()
+        source.get.return_value = "auto"
+        app.vars = {"source_language": source, "target_language": Mock()}
+        app.status = Mock()
+        app._save = Mock()
+
+        app._swap_languages()
+
+        app.status.set.assert_called_once_with("自動偵測來源語言時無法交換；請先選擇固定來源語言")
+        app._save.assert_not_called()
 
     def test_safe_target_language_rejects_auto(self):
         self.assertEqual(safe_target_language("ja", "zh"), "ja")
@@ -487,6 +502,7 @@ class GuiLogicTests(unittest.TestCase):
 
     def test_language_lock_uses_last_detected_language_only_from_auto(self):
         self.assertEqual(language_lock_value("auto", "en"), "en")
+        self.assertEqual(language_lock_value("auto", "en", "en"), "auto")
         self.assertEqual(language_lock_value("zh", "en"), "zh")
         self.assertEqual(language_lock_value("auto", ""), "auto")
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")

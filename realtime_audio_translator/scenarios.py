@@ -1,3 +1,6 @@
+from .config import validate_language_pair
+
+
 SCENARIO_CHOICES = ("game_voice", "discord_chat", "meeting", "customer_service", "subtitle_only", "speak_translate", "two_way")
 
 SCENARIO_LABELS = {
@@ -99,4 +102,5 @@ def apply_scenario(config: dict, scenario_key: str) -> dict:
     selected = scenario_key if scenario_key in SCENARIO_PRESETS else "discord_chat"
     updated["scenario"] = selected
     updated.update(SCENARIO_PRESETS[selected])
+    validate_language_pair(updated)
     return updated

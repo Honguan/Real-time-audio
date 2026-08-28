@@ -9,6 +9,18 @@ from tests.helpers import QueuedWorker, StaticTranscriber, StoppingTranslator, w
 
 
 class EngineTests(unittest.TestCase):
+    def test_engine_rejects_identical_fixed_languages_before_start(self):
+        statuses = []
+        config = DEFAULT_CONFIG.copy()
+        config["source_language"] = "en"
+        config["target_language"] = "en"
+        engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, statuses.append)
+
+        engine.start()
+
+        self.assertFalse(engine.running)
+        self.assertEqual(statuses, ["來源與目標語言不可相同"])
+
     def test_engine_uses_configured_log_dir(self):
         with tempfile.TemporaryDirectory() as tmp:
             log_dir = Path(tmp) / "custom-logs"
