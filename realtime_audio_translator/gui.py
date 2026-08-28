@@ -4,8 +4,10 @@ import threading
 import time
 import tkinter as tk
 import webbrowser
+from dataclasses import dataclass
 from pathlib import Path
 from tkinter import filedialog, messagebox, simpledialog, ttk
+from typing import Literal
 
 from .audio import audio_segment_active, capture_wav, find_device, format_device_label, list_audio_devices
 from .ai_auto_tuner import apply_tuning, recommend_tuning
@@ -35,6 +37,15 @@ PERFORMANCE_CHOICES = ("low_latency", "balanced", "quality", "offline_light")
 CLOUD_PROVIDERS = ("google", "openai")
 AUDIO_DEVICE_KEYS = ("speaker_device", "microphone_device", "tts_output_device", "speaker_tts_output_device")
 SEVERITY_LABELS = {"error": "錯誤", "warning": "警告", "info": "提示"}
+
+
+@dataclass(frozen=True)
+class UiEvent:
+    kind: Literal["status", "overlay", "callback"]
+    args: tuple
+    engine: RealtimeEngine | None = None
+
+
 SETTING_ROWS = (
     ("來源語言", "source_language"),
     ("目標語言", "target_language"),
@@ -362,7 +373,7 @@ class TranslatorApp(tk.Tk):
         self._build()
         self._set_overlay_visible(bool(self.config.get("overlay_visible", True)))
         self._refresh_lists()
-        self.after(50, self._drain_engine_events)
+        self.after(50, self._drain_ui_events)
         if self.config.get("ai_self_diagnosis", True):
             self.after(250, self._show_first_run_wizard)
 
@@ -650,16 +661,26 @@ class TranslatorApp(tk.Tk):
         if status_message_is_error(message):
             self._set_last_error(message)
 
-    def _drain_engine_events(self) -> None:
+    def _post_ui(self, kind: Literal["status", "overlay", "callback"], *args, engine: RealtimeEngine | None = None) -> None:
+        self._engine_events.put(UiEvent(kind, args, engine))
+
+    def _drain_ui_events(self) -> None:
+        assert threading.current_thread() is threading.main_thread(), "Tk event pump must run on the main thread"
         while True:
             try:
-                engine, event, args = self._engine_events.get_nowait()
+                event = self._engine_events.get_nowait()
             except queue.Empty:
                 break
-            if not self._closing and engine is self.engine:
-                (self._engine_status if event == "status" else self._overlay_update)(*args)
+            if self._closing or (event.engine is not None and event.engine is not self.engine):
+                continue
+            if event.kind == "status":
+                self._engine_status(*event.args)
+            elif event.kind == "overlay":
+                self._overlay_update(*event.args)
+            else:
+                event.args[0](*event.args[1:])
         if not self._closing:
-            self.after(50, self._drain_engine_events)
+            self.after(50, self._drain_ui_events)
 
     def _mode_text(self) -> str:
         return f"{mode_notice(self.config['provider'], self.config['tts_provider'], bool(self.config['record_logs']), self.config.get('local_translate_url', ''))}\n{main_status_summary(self.config)}"
@@ -801,11 +822,11 @@ class TranslatorApp(tk.Tk):
 
         def run() -> None:
             try:
-                download_runtime(target, lambda message: self.after(0, self.status.set, message))
+                download_runtime(target, lambda message: self._post_ui("status", message))
                 error = ""
             except Exception as exc:
                 error = str(exc)
-            self.after(0, self._finish_runtime_download, target, error)
+            self._post_ui("callback", self._finish_runtime_download, target, error)
 
         self.status.set("正在取得最新版 runtime")
         threading.Thread(target=run, daemon=True).start()
@@ -966,7 +987,7 @@ class TranslatorApp(tk.Tk):
                 message = release_update_message(current_version(self.repo_root), latest)
             except Exception as exc:
                 message = f"更新檢查失敗：{exc}；{RELEASES_URL}"
-            self.after(0, self.status.set, message)
+            self._post_ui("status", message)
 
         threading.Thread(target=run, daemon=True).start()
 
@@ -1104,8 +1125,8 @@ class TranslatorApp(tk.Tk):
                 message = "模型下載完成" if code == 0 else f"模型下載失敗：{code}"
             except Exception as exc:
                 message = f"模型下載失敗：{exc}"
-            self.after(0, self.status.set, message)
-            self.after(0, self._refresh_lists)
+            self._post_ui("status", message)
+            self._post_ui("callback", self._refresh_lists)
 
         threading.Thread(target=run, daemon=True).start()
 
@@ -1130,7 +1151,7 @@ class TranslatorApp(tk.Tk):
                 message = f"離線翻譯模型下載完成：{len(downloaded)} 個"
             except Exception as exc:
                 message = f"離線翻譯模型下載失敗：{exc}"
-            self.after(0, self.status.set, message)
+            self._post_ui("status", message)
 
         threading.Thread(target=run, daemon=True).start()
 
@@ -1296,8 +1317,8 @@ class TranslatorApp(tk.Tk):
         engine = RealtimeEngine(
             self.repo_root,
             self.config,
-            lambda speaker, mine: self._engine_events.put((engine, "overlay", (speaker, mine))),
-            lambda message: self._engine_events.put((engine, "status", (message,))),
+            lambda speaker, mine: self._post_ui("overlay", speaker, mine, engine=engine),
+            lambda message: self._post_ui("status", message, engine=engine),
             APP_DIR,
         )
         self.engine = engine
