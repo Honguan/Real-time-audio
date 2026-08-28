@@ -16,13 +16,22 @@ def write_linear16_wav(path: Path, audio: bytes, samplerate: int = 24000) -> Pat
     return path
 
 
-def play_linear16(audio: bytes, device_name: str = "CABLE Input", samplerate: int = 24000) -> None:
+def play_linear16(audio: bytes, device_name: str = "CABLE Input", samplerate: int = 24000, cancel_event=None) -> None:
     import numpy as np
     import sounddevice as sd
 
     device = find_device(device_name, want_output=True)
     data = np.frombuffer(audio, dtype="int16")
-    sd.play(data, samplerate=samplerate, device=device, blocking=True)
+    if cancel_event is None:
+        sd.play(data, samplerate=samplerate, device=device, blocking=True)
+        return
+    if cancel_event.is_set():
+        return
+    sd.play(data, samplerate=samplerate, device=device, blocking=False)
+    while sd.get_stream().active:
+        if cancel_event.wait(0.05):
+            sd.stop()
+            return
 
 
 def list_windows_sapi_voices() -> list[str]:
@@ -43,7 +52,7 @@ foreach ($candidate in $voice.GetVoices()) {
     return [line.strip() for line in result.stdout.splitlines() if line.strip()]
 
 
-def speak_windows_sapi(text: str, device_name: str = "CABLE Input", rate: int = 0, volume: int = 100, voice_name: str = "") -> None:
+def speak_windows_sapi(text: str, device_name: str = "CABLE Input", rate: int = 0, volume: int = 100, voice_name: str = "", cancel_event=None) -> None:
     script = r"""
 $voice = New-Object -ComObject SAPI.SpVoice
 $voice.Rate = [int]$env:RAT_TTS_RATE
@@ -75,9 +84,19 @@ if ($device) {
     env["RAT_TTS_VOLUME"] = str(max(0, min(100, int(volume))))
     env["RAT_TTS_VOICE"] = voice_name
     creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
-    subprocess.run(
-        ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script],
-        check=True,
-        env=env,
-        creationflags=creationflags,
-    )
+    command = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script]
+    if cancel_event is None:
+        subprocess.run(command, check=True, env=env, creationflags=creationflags)
+        return
+    process = subprocess.Popen(command, env=env, creationflags=creationflags)
+    while process.poll() is None:
+        if cancel_event.wait(0.05):
+            process.terminate()
+            try:
+                process.wait(1)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait()
+            return
+    if process.returncode:
+        raise subprocess.CalledProcessError(process.returncode, command)

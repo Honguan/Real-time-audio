@@ -1,3 +1,4 @@
+import queue
 import unittest
 from pathlib import Path
 from unittest.mock import Mock
@@ -272,13 +273,29 @@ class GuiLogicTests(unittest.TestCase):
         class Engine:
             def stop(self):
                 calls.append("stop")
+                return "已停止"
 
         app.engine = Engine()
+        app._engine_events = queue.Queue()
         app.destroy = lambda: calls.append("destroy")
 
         app._quit()
 
         self.assertEqual(calls, ["stop", "destroy"])
+
+    def test_stop_discards_queued_engine_callbacks(self):
+        app = TranslatorApp.__new__(TranslatorApp)
+        app.engine = type("Engine", (), {"stop": lambda self: "已停止"})()
+        app._engine_events = queue.Queue()
+        app._engine_events.put((app.engine, "overlay", ("stale", "")))
+        app._closing = False
+        statuses = []
+        app._engine_status = statuses.append
+
+        app._stop()
+
+        self.assertTrue(app._engine_events.empty())
+        self.assertEqual(statuses, ["已停止"])
 
     def test_gui_exposes_scenarios_and_diagnostics(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")

@@ -1,3 +1,4 @@
+import queue
 import subprocess
 import threading
 import time
@@ -342,6 +343,8 @@ class TranslatorApp(tk.Tk):
         self.repo_root = repo_root or resource_root()
         self.config = load_config(APP_DIR)
         self.engine: RealtimeEngine | None = None
+        self._engine_events = queue.Queue()
+        self._closing = False
         self.title("Realtime Audio Translator")
         self.geometry("900x680")
         self.protocol("WM_DELETE_WINDOW", self._quit)
@@ -359,6 +362,7 @@ class TranslatorApp(tk.Tk):
         self._build()
         self._set_overlay_visible(bool(self.config.get("overlay_visible", True)))
         self._refresh_lists()
+        self.after(50, self._drain_engine_events)
         if self.config.get("ai_self_diagnosis", True):
             self.after(250, self._show_first_run_wizard)
 
@@ -645,6 +649,17 @@ class TranslatorApp(tk.Tk):
         self.status.set(message)
         if status_message_is_error(message):
             self._set_last_error(message)
+
+    def _drain_engine_events(self) -> None:
+        while True:
+            try:
+                engine, event, args = self._engine_events.get_nowait()
+            except queue.Empty:
+                break
+            if not self._closing and engine is self.engine:
+                (self._engine_status if event == "status" else self._overlay_update)(*args)
+        if not self._closing:
+            self.after(50, self._drain_engine_events)
 
     def _mode_text(self) -> str:
         return f"{mode_notice(self.config['provider'], self.config['tts_provider'], bool(self.config['record_logs']), self.config.get('local_translate_url', ''))}\n{main_status_summary(self.config)}"
@@ -1278,15 +1293,30 @@ class TranslatorApp(tk.Tk):
             return
         self._set_last_error("")
         append_app_log(APP_DIR, "start", model=self.config["model"], provider=self.config["provider"])
-        self.engine = RealtimeEngine(self.repo_root, self.config, self._overlay_update, self._engine_status, APP_DIR)
-        threading.Thread(target=self.engine.start, daemon=True).start()
+        engine = RealtimeEngine(
+            self.repo_root,
+            self.config,
+            lambda speaker, mine: self._engine_events.put((engine, "overlay", (speaker, mine))),
+            lambda message: self._engine_events.put((engine, "status", (message,))),
+            APP_DIR,
+        )
+        self.engine = engine
+        threading.Thread(target=engine.start, daemon=True).start()
 
     def _stop(self) -> None:
         if self.engine:
-            self.engine.stop()
+            message = self.engine.stop()
+            while True:
+                try:
+                    self._engine_events.get_nowait()
+                except queue.Empty:
+                    break
+            if not self._closing:
+                self._engine_status(message)
             append_app_log(APP_DIR, "stop")
 
     def _quit(self) -> None:
+        self._closing = True
         self._stop()
         self.destroy()
 

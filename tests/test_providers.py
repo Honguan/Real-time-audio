@@ -2,6 +2,7 @@ import json
 import os
 import sys
 import tempfile
+import threading
 import unittest
 import zipfile
 from pathlib import Path
@@ -460,6 +461,57 @@ class ProvidersTests(unittest.TestCase):
             tts_module.subprocess.run = original_run
 
         self.assertEqual(calls[0][1]["env"]["RAT_TTS_DEVICE"], "CABLE Input (VB-Audio Virtual Cable)")
+
+    def test_windows_sapi_terminates_when_cancelled(self):
+        import realtime_audio_translator.tts as tts_module
+
+        class Process:
+            returncode = None
+            terminated = False
+
+            def poll(self):
+                return None
+
+            def terminate(self):
+                self.terminated = True
+
+            def wait(self, timeout=None):
+                self.returncode = 0
+
+        process = Process()
+        original_popen = tts_module.subprocess.Popen
+        tts_module.subprocess.Popen = lambda *args, **kwargs: process
+        cancel = threading.Event()
+        cancel.set()
+        try:
+            tts_module.speak_windows_sapi("hello", cancel_event=cancel)
+        finally:
+            tts_module.subprocess.Popen = original_popen
+
+        self.assertTrue(process.terminated)
+
+    def test_pcm_playback_does_not_start_when_cancelled(self):
+        import realtime_audio_translator.tts as tts_module
+
+        class SoundDevice:
+            played = False
+
+            def play(self, *args, **kwargs):
+                self.played = True
+
+        sounddevice = SoundDevice()
+        numpy = type("Numpy", (), {"frombuffer": staticmethod(lambda audio, dtype: audio)})()
+        original_find_device = tts_module.find_device
+        tts_module.find_device = lambda *args, **kwargs: 1
+        cancel = threading.Event()
+        cancel.set()
+        try:
+            with patch.dict(sys.modules, {"numpy": numpy, "sounddevice": sounddevice}):
+                tts_module.play_linear16(b"audio", cancel_event=cancel)
+        finally:
+            tts_module.find_device = original_find_device
+
+        self.assertFalse(sounddevice.played)
 
     def test_windows_sapi_lists_voice_names(self):
         import realtime_audio_translator.tts as tts_module

@@ -1,16 +1,43 @@
 import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 from realtime_audio_translator.archive_install import write_install_manifest
-from realtime_audio_translator.audio import audio_segment_active, device_name_from_label, find_device, loopback_device_for_output, virtual_mic_recaptures_tts
+from realtime_audio_translator.audio import SegmentWorker, audio_segment_active, device_name_from_label, find_device, loopback_device_for_output, virtual_mic_recaptures_tts
 from realtime_audio_translator.asr import AudioTranscriber, add_runtime_dll_directory, add_xxl_data
 from realtime_audio_translator.engine import RealtimeEngine, audio_devices_overlap, direction_label, drain_queue, overlay_text_from_config, safe_target_language
 from tests.helpers import write_wav
 
 
 class AudioTests(unittest.TestCase):
+    def test_segment_worker_cancels_capture_without_queuing_a_file(self):
+        import realtime_audio_translator.audio as audio_module
+
+        entered = threading.Event()
+
+        def capture(path, device, seconds, loopback, cancel_event):
+            entered.set()
+            cancel_event.wait()
+            raise InterruptedError
+
+        cancel = threading.Event()
+        worker = SegmentWorker(Path("cache"), 1, 30, False, cancel)
+        original_capture = audio_module.capture_wav
+        audio_module.capture_wav = capture
+        thread = threading.Thread(target=worker.run, args=("me",))
+        try:
+            thread.start()
+            self.assertTrue(entered.wait(1))
+            worker.stop()
+            thread.join(1)
+        finally:
+            audio_module.capture_wav = original_capture
+
+        self.assertFalse(thread.is_alive())
+        self.assertTrue(worker.queue.empty())
+
     def test_device_label_strips_hostapi_suffix(self):
         self.assertEqual(device_name_from_label("CABLE Input (VB-Audio Virtual Cable) [Windows WASAPI]"), "CABLE Input (VB-Audio Virtual Cable)")
 
