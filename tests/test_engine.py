@@ -72,6 +72,23 @@ class EngineTests(unittest.TestCase):
 
         self.assertEqual(statuses[-2:], ["部分可用；麥克風擷取失敗；請停止後重新啟動"] * 2)
 
+    def test_start_status_rechecks_capture_health_after_waiting_for_callback_lock(self):
+        statuses = []
+        engine = RealtimeEngine(Path("."), DEFAULT_CONFIG.copy(), lambda speaker, mine: None, statuses.append)
+        engine.running = True
+        engine._session = "health-race"
+        engine._callback_lock.acquire()
+        publish = threading.Thread(target=engine._publish_capture_status, args=("health-race",))
+        try:
+            publish.start()
+            engine.capture_health["me"] = WorkerHealth("me", "failed")
+        finally:
+            engine._callback_lock.release()
+        publish.join(1)
+
+        self.assertFalse(publish.is_alive())
+        self.assertEqual(statuses, ["部分可用；麥克風擷取失敗；請停止後重新啟動"])
+
     def test_engine_rejects_identical_fixed_languages_before_start(self):
         statuses = []
         config = DEFAULT_CONFIG.copy()

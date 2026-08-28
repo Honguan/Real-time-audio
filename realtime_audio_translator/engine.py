@@ -156,7 +156,7 @@ class RealtimeEngine:
             skips.append("麥克風擷取已略過：和虛擬麥克風輸出相同")
         if any(started) and self.running:
             if self._session_active(session):
-                self.status(self._capture_status("執行中") + (f"；{'；'.join(skips)}" if skips else ""))
+                self._publish_capture_status(session, f"；{'；'.join(skips)}" if skips else "")
         elif self._session == session:
             self.running = False
             if not self._cancel.is_set():
@@ -207,6 +207,11 @@ class RealtimeEngine:
         if recovering:
             return f"音訊降級；{'、'.join(recovering)}擷取恢復中"
         return healthy
+
+    def _publish_capture_status(self, session: str | None, suffix: str = "") -> None:
+        with self._callback_lock:
+            if self._session_active(session):
+                self.status(self._capture_status("執行中") + suffix)
 
     def _start_direction(self, direction: str, device_hint: str, loopback: bool) -> bool:
         device = find_device(device_hint, want_output=loopback) if device_hint else None
