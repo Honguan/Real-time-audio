@@ -8,6 +8,7 @@ import threading
 from dataclasses import dataclass
 from pathlib import Path
 
+from .audio import AudioSegment, write_audio_segment
 from .runtime import runtime_dir, runtime_status, whisper_exe
 
 
@@ -60,14 +61,15 @@ class AudioTranscriber:
                 return str(path)
         return self.model_name
 
-    def transcribe(self, wav_path: Path, language: str | None = None) -> TranscriptionResult:
+    def transcribe(self, audio: AudioSegment | Path, language: str | None = None) -> TranscriptionResult:
         if language == "auto":
             language = None
         with self._inference_lock:
             if self.model is None:
-                return self._transcribe_with_exe(wav_path, language)
+                return self._transcribe_with_exe(audio, language)
+            model_audio = str(audio) if isinstance(audio, Path) else self._model_audio(audio)
             segments, info = self.model.transcribe(
-                str(wav_path),
+                model_audio,
                 language=language or None,
                 vad_filter=True,
                 beam_size=1,
@@ -91,11 +93,22 @@ class AudioTranscriber:
                 sum(confidences) / len(confidences) if confidences else None,
             )
 
-    def _transcribe_with_exe(self, wav_path: Path, language: str | None = None) -> TranscriptionResult:
+    @staticmethod
+    def _model_audio(audio: AudioSegment):
+        import audioop
+        import numpy as np
+
+        pcm = audio.pcm
+        if audio.sample_rate != 16000:
+            pcm, _ = audioop.ratecv(pcm, 2, 1, audio.sample_rate, 16000, None)
+        return np.frombuffer(pcm, dtype=np.int16).astype(np.float32) / 32768.0
+
+    def _transcribe_with_exe(self, audio: AudioSegment | Path, language: str | None = None) -> TranscriptionResult:
         if language == "auto":
             language = None
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory(prefix="realtime-audio-asr-") as tmp:
             out_dir = Path(tmp)
+            wav_path = audio if isinstance(audio, Path) else write_audio_segment(out_dir / "segment.wav", audio)
             command = [
                 str(self.exe_path),
                 str(wav_path),

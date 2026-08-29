@@ -226,7 +226,6 @@ class RealtimeEngine:
             return False
         session = self._session
         worker = SegmentWorker(
-            APP_DIR / "cache" / "audio" / f"session-{session}",
             device,
             float(self.config["segment_seconds"]),
             loopback,
@@ -317,10 +316,13 @@ class RealtimeEngine:
                 previous_dropped = metrics.get("last_dropped_segments", 0)
                 queue_depth = worker.queue.qsize()
                 dropped_segments = getattr(worker, "dropped_segments", 0)
-                try:
-                    processing_lag = max(0.0, time.time() - wav.stat().st_mtime)
-                except OSError:
-                    processing_lag = 0.0
+                if "_capture_completed_perf" in timing:
+                    processing_lag = max(0.0, dequeued_perf - timing["_capture_completed_perf"])
+                else:
+                    try:
+                        processing_lag = max(0.0, time.time() - wav.stat().st_mtime)
+                    except (AttributeError, OSError):
+                        processing_lag = 0.0
                 backlog_metrics = {
                     "last_queue_depth": queue_depth,
                     "last_max_queue_depth": max(int(metrics.get("last_max_queue_depth", 0)), int(getattr(worker, "max_queue_depth", queue_depth))),

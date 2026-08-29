@@ -113,19 +113,41 @@ def virtual_mic_recaptures_tts(microphone_device: str, tts_output_device: str) -
     return same_device_identity(microphone_device, tts_output_device)
 
 
-def audio_segment_active(path: Path, threshold: float) -> bool:
+@dataclass
+class AudioSegment:
+    pcm: bytes
+    sample_rate: int
+    timing: dict[str, float] = field(default_factory=dict)
+
+
+def audio_segment_active(segment: AudioSegment | Path, threshold: float) -> bool:
     threshold = min(1.0, max(0.0, float(threshold)))
     if threshold == 0:
         return True
-    with wave.open(str(path), "rb") as handle:
-        frames = handle.readframes(handle.getnframes())
-        if not frames:
-            return False
-        peak = float(2 ** (8 * handle.getsampwidth() - 1))
-        return audioop.rms(frames, handle.getsampwidth()) / peak >= threshold
+    if isinstance(segment, AudioSegment):
+        frames = segment.pcm
+        sample_width = 2
+    else:
+        with wave.open(str(segment), "rb") as handle:
+            frames = handle.readframes(handle.getnframes())
+            sample_width = handle.getsampwidth()
+    if not frames:
+        return False
+    peak = float(2 ** (8 * sample_width - 1))
+    return audioop.rms(frames, sample_width) / peak >= threshold
 
 
-def capture_wav(path: Path, device_index: int, seconds: float, loopback: bool = False, cancel_event=None) -> Path:
+def write_audio_segment(path: Path, segment: AudioSegment) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with wave.open(str(path), "wb") as handle:
+        handle.setnchannels(1)
+        handle.setsampwidth(2)
+        handle.setframerate(segment.sample_rate)
+        handle.writeframes(segment.pcm)
+    return path
+
+
+def capture_audio(device_index: int, seconds: float, loopback: bool = False, cancel_event=None) -> AudioSegment:
     import numpy as np
 
     sd = _sd()
@@ -134,10 +156,9 @@ def capture_wav(path: Path, device_index: int, seconds: float, loopback: bool = 
         output = next((candidate for candidate in list_audio_devices() if candidate["index"] == device_index), None)
         if output is None:
             raise DeviceResolutionError("已選擇的輸出裝置已不可用")
-        return _capture_loopback_wav(path, output, seconds, cancel_event)
+        return _capture_loopback_audio(output, seconds, cancel_event)
     samplerate = int(device.get("default_samplerate") or 48000)
-    channels = int(device["max_input_channels"])
-    channels = max(1, min(channels, 2))
+    channels = max(1, min(int(device["max_input_channels"]), 2))
     frames = int(samplerate * seconds)
     data = sd.rec(frames, samplerate=samplerate, channels=channels, dtype="int16", device=device_index)
     if cancel_event is not None and cancel_event.wait(seconds):
@@ -150,14 +171,11 @@ def capture_wav(path: Path, device_index: int, seconds: float, loopback: bool = 
         raise InterruptedError
     if channels > 1:
         data = data.mean(axis=1).astype(np.int16)
-        channels = 1
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with wave.open(str(path), "wb") as handle:
-        handle.setnchannels(channels)
-        handle.setsampwidth(2)
-        handle.setframerate(samplerate)
-        handle.writeframes(data.tobytes())
-    return path
+    return AudioSegment(data.tobytes(), samplerate)
+
+
+def capture_wav(path: Path, device_index: int, seconds: float, loopback: bool = False, cancel_event=None) -> Path:
+    return write_audio_segment(path, capture_audio(device_index, seconds, loopback, cancel_event))
 
 
 def _pyaudio_output_for_device(audio, output_device: dict) -> dict:
@@ -180,7 +198,7 @@ def _pyaudio_output_for_device(audio, output_device: dict) -> dict:
     return outputs[0]
 
 
-def _capture_loopback_wav(path: Path, output_device: dict, seconds: float, cancel_event=None) -> Path:
+def _capture_loopback_audio(output_device: dict, seconds: float, cancel_event=None) -> AudioSegment:
     import numpy as np
     import pyaudiowpatch as pyaudio
 
@@ -213,13 +231,7 @@ def _capture_loopback_wav(path: Path, output_device: dict, seconds: float, cance
     if channels > 1:
         data = data.reshape(-1, channels).mean(axis=1).astype(np.int16)
         channels = 1
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with wave.open(str(path), "wb") as handle:
-        handle.setnchannels(channels)
-        handle.setsampwidth(2)
-        handle.setframerate(samplerate)
-        handle.writeframes(data.tobytes())
-    return path
+    return AudioSegment(data.tobytes(), samplerate)
 
 
 MAX_PENDING_SEGMENTS = 3
@@ -252,17 +264,18 @@ def capture_error_code(error: BaseException) -> str:
     return "capture_fatal"
 
 
-def discard_audio_segment(path: Path) -> bool:
+def discard_audio_segment(segment: AudioSegment | Path) -> bool:
+    if isinstance(segment, AudioSegment):
+        return True
     try:
-        path.unlink(missing_ok=True)
+        segment.unlink(missing_ok=True)
         return True
     except OSError:
         return False
 
 
 class SegmentWorker:
-    def __init__(self, cache_dir: Path, device_index: int, seconds: float, loopback: bool, cancel_event=None, health_callback=None):
-        self.cache_dir = cache_dir
+    def __init__(self, device_index: int, seconds: float, loopback: bool, cancel_event=None, health_callback=None):
         self.device_index = device_index
         self.seconds = seconds
         self.loopback = loopback
@@ -270,8 +283,7 @@ class SegmentWorker:
         self._stopped = False
         self._health_callback = health_callback
         self._queue_lock = threading.Lock()
-        self.queue: queue.Queue[Path] = queue.Queue(maxsize=MAX_PENDING_SEGMENTS)
-        self.timings: dict[Path, dict[str, float]] = {}
+        self.queue: queue.Queue[AudioSegment] = queue.Queue(maxsize=MAX_PENDING_SEGMENTS)
         self.dropped_segments = 0
         self.max_queue_depth = 0
         self.health = WorkerHealth("", "stopped")
@@ -302,22 +314,20 @@ class SegmentWorker:
         with self._queue_lock:
             return self._discard_pending()
 
-    def take_timing(self, captured: Path) -> dict[str, float]:
-        with self._queue_lock:
-            return self.timings.pop(captured, {})
+    def take_timing(self, captured: AudioSegment) -> dict[str, float]:
+        return captured.timing
 
     def _discard_pending(self) -> int:
         discarded = 0
         while True:
             try:
                 pending = self.queue.get_nowait()
-                self.timings.pop(pending, None)
                 discard_audio_segment(pending)
                 discarded += 1
             except queue.Empty:
                 return discarded
 
-    def _enqueue(self, captured: Path, timing: dict[str, float] | None = None) -> None:
+    def _enqueue(self, captured: AudioSegment, timing: dict[str, float] | None = None) -> None:
         with self._queue_lock:
             if self._stopped or self._cancel.is_set():
                 discard_audio_segment(captured)
@@ -327,30 +337,26 @@ class SegmentWorker:
                     timing = dict(timing or {})
                     timing["enqueued_at"] = time.time()
                     timing["_enqueued_perf"] = time.perf_counter()
-                    self.timings[captured] = timing
+                    captured.timing.update(timing)
                     self.queue.put_nowait(captured)
                     self.max_queue_depth = max(self.max_queue_depth, self.queue.qsize())
                     return
                 except queue.Full:
-                    self.timings.pop(captured, None)
                     try:
                         dropped = self.queue.get_nowait()
-                        self.timings.pop(dropped, None)
                         discard_audio_segment(dropped)
                         self.dropped_segments += 1
                     except queue.Empty:
                         continue
 
     def run(self, prefix: str) -> None:
-        count = 0
         failures = 0
         self._emit_health(prefix, "capturing")
         while not self._stopped:
-            path = self.cache_dir / f"{prefix}-{count:06d}.wav"
             try:
                 capture_started_perf = time.perf_counter()
                 timing = {"capture_started_at": time.time(), "_capture_started_perf": capture_started_perf}
-                captured = capture_wav(path, self.device_index, self.seconds, self.loopback, self._cancel)
+                captured = capture_audio(self.device_index, self.seconds, self.loopback, self._cancel)
                 timing["capture_completed_at"] = time.time()
                 timing["_capture_completed_perf"] = time.perf_counter()
                 if self._cancel.is_set():
@@ -361,10 +367,8 @@ class SegmentWorker:
                     self._emit_health(prefix, "capturing")
                     failures = 0
             except InterruptedError:
-                discard_audio_segment(path)
                 return
             except Exception as exc:
-                discard_audio_segment(path)
                 failures += 1
                 recoverable = isinstance(exc, OSError) or type(exc).__name__ == "PortAudioError"
                 if recoverable and failures <= len(CAPTURE_RETRY_DELAYS):
@@ -378,4 +382,3 @@ class SegmentWorker:
                     self._discard_pending()
                 self._emit_health(prefix, "failed", exc, failures)
                 return
-            count += 1
