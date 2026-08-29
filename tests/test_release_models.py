@@ -322,6 +322,13 @@ class ReleaseModelsTests(unittest.TestCase):
             self.assertIn("對話紀錄預設關閉", text)
             self.assertIn("開啟前會詢問", text)
             self.assertIn("存在本機", text)
+            self.assertIn("原文", text)
+            self.assertIn("譯文", text)
+            self.assertIn("7 天", text)
+            self.assertIn("100 MB", text)
+            self.assertIn("背景", text)
+            self.assertIn("logs\\conversations", text)
+            self.assertIn("logs\\app.log", text)
 
     def test_readme_mentions_open_app_folder(self):
         readme = Path("README.md").read_text(encoding="utf-8")

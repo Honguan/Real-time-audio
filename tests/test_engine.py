@@ -190,6 +190,27 @@ class EngineTests(unittest.TestCase):
             engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, lambda status: None)
 
             self.assertEqual(engine.log.jsonl_path.parent, log_dir)
+            self.assertEqual(engine.log.content_mode, "both")
+            self.assertTrue(engine.log.close())
+
+    def test_engine_updates_async_log_policy_without_restarting(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = DEFAULT_CONFIG | {"provider": "google", "record_logs": False, "log_dir": tmp}
+            engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, lambda status: None)
+            enabled = config | {"record_logs": True, "conversation_log_content": "original", "conversation_log_retention_days": 3, "conversation_log_max_mb": 12}
+
+            engine.update_config(enabled)
+
+            log = engine.log
+            self.assertIsNotNone(log)
+            self.assertEqual(log.content_mode, "original")
+            self.assertEqual(log.retention_days, 3)
+            self.assertEqual(log.max_bytes, 12 * 1024 * 1024)
+
+            engine.update_config(enabled | {"record_logs": False})
+
+            self.assertIsNone(engine.log)
+            self.assertFalse(log._thread.is_alive())
 
     def test_engine_reports_segment_latency(self):
         statuses = []

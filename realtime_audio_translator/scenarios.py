@@ -42,7 +42,7 @@ SCENARIO_PRESETS = {
         "microphone_enabled": True,
         "show_original_text": True,
         "show_translated_text": True,
-        "record_logs": True,
+        "record_logs": False,
     },
     "customer_service": {
         "performance_mode": "quality",
@@ -52,7 +52,7 @@ SCENARIO_PRESETS = {
         "microphone_enabled": True,
         "show_original_text": True,
         "show_translated_text": True,
-        "record_logs": True,
+        "record_logs": False,
     },
     "subtitle_only": {
         "performance_mode": "balanced",

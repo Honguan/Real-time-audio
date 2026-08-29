@@ -18,6 +18,7 @@ from .commands import command_choices, refresh_commands
 from .config import APP_DIR, clear_cache, clear_logs, ensure_glossary_file, load_config, log_files_to_clear, save_audio_devices, save_config, save_config_state, validate_language_pair
 from .diagnostics import collect_diagnostics
 from .engine import RealtimeEngine
+from .logbook import conversation_log_usage
 from .models import cuda_hardware_from_check_output, download_model, list_models, model_available, model_install_message, models_dir, recommend_model
 from .offline_translation import download_translation_models as download_offline_translation_models
 from .paths import resource_root
@@ -80,6 +81,9 @@ SETTING_ROWS = (
     ("字幕透明度", "overlay_opacity"),
     ("字幕字級", "overlay_font_size"),
     ("字幕停留秒數", "overlay_hold_seconds"),
+    ("紀錄內容", "conversation_log_content"),
+    ("紀錄保留天數", "conversation_log_retention_days"),
+    ("紀錄容量上限 MB", "conversation_log_max_mb"),
     ("紀錄資料夾", "log_dir"),
     ("runtime 資料夾", "runtime_dir"),
 )
@@ -279,6 +283,20 @@ def mode_notice(provider: str, tts_provider: str, record_logs: bool = False, loc
     return f"目前模式：本機免費模式；語音是否上傳：否；是否可能產生 API 費用：否；{logs}{setup}"
 
 
+def conversation_log_notice(config: dict) -> str:
+    path = Path(config.get("log_dir") or APP_DIR / "logs" / "conversations")
+    try:
+        usage_mb = conversation_log_usage(path) / (1024 * 1024)
+    except OSError:
+        usage_mb = 0.0
+    content = {"both": "原文與譯文", "original": "僅原文", "translation": "僅譯文", "none": "不含對話文字"}.get(str(config.get("conversation_log_content", "both")), "未知")
+    days = int(config.get("conversation_log_retention_days", 7))
+    max_mb = int(config.get("conversation_log_max_mb", 100))
+    retention = f"{days} 天" if days else "不限天數"
+    capacity = f"{max_mb} MB" if max_mb else "不限容量"
+    return f"對話紀錄內容：{content}；位置：{path}；目前用量：{usage_mb:.1f} MB；保留：{retention}；容量上限：{capacity}"
+
+
 def main_status_summary(config: dict) -> str:
     speaker = str(config.get("speaker_device") or "未選擇")
     microphone = str(config.get("microphone_device") or "未選擇")
@@ -304,10 +322,6 @@ def cloud_activation_requires_confirmation(old_provider: str, old_tts_provider: 
     old_cloud = {name for name in (old_provider, old_tts_provider) if name in CLOUD_PROVIDERS}
     new_cloud = {name for name in (new_provider, new_tts_provider) if name in CLOUD_PROVIDERS}
     return bool(new_cloud - old_cloud)
-
-
-def record_logs_requires_confirmation(old_record_logs: bool, new_record_logs: bool) -> bool:
-    return not old_record_logs and new_record_logs
 
 
 class Overlay(tk.Toplevel):
@@ -356,6 +370,7 @@ class TranslatorApp(tk.Tk):
         super().__init__()
         self.repo_root = repo_root or resource_root()
         self.config = load_config(APP_DIR)
+        self._log_consent_granted = False
         self.engine: RealtimeEngine | None = None
         self._device_id_by_label: dict[str, str] = {"系統預設": ""}
         self._device_label_by_id: dict[str, str] = {"": "系統預設"}
@@ -412,8 +427,8 @@ class TranslatorApp(tk.Tk):
                 values = LANGUAGE_CHOICES if key == "source_language" else TARGET_LANGUAGE_CHOICES
                 widget = ttk.Combobox(frame, textvariable=self.vars[key], values=values)
                 widget.bind("<<ComboboxSelected>>", lambda _event: self._save())
-            elif key in ("provider", "tts_provider", "performance_mode", "scenario"):
-                values = tuple(scenario_label(key) for key in SCENARIO_CHOICES) if key == "scenario" else PERFORMANCE_CHOICES if key == "performance_mode" else TTS_PROVIDER_CHOICES if key == "tts_provider" else PROVIDER_CHOICES
+            elif key in ("provider", "tts_provider", "performance_mode", "scenario", "conversation_log_content"):
+                values = tuple(scenario_label(key) for key in SCENARIO_CHOICES) if key == "scenario" else ("both", "original", "translation", "none") if key == "conversation_log_content" else PERFORMANCE_CHOICES if key == "performance_mode" else TTS_PROVIDER_CHOICES if key == "tts_provider" else PROVIDER_CHOICES
                 widget = ttk.Combobox(frame, textvariable=self.vars[key], values=values, state="readonly")
                 widget.bind("<<ComboboxSelected>>", lambda _event, name=key: self._apply_performance_mode() if name == "performance_mode" else self._apply_scenario() if name == "scenario" else self._save())
             elif key in AUDIO_DEVICE_KEYS or key in ("model", "device", "compute_type", "tts_voice_name"):
@@ -664,6 +679,12 @@ class TranslatorApp(tk.Tk):
         except Exception:
             config["tts_volume"] = 100
             config["speaker_tts_volume"] = 100
+        try:
+            config["conversation_log_retention_days"] = max(0, min(3650, int(config["conversation_log_retention_days"])))
+            config["conversation_log_max_mb"] = max(0, min(10240, int(config["conversation_log_max_mb"])))
+        except Exception:
+            config["conversation_log_retention_days"] = 7
+            config["conversation_log_max_mb"] = 100
         return config
 
     def _save(self) -> bool:
@@ -679,6 +700,14 @@ class TranslatorApp(tk.Tk):
                 self._load_config_into_widgets(self.config)
                 self.status.set("雲端 API 未啟用")
                 return False
+        if config["record_logs"] and not getattr(self, "_log_consent_granted", False):
+            if not messagebox.askyesno("啟用本次對話紀錄？", conversation_log_notice(config) + "\n\n本次執行是否允許儲存上述內容？"):
+                self.record_logs.set(False)
+                config["record_logs"] = False
+            else:
+                self._log_consent_granted = True
+        elif not config["record_logs"]:
+            self._log_consent_granted = False
         config["cloud_api_enabled"] = cloud_enabled
         if self.engine:
             try:
@@ -725,7 +754,7 @@ class TranslatorApp(tk.Tk):
             self.after(50, self._drain_ui_events)
 
     def _mode_text(self) -> str:
-        return f"{mode_notice(self.config['provider'], self.config['tts_provider'], bool(self.config['record_logs']), self.config.get('local_translate_url', ''))}\n{main_status_summary(self.config)}"
+        return f"{mode_notice(self.config['provider'], self.config['tts_provider'], bool(self.config['record_logs']), self.config.get('local_translate_url', ''))}\n{conversation_log_notice(self.config)}\n{main_status_summary(self.config)}"
 
     def _apply_mode(self, save: bool = True) -> None:
         for key in ADVANCED_SETTING_KEYS:
@@ -1077,9 +1106,6 @@ class TranslatorApp(tk.Tk):
         except ValueError as exc:
             self.status.set(str(exc))
             return
-        if record_logs_requires_confirmation(bool(self.config.get("record_logs", False)), bool(updated.get("record_logs", False))):
-            if not messagebox.askyesno("啟用對話紀錄？", "這個場景會開啟對話紀錄。\n是否允許本機保存本次對話紀錄？"):
-                updated["record_logs"] = False
         self._load_config_into_widgets(updated)
         self._save()
         self.status.set(f"已套用場景：{scenario_label(updated['scenario'])}")

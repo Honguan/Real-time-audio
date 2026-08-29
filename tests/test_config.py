@@ -9,7 +9,7 @@ from realtime_audio_translator.commands import command_choices, parse_help_optio
 from realtime_audio_translator.config import DEFAULT_CONFIG, _has_reparse_point, clear_cache, clear_logs, ensure_app_dirs, ensure_glossary_file, load_config, log_files_to_clear, save_audio_devices, save_config, save_config_state
 from realtime_audio_translator.ai_memory import add_glossary_term, cache_translation, cached_translation
 from realtime_audio_translator.app_log import append_app_log
-from realtime_audio_translator.gui import LANGUAGE_CHOICES, PERFORMANCE_CHOICES, PROVIDER_CHOICES, TARGET_LANGUAGE_CHOICES, TTS_PROVIDER_CHOICES, TranslatorApp, diagnostic_action_label, diagnostic_actions, first_diagnostic_action, first_run_setup_action, first_run_wizard_needed, format_overlay_line, language_lock_value, latency_seconds_value, main_status_summary, mode_notice, overlay_clipboard_text, overlay_font_size_value, overlay_hold_seconds_value, overlay_opacity_value, overlay_visibility_action, performance_segment_seconds, record_logs_requires_confirmation, setup_guide_actions, status_message_is_error, subtitle_updates_allowed, swap_language_values, troubleshooting_action, visible_button_texts, visible_setting_keys
+from realtime_audio_translator.gui import LANGUAGE_CHOICES, PERFORMANCE_CHOICES, PROVIDER_CHOICES, TARGET_LANGUAGE_CHOICES, TTS_PROVIDER_CHOICES, TranslatorApp, diagnostic_action_label, diagnostic_actions, first_diagnostic_action, first_run_setup_action, first_run_wizard_needed, format_overlay_line, language_lock_value, latency_seconds_value, main_status_summary, mode_notice, overlay_clipboard_text, overlay_font_size_value, overlay_hold_seconds_value, overlay_opacity_value, overlay_visibility_action, performance_segment_seconds, setup_guide_actions, status_message_is_error, subtitle_updates_allowed, swap_language_values, troubleshooting_action, visible_button_texts, visible_setting_keys
 from realtime_audio_translator.logbook import ConversationLog
 from realtime_audio_translator.release_updater import RELEASES_URL, current_version, is_newer_version, latest_release_tag_from_json, release_update_message
 
@@ -154,7 +154,7 @@ class ConfigTests(unittest.TestCase):
             root = Path(tmp)
             ensure_app_dirs(root)
             (root / "config" / "settings.json").write_text(
-                json.dumps({"record_logs": "yes", "tts_volume": 101, "segment_seconds": -1, "runtime_dir": "relative", "provider": "unknown", "last_ffmpeg_failed": "yes"}),
+                json.dumps({"record_logs": "yes", "tts_volume": 101, "segment_seconds": -1, "runtime_dir": "relative", "provider": "unknown", "conversation_log_retention_days": -1, "conversation_log_max_mb": 20000, "conversation_log_content": "everything", "last_ffmpeg_failed": "yes"}),
                 encoding="utf-8",
             )
 
@@ -165,6 +165,9 @@ class ConfigTests(unittest.TestCase):
             self.assertEqual(config["segment_seconds"], DEFAULT_CONFIG["segment_seconds"])
             self.assertEqual(config["runtime_dir"], DEFAULT_CONFIG["runtime_dir"])
             self.assertEqual(config["provider"], DEFAULT_CONFIG["provider"])
+            self.assertEqual(config["conversation_log_retention_days"], DEFAULT_CONFIG["conversation_log_retention_days"])
+            self.assertEqual(config["conversation_log_max_mb"], DEFAULT_CONFIG["conversation_log_max_mb"])
+            self.assertEqual(config["conversation_log_content"], DEFAULT_CONFIG["conversation_log_content"])
             self.assertEqual(config["last_ffmpeg_failed"], DEFAULT_CONFIG["last_ffmpeg_failed"])
 
     def test_load_config_rejects_future_schema(self):
@@ -444,10 +447,15 @@ class ConfigTests(unittest.TestCase):
             (root / "logs" / "app.log").write_text("app event", encoding="utf-8")
             root_log = ConversationLog(root / "logs", "session")
             root_log.append("me", "en", "zh", "hello", "你好", "local")
+            self.assertTrue(root_log.close())
+            default_log = ConversationLog(root / "logs" / "conversations", "default-session")
+            default_log.append("me", "en", "zh", "hello", "你好", "local")
+            self.assertTrue(default_log.close())
             (root / "exports" / "subtitles" / "session.srt").write_text("secret", encoding="utf-8")
             custom_logs.mkdir()
             custom_log = ConversationLog(custom_logs, "session")
             custom_log.append("me", "en", "zh", "hello", "你好", "local")
+            self.assertTrue(custom_log.close())
             (custom_logs / "notes.txt").write_text("keep", encoding="utf-8")
             (custom_logs / "notes.md").write_text("keep", encoding="utf-8")
             (custom_logs / "data.jsonl").write_text('{"unrelated": true}\n', encoding="utf-8")
@@ -464,8 +472,9 @@ class ConfigTests(unittest.TestCase):
             clear_logs(root, custom_logs)
             clear_cache(root, custom_cache)
 
-            self.assertEqual([path.name for path in (root / "logs").iterdir()], ["app.log"])
+            self.assertEqual(sorted(path.name for path in (root / "logs").iterdir()), ["app.log", "conversations"])
             self.assertEqual((root / "logs" / "app.log").read_text(encoding="utf-8"), "")
+            self.assertEqual(list((root / "logs" / "conversations").iterdir()), [])
             self.assertEqual(list((root / "exports" / "subtitles").iterdir()), [])
             self.assertEqual(sorted(path.name for path in custom_logs.iterdir()), ["data.jsonl", "notes.md", "notes.txt", "unrelated"])
             self.assertEqual((custom_logs / "notes.txt").read_text(encoding="utf-8"), "keep")
@@ -506,6 +515,7 @@ class ConfigTests(unittest.TestCase):
             self.addCleanup(lambda: __import__("shutil").rmtree(external, ignore_errors=True))
             log = ConversationLog(external, "session")
             log.append("me", "en", "zh", "hello", "你好", "local")
+            self.assertTrue(log.close())
             (external / "notes.txt").write_text("keep", encoding="utf-8")
             app = TranslatorApp.__new__(TranslatorApp)
             app.config = {"log_dir": str(external)}

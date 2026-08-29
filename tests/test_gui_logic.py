@@ -1,4 +1,5 @@
 import queue
+import tempfile
 import threading
 import unittest
 from pathlib import Path
@@ -7,7 +8,7 @@ from unittest.mock import Mock, patch
 from realtime_audio_translator.config import DEFAULT_CONFIG, _has_reparse_point, clear_cache, clear_logs, ensure_app_dirs, ensure_glossary_file, load_config, log_files_to_clear, save_audio_devices, save_config
 from realtime_audio_translator.diagnostics import DiagnosticIssue, collect_diagnostics
 from realtime_audio_translator.engine import RealtimeEngine, audio_devices_overlap, direction_label, drain_queue, overlay_text_from_config, safe_target_language
-from realtime_audio_translator.gui import LANGUAGE_CHOICES, PERFORMANCE_CHOICES, PROVIDER_CHOICES, TARGET_LANGUAGE_CHOICES, TTS_PROVIDER_CHOICES, TranslatorApp, diagnostic_action_label, diagnostic_actions, first_diagnostic_action, first_run_setup_action, first_run_wizard_needed, format_overlay_line, language_lock_value, latency_seconds_value, main_status_summary, mode_notice, overlay_clipboard_text, overlay_font_size_value, overlay_hold_seconds_value, overlay_opacity_value, overlay_visibility_action, performance_segment_seconds, record_logs_requires_confirmation, setup_guide_actions, status_message_is_error, subtitle_updates_allowed, swap_language_values, troubleshooting_action, visible_button_texts, visible_setting_keys
+from realtime_audio_translator.gui import LANGUAGE_CHOICES, PERFORMANCE_CHOICES, PROVIDER_CHOICES, TARGET_LANGUAGE_CHOICES, TTS_PROVIDER_CHOICES, TranslatorApp, conversation_log_notice, diagnostic_action_label, diagnostic_actions, first_diagnostic_action, first_run_setup_action, first_run_wizard_needed, format_overlay_line, language_lock_value, latency_seconds_value, main_status_summary, mode_notice, overlay_clipboard_text, overlay_font_size_value, overlay_hold_seconds_value, overlay_opacity_value, overlay_visibility_action, performance_segment_seconds, setup_guide_actions, status_message_is_error, subtitle_updates_allowed, swap_language_values, troubleshooting_action, visible_button_texts, visible_setting_keys
 
 
 class GuiLogicTests(unittest.TestCase):
@@ -90,7 +91,10 @@ class GuiLogicTests(unittest.TestCase):
 
     def test_conversation_logs_are_off_by_default(self):
         self.assertFalse(DEFAULT_CONFIG["record_logs"])
-        self.assertEqual(DEFAULT_CONFIG["log_dir"], str(Path.home() / ".realtime-audio" / "logs"))
+        self.assertEqual(DEFAULT_CONFIG["log_dir"], str(Path.home() / ".realtime-audio" / "logs" / "conversations"))
+        self.assertEqual(DEFAULT_CONFIG["conversation_log_retention_days"], 7)
+        self.assertEqual(DEFAULT_CONFIG["conversation_log_max_mb"], 100)
+        self.assertEqual(DEFAULT_CONFIG["conversation_log_content"], "both")
         self.assertEqual(DEFAULT_CONFIG["tts_rate"], 0)
         self.assertEqual(DEFAULT_CONFIG["tts_volume"], 100)
         self.assertEqual(DEFAULT_CONFIG["speaker_tts_volume"], 100)
@@ -710,16 +714,72 @@ class GuiLogicTests(unittest.TestCase):
         self.assertIn("對話紀錄：關閉", local_notice)
         self.assertIn("本機翻譯 URL 未設定", local_notice)
         self.assertIn("對話紀錄：開啟", mode_notice("local", "local", True))
-        self.assertTrue(record_logs_requires_confirmation(False, True))
-        self.assertFalse(record_logs_requires_confirmation(True, True))
-        self.assertFalse(record_logs_requires_confirmation(False, False))
+
+    def test_conversation_log_notice_shows_content_location_usage_and_limits(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = DEFAULT_CONFIG | {
+                "record_logs": True,
+                "log_dir": tmp,
+                "conversation_log_content": "translation",
+                "conversation_log_retention_days": 14,
+                "conversation_log_max_mb": 50,
+            }
+
+            notice = conversation_log_notice(config)
+
+            self.assertIn("僅譯文", notice)
+            self.assertIn(tmp, notice)
+            self.assertIn("目前用量：0.0 MB", notice)
+            self.assertIn("保留：14 天", notice)
+            self.assertIn("容量上限：50 MB", notice)
+
+    @patch("realtime_audio_translator.gui.save_config")
+    @patch("realtime_audio_translator.gui.messagebox.askyesno", return_value=False)
+    def test_save_keeps_logging_off_when_session_consent_is_rejected(self, askyesno, save):
+        app = TranslatorApp.__new__(TranslatorApp)
+        app.config = DEFAULT_CONFIG.copy()
+        app._log_consent_granted = False
+        candidate = DEFAULT_CONFIG | {"record_logs": True}
+        app._config_from_vars = lambda: candidate
+        app.record_logs = Mock()
+        app.status = Mock()
+        app.mode_text = Mock()
+        app.engine = None
+        app._mode_text = lambda: "mode"
+
+        self.assertTrue(app._save())
+
+        askyesno.assert_called_once()
+        self.assertIn("本次執行", askyesno.call_args.args[1])
+        app.record_logs.set.assert_called_once_with(False)
+        self.assertFalse(app.config["record_logs"])
+        save.assert_called_once()
+
+    @patch("realtime_audio_translator.gui.save_config")
+    @patch("realtime_audio_translator.gui.messagebox.askyesno", return_value=True)
+    def test_save_persists_logging_only_after_session_consent(self, askyesno, save):
+        app = TranslatorApp.__new__(TranslatorApp)
+        app.config = DEFAULT_CONFIG.copy()
+        app._log_consent_granted = False
+        candidate = DEFAULT_CONFIG | {"record_logs": True}
+        app._config_from_vars = lambda: candidate
+        app.record_logs = Mock()
+        app.status = Mock()
+        app.mode_text = Mock()
+        app.engine = None
+        app._mode_text = lambda: "mode"
+
+        self.assertTrue(app._save())
+
+        askyesno.assert_called_once()
+        self.assertTrue(app._log_consent_granted)
+        save.assert_called_once()
 
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
         self.assertIn("messagebox.askyesno", gui_source)
         self.assertIn("cloud_activation_requires_confirmation", gui_source)
         self.assertIn('config["cloud_api_enabled"] = cloud_enabled', gui_source)
-        self.assertIn("record_logs_requires_confirmation", gui_source)
-        self.assertIn("啟用對話紀錄？", gui_source)
+        self.assertIn("啟用本次對話紀錄？", gui_source)
 
     def test_main_status_summary_shows_required_main_screen_state(self):
         config = DEFAULT_CONFIG.copy()

@@ -105,7 +105,6 @@ class RealtimeEngine:
         self._callback_lock = threading.Lock()
         self._metrics_lock = threading.Lock()
         self._health_lock = threading.Lock()
-        self._log_lock = threading.Lock()
         self._tts_queue_lock = threading.Lock()
         self._virtual_mic_cancel = threading.Event()
         self._speaker_translation_cancel = threading.Event()
@@ -119,7 +118,7 @@ class RealtimeEngine:
         self.capture_health: dict[str, WorkerHealth] = {}
         self._active_directions: set[str] = set()
         self._starting_directions = False
-        self.log = ConversationLog(Path(config.get("log_dir") or APP_DIR / "logs")) if config.get("record_logs") else None
+        self.log = self._new_conversation_log(config)
         self.pipelines: dict[str, PipelineContext] = {}
         self.offline_translation_registry: OfflineTranslationRegistry | None = None
         self.transcriber: AudioTranscriber | None = None
@@ -241,11 +240,12 @@ class RealtimeEngine:
             if thread is not current:
                 thread.join(max(0.0, deadline - time.monotonic()))
         alive = [thread for thread in threads if thread.is_alive()]
+        log_closed = self.log.close(max(0.0, deadline - time.monotonic())) if self.log else True
         with self._lifecycle_lock:
             self.threads = [thread for thread in self.threads if thread not in threads or thread in alive]
             if not alive:
                 self.workers = [worker for worker in self.workers if worker not in workers]
-        pending = len(alive) + (not callback_stopped)
+        pending = len(alive) + (not callback_stopped) + (not log_closed)
         message = f"停止逾時：仍有 {pending} 個背景工作" if pending else "已停止"
         self.status(message)
         return message
@@ -367,6 +367,7 @@ class RealtimeEngine:
         return pipeline
 
     def update_config(self, config: dict) -> None:
+        old_log = None
         with self._lifecycle_lock:
             previous_models_path = self.config.get("models_path")
             use_offline_registry = config.get("provider") == "local" and not config.get("local_translate_url", "").strip()
@@ -379,6 +380,11 @@ class RealtimeEngine:
             else:
                 registry = None
             self.config = config
+            desired_policy = self._log_policy(config)
+            if self.log and (not config.get("record_logs") or self.log.policy != desired_policy):
+                old_log, self.log = self.log, None
+            if config.get("record_logs") and self.log is None:
+                self.log = self._new_conversation_log(config)
             self.offline_translation_registry = registry
             if registry is not None:
                 registry.config = config
@@ -389,6 +395,24 @@ class RealtimeEngine:
                 pipeline.config.update(values)
                 if hasattr(pipeline.translator, "offline_registry"):
                     pipeline.translator.offline_registry = registry
+        if old_log:
+            old_log.close()
+
+    @staticmethod
+    def _log_policy(config: dict) -> tuple:
+        return (
+            Path(config.get("log_dir") or APP_DIR / "logs" / "conversations"),
+            int(config.get("conversation_log_retention_days", 7)),
+            int(config.get("conversation_log_max_mb", 100)) * 1024 * 1024,
+            str(config.get("conversation_log_content", "both")),
+        )
+
+    @classmethod
+    def _new_conversation_log(cls, config: dict) -> ConversationLog | None:
+        if not config.get("record_logs"):
+            return None
+        log_dir, retention_days, max_bytes, content_mode = cls._log_policy(config)
+        return ConversationLog(log_dir, retention_days=retention_days, max_mb=max_bytes // (1024 * 1024), content_mode=content_mode)
 
     def _publish(self, session: str | None, callback: Callable, *args) -> None:
         with self._callback_lock:
@@ -562,13 +586,13 @@ class RealtimeEngine:
                 self._record_metrics(direction, metrics, state_keys)
                 if not self._session_active(session):
                     return
-                if self.log and not translation_failed:
-                    with self._log_lock:
-                        public_timing = {key: value for key, value in timing.items() if not key.startswith("_")}
-                        performance_keys = set(backlog_metrics) | set(subtitle_metrics) | set(stage_metrics) | {"last_provider_error_count", "last_rate_limit_count"}
-                        performance = {key: metrics[key] for key in performance_keys if key in metrics}
-                        performance.update({key: self.config[key] for key in ("last_cuda_devices", "last_vram_gb", "last_model_load_seconds") if self.config.get(key) not in (None, "")})
-                        self.log.append(direction, source_for_output, target, text, translated, config["provider"], latency_seconds=latency, performance=performance, timestamps=public_timing)
+                log = self.log
+                if log and not translation_failed:
+                    public_timing = {key: value for key, value in timing.items() if not key.startswith("_")}
+                    performance_keys = set(backlog_metrics) | set(subtitle_metrics) | set(stage_metrics) | {"last_provider_error_count", "last_rate_limit_count"}
+                    performance = {key: metrics[key] for key in performance_keys if key in metrics}
+                    performance.update({key: self.config[key] for key in ("last_cuda_devices", "last_vram_gb", "last_model_load_seconds") if self.config.get(key) not in (None, "")})
+                    log.append(direction, source_for_output, target, text, translated, config["provider"], latency_seconds=latency, performance=performance, timestamps=public_timing)
                     if not self._session_active(session):
                         return
                 if not translation_failed:
