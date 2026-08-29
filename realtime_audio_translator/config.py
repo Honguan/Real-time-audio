@@ -37,6 +37,7 @@ DEFAULT_CONFIG = {
     "speaker_tts_output_device": "",
     "tts_rate": 0,
     "tts_volume": 100,
+    "speaker_tts_volume": 100,
     "tts_voice_name": "",
     "google_tts_voice": "",
     "overlay_visible": True,
@@ -192,6 +193,7 @@ SETTING_RANGES = {
     "overlay_hold_seconds": (1.0, 60.0),
     "tts_rate": (-10, 10),
     "tts_volume": (0, 100),
+    "speaker_tts_volume": (0, 100),
     "segment_seconds": (0.5, 3.0),
     "speech_threshold": (0.0, 1.0),
 }

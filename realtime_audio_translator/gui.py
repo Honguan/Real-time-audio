@@ -65,7 +65,8 @@ SETTING_ROWS = (
     ("虛擬麥克風檢查輸入", "virtual_mic_input_device"),
     ("對方翻譯播放輸出", "speaker_tts_output_device"),
     ("TTS 速度", "tts_rate"),
-    ("TTS 音量", "tts_volume"),
+    ("虛擬麥克風語音音量", "tts_volume"),
+    ("本機翻譯音量", "speaker_tts_volume"),
     ("TTS 聲音", "tts_voice_name"),
     ("Google TTS 聲音", "google_tts_voice"),
     ("OpenAI TTS 模型", "openai_tts_model"),
@@ -658,8 +659,10 @@ class TranslatorApp(tk.Tk):
             config["tts_rate"] = 0
         try:
             config["tts_volume"] = max(0, min(100, int(config["tts_volume"])))
+            config["speaker_tts_volume"] = max(0, min(100, int(config["speaker_tts_volume"])))
         except Exception:
             config["tts_volume"] = 100
+            config["speaker_tts_volume"] = 100
         return config
 
     def _save(self) -> bool:

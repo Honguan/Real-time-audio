@@ -342,6 +342,8 @@ class RealtimeEngine:
     def _pipeline(self, direction: str) -> PipelineContext:
         if direction not in self.pipelines:
             config = {key: value for key, value in self.config.items() if key not in STATE_KEYS}
+            if direction == "speaker":
+                config["tts_volume"] = config["speaker_tts_volume"]
             self.pipelines[direction] = PipelineContext(config, Translator(config), TextToSpeech(config))
         return self.pipelines[direction]
 
@@ -652,7 +654,7 @@ class RealtimeEngine:
                     return None
                 playback_started = time.perf_counter()
                 timing["tts_playback_started_at"] = time.time()
-                play_linear16(audio, tts_device) if session is None else play_linear16(audio, tts_device, cancel_event=cancel_event)
+                play_linear16(audio, tts_device, volume=config["tts_volume"]) if session is None else play_linear16(audio, tts_device, cancel_event=cancel_event, volume=config["tts_volume"])
                 playback_seconds = time.perf_counter() - playback_started
                 timing["tts_playback_completed_at"] = time.time()
             else:
@@ -667,7 +669,7 @@ class RealtimeEngine:
                     return None
                 playback_started = time.perf_counter()
                 timing["tts_playback_started_at"] = time.time()
-                play_linear16(audio, tts_device) if session is None else play_linear16(audio, tts_device, cancel_event=cancel_event)
+                play_linear16(audio, tts_device, volume=config["tts_volume"]) if session is None else play_linear16(audio, tts_device, cancel_event=cancel_event, volume=config["tts_volume"])
                 playback_seconds = time.perf_counter() - playback_started
                 timing["tts_playback_completed_at"] = time.time()
             if not self._session_active(session):

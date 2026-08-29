@@ -614,6 +614,35 @@ class ProvidersTests(unittest.TestCase):
         self.assertEqual(devices, [7])
         self.assertTrue(stream.aborted)
 
+    def test_pcm_playback_applies_output_volume(self):
+        import realtime_audio_translator.tts as tts_module
+
+        written = []
+
+        class Stream:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return None
+
+            def write(self, data):
+                written.extend(data.tolist())
+
+        class SoundDevice:
+            def OutputStream(self, **kwargs):
+                return Stream()
+
+        original_find_device = tts_module.find_device
+        tts_module.find_device = lambda *args, **kwargs: 7
+        try:
+            with patch.dict(sys.modules, {"sounddevice": SoundDevice()}):
+                tts_module.play_linear16((10000).to_bytes(2, "little", signed=True), volume=50)
+        finally:
+            tts_module.find_device = original_find_device
+
+        self.assertEqual(written, [5000])
+
     def test_windows_sapi_lists_voice_names(self):
         import realtime_audio_translator.tts as tts_module
 

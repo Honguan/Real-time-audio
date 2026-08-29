@@ -18,7 +18,7 @@ def write_linear16_wav(path: Path, audio: bytes, samplerate: int = 24000) -> Pat
     return path
 
 
-def play_linear16(audio: bytes, device_name: str = "", samplerate: int = 24000, cancel_event=None) -> None:
+def play_linear16(audio: bytes, device_name: str = "", samplerate: int = 24000, cancel_event=None, volume: int = 100) -> None:
     import numpy as np
     import sounddevice as sd
 
@@ -26,6 +26,9 @@ def play_linear16(audio: bytes, device_name: str = "", samplerate: int = 24000, 
         return
     device = find_device(device_name, want_output=True)
     data = np.frombuffer(audio, dtype="int16")
+    volume = max(0, min(100, int(volume)))
+    if volume != 100:
+        data = (data.astype("int32") * volume // 100).clip(-32768, 32767).astype("int16")
     block_frames = max(1, samplerate // 20)
     with sd.OutputStream(samplerate=samplerate, device=device, channels=1, dtype="int16") as stream:
         for offset in range(0, len(data), block_frames):

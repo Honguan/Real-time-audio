@@ -92,6 +92,7 @@ class GuiLogicTests(unittest.TestCase):
         self.assertEqual(DEFAULT_CONFIG["log_dir"], str(Path.home() / ".realtime-audio" / "logs"))
         self.assertEqual(DEFAULT_CONFIG["tts_rate"], 0)
         self.assertEqual(DEFAULT_CONFIG["tts_volume"], 100)
+        self.assertEqual(DEFAULT_CONFIG["speaker_tts_volume"], 100)
         self.assertEqual(DEFAULT_CONFIG["tts_voice_name"], "")
         self.assertTrue(DEFAULT_CONFIG["show_original_text"])
         self.assertTrue(DEFAULT_CONFIG["show_translated_text"])

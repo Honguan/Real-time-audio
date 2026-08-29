@@ -14,6 +14,14 @@ from tests.helpers import QueuedWorker, StaticTranscriber, StoppingTranslator, w
 
 
 class EngineTests(unittest.TestCase):
+    def test_tts_pipelines_use_independent_output_volumes(self):
+        config = DEFAULT_CONFIG.copy()
+        config.update({"tts_volume": 35, "speaker_tts_volume": 70})
+        engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, lambda status: None)
+
+        self.assertEqual(engine._pipeline("me").tts.config["tts_volume"], 35)
+        self.assertEqual(engine._pipeline("speaker").tts.config["tts_volume"], 70)
+
     def test_transcript_overlap_removes_only_shared_boundary(self):
         self.assertEqual(trim_transcript_overlap("we cross the boundary", "the boundary without loss"), "without loss")
         self.assertEqual(trim_transcript_overlap("跨越邊界", "邊界不漏字"), "不漏字")
@@ -531,7 +539,7 @@ class EngineTests(unittest.TestCase):
                 self.queue.put(wav)
 
         original_play = engine_module.play_linear16
-        engine_module.play_linear16 = lambda audio, device: played.append((audio, device))
+        engine_module.play_linear16 = lambda audio, device, **kwargs: played.append((audio, device))
         try:
             with tempfile.TemporaryDirectory() as tmp:
                 wav = Path(tmp) / "clip.wav"
@@ -583,7 +591,7 @@ class EngineTests(unittest.TestCase):
                 self.queue.put(wav)
 
         original_play = engine_module.play_linear16
-        engine_module.play_linear16 = lambda audio, device: (_ for _ in ()).throw(AssertionError("pcm playback should not be used"))
+        engine_module.play_linear16 = lambda audio, device, **kwargs: (_ for _ in ()).throw(AssertionError("pcm playback should not be used"))
         try:
             with tempfile.TemporaryDirectory() as tmp:
                 wav = Path(tmp) / "clip.wav"
@@ -673,7 +681,7 @@ class EngineTests(unittest.TestCase):
                 self.queue.put(wav)
 
         original_play = engine_module.play_linear16
-        engine_module.play_linear16 = lambda audio, device: played.append((audio, device))
+        engine_module.play_linear16 = lambda audio, device, **kwargs: played.append((audio, device))
         try:
             with tempfile.TemporaryDirectory() as tmp:
                 wav = Path(tmp) / "clip.wav"
@@ -1100,7 +1108,7 @@ class EngineTests(unittest.TestCase):
                 self.queue.put(wav)
 
         original_play = engine_module.play_linear16
-        engine_module.play_linear16 = lambda audio, device: played.append((audio, device))
+        engine_module.play_linear16 = lambda audio, device, **kwargs: played.append((audio, device))
         try:
             with tempfile.TemporaryDirectory() as tmp:
                 wav = Path(tmp) / "clip.wav"
