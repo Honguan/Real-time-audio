@@ -1,5 +1,7 @@
 # Realtime Audio Translator 發布說明
 
+## v0.1.35
+
 - 設定改用單一具 schema 版本的 `config/settings.json`，透過原子寫入與備份復原避免中斷或並行保存造成損毀；執行狀態分離至 `config/state.json`。
 - 新增 MIT LICENSE、第三方授權 notices 與 CycloneDX SBOM；未能確認完整再散布授權的 runtime 與 Argos 模型不再隨 Release 封裝。
 
