@@ -680,11 +680,15 @@ class TranslatorApp(tk.Tk):
                 self.status.set("雲端 API 未啟用")
                 return False
         config["cloud_api_enabled"] = cloud_enabled
+        if self.engine:
+            try:
+                self.engine.update_config(config)
+            except Exception as exc:
+                self.status.set(f"設定套用失敗：{exc}")
+                return False
         self.config = config
         self.mode_text.set(self._mode_text())
         save_config(APP_DIR, self.config)
-        if self.engine:
-            self.engine.update_config(self.config)
         return True
 
     def _set_last_error(self, message: str) -> None:
@@ -1186,7 +1190,8 @@ class TranslatorApp(tk.Tk):
 
         def run() -> None:
             try:
-                downloaded = download_offline_translation_models(self.config, source_language, target_language)
+                registry = self.engine.offline_translation_registry if self.engine else None
+                downloaded = download_offline_translation_models(self.config, source_language, target_language, registry)
                 message = f"離線翻譯模型下載完成：{len(downloaded)} 個"
             except Exception as exc:
                 message = f"離線翻譯模型下載失敗：{exc}"

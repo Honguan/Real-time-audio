@@ -14,6 +14,47 @@ from tests.helpers import QueuedWorker, StaticTranscriber, StoppingTranslator, w
 
 
 class EngineTests(unittest.TestCase):
+    def test_engine_rebinds_offline_registry_after_provider_and_model_path_changes(self):
+        initial = DEFAULT_CONFIG.copy()
+        initial["provider"] = "google"
+        engine = RealtimeEngine(Path("."), initial, lambda speaker, mine: None, lambda status: None)
+        pipeline = engine._pipeline("speaker")
+        registries = []
+
+        class Registry:
+            def __init__(self, config):
+                self.config = config
+                registries.append(self)
+
+        local = initial.copy()
+        local.update({"provider": "local", "local_translate_url": "", "models_path": "models-a"})
+        with patch("realtime_audio_translator.engine.OfflineTranslationRegistry", Registry):
+            engine.update_config(local)
+            registry = engine.offline_translation_registry
+            moved = local.copy()
+            moved["models_path"] = "models-b"
+            engine.update_config(moved)
+
+        self.assertIsNot(registries[1], registry)
+        self.assertIs(pipeline.translator.offline_registry, registries[1])
+        self.assertEqual(registries[1].config["models_path"], "models-b")
+
+    def test_engine_preserves_running_config_when_offline_registry_update_fails(self):
+        initial = DEFAULT_CONFIG.copy()
+        initial["provider"] = "google"
+        engine = RealtimeEngine(Path("."), initial, lambda speaker, mine: None, lambda status: None)
+        pipeline = engine._pipeline("speaker")
+        local = initial.copy()
+        local.update({"provider": "local", "local_translate_url": "", "models_path": "broken"})
+
+        with patch("realtime_audio_translator.engine.OfflineTranslationRegistry", side_effect=OSError("denied")):
+            with self.assertRaisesRegex(OSError, "denied"):
+                engine.update_config(local)
+
+        self.assertIs(engine.config, initial)
+        self.assertEqual(pipeline.config["provider"], "google")
+        self.assertIsNone(engine.offline_translation_registry)
+
     def test_engine_updates_existing_pipeline_translation_cache_inputs(self):
         engine = RealtimeEngine(Path("."), DEFAULT_CONFIG.copy(), lambda speaker, mine: None, lambda status: None)
         pipeline = engine._pipeline("speaker")

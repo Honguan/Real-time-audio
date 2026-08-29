@@ -1,7 +1,6 @@
 import base64
 import hashlib
 import html
-import importlib.metadata
 import json
 import os
 import random
@@ -16,7 +15,7 @@ import requests
 from requests.adapters import HTTPAdapter
 
 from .ai_memory import cache_translation, cached_translation
-from .offline_translation import translate_offline, translation_models_dir
+from .offline_translation import OfflineTranslationRegistry, translate_offline
 from .tts import speak_windows_sapi
 
 
@@ -192,6 +191,7 @@ def google_access_token(service_account_json: str, http: HttpClient | None = Non
 @dataclass
 class Translator:
     config: dict
+    offline_registry: OfflineTranslationRegistry | None = None
     cache: OrderedDict[str, str] = field(default_factory=OrderedDict)
     context: list[tuple[str, str]] = field(default_factory=list)
     http: HttpClient = field(default_factory=HttpClient)
@@ -253,34 +253,17 @@ class Translator:
             return {"model": self.config.get("openai_model", ""), "revision": revision}
         if provider == "google":
             return {"api": "translate-v3", "revision": revision}
-        manifests = []
-        packages_dir = translation_models_dir(self.config) / "packages"
-        try:
-            for path in sorted(packages_dir.glob("*/install_manifest.json")):
-                manifests.append(hashlib.sha256(path.read_bytes()).hexdigest())
-        except OSError:
-            manifests = []
-        try:
-            argos_version = importlib.metadata.version("argostranslate")
-        except importlib.metadata.PackageNotFoundError:
-            argos_version = ""
-        try:
-            import argostranslate.settings as argos_settings
-
-            argos_models = sorted(
-                hashlib.sha256(metadata.read_bytes()).hexdigest()
-                for directory in argos_settings.package_dirs
-                for metadata in Path(directory).glob("*/metadata.json")
-            )
-        except Exception:
-            argos_models = []
+        url = self.config.get("local_translate_url", "").strip()
         return {
-            "url": self.config.get("local_translate_url", "").strip(),
-            "models": manifests,
-            "argos": argos_version,
-            "argos_models": argos_models,
+            "url": url,
+            "models": "" if url else self._offline_registry().revision,
             "revision": revision,
         }
+
+    def _offline_registry(self) -> OfflineTranslationRegistry:
+        if self.offline_registry is None:
+            self.offline_registry = OfflineTranslationRegistry(self.config)
+        return self.offline_registry
 
     def _memory_cached(self, request_fingerprint: str) -> str | None:
         translated = self.cache.pop(request_fingerprint, None)
@@ -326,7 +309,7 @@ class Translator:
     def _local_translate(self, text: str, source_language: str, target_language: str) -> str:
         url = self.config.get("local_translate_url", "").strip()
         if not url:
-            translated = translate_offline(self.config, text, source_language, target_language) or self._argos_translate(text, source_language, target_language)
+            translated = translate_offline(self.config, text, source_language, target_language, self._offline_registry()) or self._argos_translate(text, source_language, target_language)
             if translated:
                 return translated
             raise RuntimeError(f"找不到 {source_language}→{target_language} 的本機翻譯模型；請下載離線翻譯模型或設定本機翻譯 URL")

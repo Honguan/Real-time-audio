@@ -12,6 +12,7 @@ from .ai_confidence import build_confidence_snapshot, format_confidence_status
 from .config import APP_DIR, DEFAULT_CONFIG, STATE_KEYS, TARGET_LANGUAGE_CHOICES, save_config_state, validate_language_pair
 from .logbook import ConversationLog
 from .models import models_dir
+from .offline_translation import OfflineTranslationRegistry
 from .performance import FIRST_SUBTITLE_P50, FIRST_SUBTITLE_P95, FIRST_SUBTITLE_P99, LatencyWindow
 from .providers import HttpClient, TextToSpeech, Translator
 from .tts import play_linear16
@@ -120,6 +121,7 @@ class RealtimeEngine:
         self._starting_directions = False
         self.log = ConversationLog(Path(config.get("log_dir") or APP_DIR / "logs")) if config.get("record_logs") else None
         self.pipelines: dict[str, PipelineContext] = {}
+        self.offline_translation_registry: OfflineTranslationRegistry | None = None
         self.transcriber: AudioTranscriber | None = None
 
     def start(self) -> None:
@@ -145,6 +147,14 @@ class RealtimeEngine:
             if self._session == session:
                 self.status(str(exc))
             return
+        if self.config.get("provider") == "local" and not self.config.get("local_translate_url", "").strip():
+            try:
+                self.offline_translation_registry = OfflineTranslationRegistry(self.config)
+            except Exception as exc:
+                self.running = False
+                if self._session == session:
+                    self.status(f"離線翻譯模型載入失敗：{exc}")
+                return
         session_counters = {"last_provider_error_count": 0, "last_rate_limit_count": 0, "last_max_queue_depth": 0, "last_dropped_segments": 0}
         self.config.update(session_counters)
         self._save_state(set(session_counters))
@@ -346,7 +356,7 @@ class RealtimeEngine:
                 config["tts_volume"] = config["speaker_tts_volume"]
             self.pipelines[direction] = PipelineContext(
                 config,
-                Translator(config, http=HttpClient(cancel_event=self._cancel)),
+                Translator(config, self.offline_translation_registry, http=HttpClient(cancel_event=self._cancel)),
                 TextToSpeech(config, http=HttpClient(cancel_event=self._cancel)),
             )
         pipeline = self.pipelines[direction]
@@ -358,12 +368,27 @@ class RealtimeEngine:
 
     def update_config(self, config: dict) -> None:
         with self._lifecycle_lock:
+            previous_models_path = self.config.get("models_path")
+            use_offline_registry = config.get("provider") == "local" and not config.get("local_translate_url", "").strip()
+            if use_offline_registry and (
+                self.offline_translation_registry is None or previous_models_path != config.get("models_path")
+            ):
+                registry = OfflineTranslationRegistry(config)
+            elif use_offline_registry:
+                registry = self.offline_translation_registry
+            else:
+                registry = None
             self.config = config
+            self.offline_translation_registry = registry
+            if registry is not None:
+                registry.config = config
             for direction, pipeline in self.pipelines.items():
                 values = {key: value for key, value in config.items() if key not in STATE_KEYS}
                 if direction == "speaker":
                     values["tts_volume"] = values["speaker_tts_volume"]
                 pipeline.config.update(values)
+                if hasattr(pipeline.translator, "offline_registry"):
+                    pipeline.translator.offline_registry = registry
 
     def _publish(self, session: str | None, callback: Callable, *args) -> None:
         with self._callback_lock:
