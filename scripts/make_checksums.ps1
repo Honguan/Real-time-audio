@@ -18,7 +18,7 @@ $Checksums = Join-Path $OutputDir "SHA256SUMS.txt"
 $Sha256 = [System.Security.Cryptography.SHA256]::Create()
 try {
   Get-ChildItem -LiteralPath $OutputDir |
-    Where-Object { $_.Extension -in ".zip", ".7z" } |
+    Where-Object { $_.Extension -in ".zip", ".7z", ".json" } |
     ForEach-Object {
       $Stream = [System.IO.File]::OpenRead($_.FullName)
       try {

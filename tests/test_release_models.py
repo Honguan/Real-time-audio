@@ -252,18 +252,23 @@ class ReleaseModelsTests(unittest.TestCase):
         self.assertIn("build_runtime", workflow)
         self.assertIn("require_runtime_asset", workflow)
         self.assertIn("github.event_name == 'push' || inputs.build_runtime == 'true'", workflow)
-        self.assertIn('python -m pip install ".[build]"', workflow)
+        self.assertIn("ref: ${{ inputs.version || github.ref }}", workflow)
+        self.assertIn("python-version: \"3.10.11\"", workflow)
+        self.assertIn("--require-hashes -r requirements-release.txt", workflow)
+        self.assertIn("--no-deps --no-build-isolation .", workflow)
         self.assertIn(".\\scripts\\test.ps1", workflow)
-        self.assertIn("releases?per_page=20", workflow)
-        self.assertNotIn("/releases/latest", workflow)
-        self.assertIn("Sort-Object updated_at -Descending", workflow)
-        self.assertIn("Faster-Whisper-XXL_.*_windows", workflow)
-        self.assertIn("cuBLAS.and.cuDNN_CUDA12_win_v3.7z", workflow)
+        self.assertNotIn("releases?per_page=20", workflow)
+        self.assertNotIn("argospm-index/main", workflow)
+        self.assertIn("Get-Content release-lock.json", workflow)
+        self.assertIn("Get-FileHash", workflow)
         self.assertIn("cublas64_12.dll", workflow)
         self.assertIn("cublasLt64_12.dll", workflow)
         self.assertIn("cudnn64_9.dll", workflow)
+        self.assertGreaterEqual(workflow.count("$LASTEXITCODE -ne 0"), 2)
+        self.assertIn('Test-Path "runtime-download\\.complete"', workflow)
         self.assertNotIn("-Filter *.dll", workflow)
-        self.assertIn("& ./scripts/package_app_zip.ps1 -Version $version", workflow)
+        self.assertIn("& ./scripts/build.ps1 -SkipInstall", workflow)
+        self.assertIn("& ./scripts/package_app_zip.ps1 -Version $version -SkipBuild", workflow)
         self.assertIn("& ./scripts/package_runtime_zip.ps1 -Version $version -RuntimeSource \"downloaded-runtime\" -SplitRuntime -RuntimeCoreFormat 7z", workflow)
         self.assertIn("& ./scripts/make_checksums.ps1", workflow)
         self.assertNotIn("@args", workflow)
@@ -274,7 +279,29 @@ class ReleaseModelsTests(unittest.TestCase):
         self.assertIn("inputs.version || github.ref_name", workflow)
         self.assertIn("dist-release/*.zip", workflow)
         self.assertIn("dist-release/*.7z", workflow)
+        self.assertIn("dist-release/RELEASE_MANIFEST.json", workflow)
         self.assertIn("dist-release/SHA256SUMS.txt", workflow)
+
+    def test_release_inputs_are_versioned_and_hash_locked(self):
+        lock = json.loads(Path("release-lock.json").read_text(encoding="utf-8"))
+        requirements = Path(lock["python"]["requirements"])
+        workflows = "\n".join(path.read_text(encoding="utf-8") for path in Path(".github/workflows").glob("*.yml"))
+
+        self.assertEqual(lock["python"]["version"], "3.10.11")
+        self.assertEqual(lock["python"]["index_url"], "https://pypi.org/simple")
+        requirements_bytes = requirements.read_bytes().replace(b"\r\n", b"\n")
+        self.assertEqual(hashlib.sha256(requirements_bytes).hexdigest(), lock["python"]["requirements_sha256"])
+        self.assertEqual(len(lock["runtime"]), 2)
+        self.assertEqual(len(lock["translation_models"]["packages"]), 6)
+        self.assertRegex(lock["translation_models"]["index_revision"], r"^[0-9a-f]{40}$")
+        for action in lock["github_actions"]:
+            self.assertRegex(action["commit"], r"^[0-9a-f]{40}$")
+            self.assertIn(f'{action["name"]}@{action["commit"]}', workflows)
+        for asset in lock["runtime"] + lock["translation_models"]["packages"]:
+            self.assertGreater(asset["size"], 0)
+            self.assertRegex(asset["sha256"], r"^[0-9a-f]{64}$")
+            self.assertNotIn("latest", asset["url"])
+        self.assertIn('".json"', Path("scripts/make_checksums.ps1").read_text(encoding="utf-8"))
 
     def test_ci_workflow_gates_push_and_pull_requests_with_shared_tests(self):
         ci_path = Path(".github/workflows/ci.yml")
@@ -311,10 +338,10 @@ class ReleaseModelsTests(unittest.TestCase):
         self.assertFalse(Path("requirements.txt").exists())
 
     def test_release_workflow_packages_basic_offline_languages(self):
-        workflow = Path(".github/workflows/release.yml").read_text(encoding="utf-8")
+        lock = json.loads(Path("release-lock.json").read_text(encoding="utf-8"))
+        pairs = {(item["from"], item["to"]) for item in lock["translation_models"]["packages"]}
 
-        for pair in ('@("zh", "en")', '@("en", "zh")', '@("ja", "en")', '@("en", "ja")', '@("ko", "en")', '@("en", "ko")'):
-            self.assertIn(pair, workflow)
+        self.assertEqual(pairs, {("zh", "en"), ("en", "zh"), ("ja", "en"), ("en", "ja"), ("ko", "en"), ("en", "ko")})
 
     def test_release_notes_include_public_download_instructions(self):
         notes = Path("docs/RELEASE_NOTES.md").read_text(encoding="utf-8")

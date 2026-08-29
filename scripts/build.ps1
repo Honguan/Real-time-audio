@@ -1,8 +1,14 @@
+param(
+  [switch]$SkipInstall
+)
+
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
 Set-Location $Root
 
-python -m pip install -e ".[build]"
+if (-not $SkipInstall) {
+  python -m pip install -e ".[build]"
+}
 python -m realtime_audio_translator.tools.generate_assets
 python -m PyInstaller `
   --noconfirm `

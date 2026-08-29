@@ -35,15 +35,24 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          python-version: "3.10"
+          ref: ${{ inputs.version || github.ref }}
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.10.11"
 
       - name: Install dependencies
         shell: pwsh
-        run: python -m pip install ".[build]"
+        run: |
+          $lock = Get-Content release-lock.json -Raw | ConvertFrom-Json
+          $actualHash = (Get-FileHash requirements-release.txt -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actualHash -ne $lock.python.requirements_sha256) {
+            throw "requirements-release.txt hash mismatch."
+          }
+          python -m pip install --index-url $lock.python.index_url --require-hashes -r requirements-release.txt
+          python -m pip install --no-deps --no-build-isolation .
 
       - name: Run tests
         shell: pwsh
@@ -55,32 +64,32 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          $releases = Invoke-RestMethod "https://api.github.com/repos/Purfview/whisper-standalone-win/releases?per_page=20"
-          $assets = $releases | ForEach-Object { $_.assets }
-          $runtimeAsset = $assets |
-            Where-Object { $_.name -match "Faster-Whisper-XXL_.*_windows\.(7z|zip)$" } |
-            Sort-Object updated_at -Descending |
-            Select-Object -First 1
-          $cudaAsset = $assets |
-            Where-Object { $_.name -eq "cuBLAS.and.cuDNN_CUDA12_win_v3.7z" } |
-            Select-Object -First 1
-          if (-not $runtimeAsset) {
-            throw "Cannot find Faster-Whisper-XXL Windows asset. Upload runtime zip manually or update release workflow matcher."
-          }
-          if (-not $cudaAsset) {
-            throw "Cannot find cuBLAS.and.cuDNN_CUDA12_win_v3.7z. Upload runtime zip manually or update release workflow matcher."
+          function Get-LockedAsset($Asset, $Destination) {
+            Invoke-WebRequest $Asset.url -OutFile $Destination
+            $file = Get-Item -LiteralPath $Destination
+            $hash = (Get-FileHash -LiteralPath $Destination -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($file.Length -ne $Asset.size -or $hash -ne $Asset.sha256) {
+              throw "Release input verification failed: $($Asset.name)"
+            }
           }
 
+          $lock = Get-Content release-lock.json -Raw | ConvertFrom-Json
           New-Item -ItemType Directory -Path runtime-download, cuda-download, downloaded-runtime | Out-Null
-          Invoke-WebRequest $runtimeAsset.browser_download_url -OutFile runtime-download\runtime.pkg
-          Invoke-WebRequest $cudaAsset.browser_download_url -OutFile cuda-download\cuda.7z
+          Get-LockedAsset $lock.runtime[0] runtime-download\runtime.pkg
+          Get-LockedAsset $lock.runtime[1] cuda-download\cuda.7z
 
           $sevenZip = "${env:ProgramFiles}\7-Zip\7z.exe"
           if (-not (Test-Path $sevenZip)) {
             throw "7-Zip not found on runner."
           }
           & $sevenZip x runtime-download\runtime.pkg "-oruntime-download\extracted" -y
+          if ($LASTEXITCODE -ne 0) {
+            throw "Cannot extract locked Faster-Whisper-XXL runtime."
+          }
           & $sevenZip x cuda-download\cuda.7z "-ocuda-download\extracted" -y
+          if ($LASTEXITCODE -ne 0) {
+            throw "Cannot extract locked CUDA runtime."
+          }
 
           $fw = Get-ChildItem runtime-download\extracted -Recurse -Filter faster-whisper-xxl.exe | Select-Object -First 1
           if (-not $fw) {
@@ -94,20 +103,26 @@ jobs:
             }
             Copy-Item -LiteralPath $dll.FullName -Destination downloaded-runtime -Force
           }
+          New-Item runtime-download\.complete -ItemType File | Out-Null
 
       - name: Download offline translation models
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          $index = Invoke-RestMethod "https://raw.githubusercontent.com/argosopentech/argospm-index/main/index.json"
+          function Get-LockedAsset($Asset, $Destination) {
+            Invoke-WebRequest $Asset.url -OutFile $Destination
+            $file = Get-Item -LiteralPath $Destination
+            $hash = (Get-FileHash -LiteralPath $Destination -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($file.Length -ne $Asset.size -or $hash -ne $Asset.sha256) {
+              throw "Release input verification failed: $($Asset.name)"
+            }
+          }
+
+          $lock = Get-Content release-lock.json -Raw | ConvertFrom-Json
           $modelsDir = "translation-models\translation"
           New-Item -ItemType Directory -Path $modelsDir | Out-Null
-          foreach ($pair in @(@("zh", "en"), @("en", "zh"), @("ja", "en"), @("en", "ja"), @("ko", "en"), @("en", "ko"))) {
-            $package = $index | Where-Object { $_.from_code -eq $pair[0] -and $_.to_code -eq $pair[1] -and $_.links } | Select-Object -First 1
-            if (-not $package) {
-              throw "Cannot find offline translation model: $($pair[0]) -> $($pair[1])"
-            }
-            Invoke-WebRequest $package.links[0] -OutFile (Join-Path $modelsDir ([IO.Path]::GetFileName($package.links[0])))
+          foreach ($package in $lock.translation_models.packages) {
+            Get-LockedAsset $package (Join-Path $modelsDir $package.name)
           }
 
       - name: Build release zips
@@ -120,21 +135,24 @@ jobs:
           if ($version -notlike "v*") {
             throw "Release version must start with v, for example v0.1.1."
           }
-          & ./scripts/package_app_zip.ps1 -Version $version
-          if (Test-Path "runtime-download\runtime.pkg") {
+          & ./scripts/build.ps1 -SkipInstall
+          & ./scripts/package_app_zip.ps1 -Version $version -SkipBuild
+          if (Test-Path "runtime-download\.complete") {
             & ./scripts/package_runtime_zip.ps1 -Version $version -RuntimeSource "downloaded-runtime" -SplitRuntime -RuntimeCoreFormat 7z
           }
           & ./scripts/package_models_zip.ps1 -Version $version -ModelsSource "translation-models\translation" -ModelName "translation"
+          Copy-Item release-lock.json dist-release\RELEASE_MANIFEST.json
           & ./scripts/make_checksums.ps1
 
       - name: Upload GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           tag_name: ${{ inputs.version || github.ref_name }}
           body_path: docs/RELEASE_NOTES.md
           files: |
             dist-release/*.zip
             dist-release/*.7z
+            dist-release/RELEASE_MANIFEST.json
             dist-release/SHA256SUMS.txt
 
       - name: Update Release notes
