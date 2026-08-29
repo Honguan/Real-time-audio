@@ -1,5 +1,4 @@
 import json
-import math
 import os
 import subprocess
 import sys
@@ -20,7 +19,7 @@ class TranscriptionResult:
     text: str
     language: str | None
     language_probability: float | None = None
-    confidence: float | None = None
+    model_score: float | None = None
 
 
 def add_runtime_dll_directory(runtime_root: Path) -> None:
@@ -77,20 +76,20 @@ class AudioTranscriber:
                 without_timestamps=True,
             )
             texts = []
-            confidences = []
+            model_scores = []
             for segment in segments:
                 texts.append(segment.text.strip())
                 avg_logprob = getattr(segment, "avg_logprob", None)
                 if avg_logprob is not None:
                     try:
-                        confidences.append(min(1.0, max(0.0, math.exp(float(avg_logprob)))))
+                        model_scores.append(float(avg_logprob))
                     except Exception:
                         pass
             return TranscriptionResult(
                 " ".join(text for text in texts if text).strip(),
                 getattr(info, "language", None) or language,
                 getattr(info, "language_probability", None),
-                sum(confidences) / len(confidences) if confidences else None,
+                sum(model_scores) / len(model_scores) if model_scores else None,
             )
 
     @staticmethod

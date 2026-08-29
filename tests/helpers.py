@@ -30,7 +30,7 @@ class StaticTranscriber:
             self.text,
             getattr(self, "last_language", source_language),
             getattr(self, "last_language_probability", None),
-            getattr(self, "last_confidence", None),
+            getattr(self, "last_model_score", None),
         )
 
 
@@ -42,4 +42,8 @@ class StoppingTranslator:
 
     def translate(self, text, source_language, target_language):
         self.engine.running = False
-        return TranslationResult(self.text, getattr(self, "last_confidence", 0.8))
+        return TranslationResult(
+            self.text,
+            getattr(self, "last_quality_signal", None),
+            getattr(self, "last_heuristic_warning", None),
+        )

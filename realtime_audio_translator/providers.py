@@ -108,7 +108,8 @@ class HttpClient:
 @dataclass(frozen=True)
 class TranslationResult:
     text: str
-    confidence: float
+    provider_quality_signal: float | None = None
+    heuristic_warning: str | None = None
 
 
 def build_openai_translation_request(text: str, target_language: str, source_language: str, model: str = "gpt-4.1-mini", context: list[tuple[str, str]] | None = None, style: str = "plain", glossary: dict | None = None) -> dict:
@@ -198,14 +199,14 @@ class Translator:
 
     def translate(self, text: str, source_language: str, target_language: str) -> TranslationResult:
         if not text.strip():
-            return TranslationResult("", 0.0)
+            return TranslationResult("")
         provider = self.config.get("provider", "google")
         glossary = self._glossary()
         request_fingerprint = self._request_fingerprint(text, source_language, target_language, glossary)
         memory_cached = self._memory_cached(request_fingerprint)
         if memory_cached is not None and not self._unverified_local_passthrough(provider, text, memory_cached):
             self._remember_context(text, memory_cached)
-            return TranslationResult(self._apply_glossary(memory_cached, glossary), 1.0)
+            return TranslationResult(self._apply_glossary(memory_cached, glossary), heuristic_warning="快取結果，未重新評分")
         db_path = Path(self.config.get("translation_cache_path", ""))
         persistent_cache_enabled = self.config.get("translation_cache_enabled", True)
         if persistent_cache_enabled and db_path:
@@ -213,23 +214,21 @@ class Translator:
             if cached is not None and not self._unverified_local_passthrough(provider, text, cached):
                 self._remember_cached(request_fingerprint, cached)
                 self._remember_context(text, cached)
-                return TranslationResult(self._apply_glossary(cached, glossary), 1.0)
+                return TranslationResult(self._apply_glossary(cached, glossary), heuristic_warning="快取結果，未重新評分")
         if provider == "local":
             translated = self._local_translate(text, source_language, target_language)
-            confidence = 0.8 if self.config.get("local_translate_url", "").strip() or translated != text else 0.3
         elif provider == "openai":
             translated = self._openai_translate(text, source_language, target_language, glossary)
-            confidence = 0.8
         else:
             translated = self._google_translate(text, source_language, target_language)
-            confidence = 0.8
-        if not translated.strip():
-            confidence = 0.0
+        heuristic_warning = None
+        if provider == "local" and translated.strip() == text.strip():
+            heuristic_warning = "翻譯結果與原文相同，請確認語言與模型"
         self._remember_cached(request_fingerprint, translated)
         self._remember_context(text, translated)
         if persistent_cache_enabled and db_path and not (provider == "local" and not self.config.get("local_translate_url", "").strip() and translated == text):
             cache_translation(db_path, request_fingerprint, provider, source_language, target_language, text, translated)
-        return TranslationResult(self._apply_glossary(translated, glossary), confidence)
+        return TranslationResult(self._apply_glossary(translated, glossary), heuristic_warning=heuristic_warning)
 
     def _request_fingerprint(self, text: str, source_language: str, target_language: str, glossary: dict | None = None) -> str:
         provider = self.config.get("provider", "google")

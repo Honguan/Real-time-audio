@@ -4,7 +4,7 @@ from pathlib import Path
 from realtime_audio_translator.config import DEFAULT_CONFIG, _has_reparse_point, clear_cache, clear_logs, ensure_app_dirs, ensure_glossary_file, load_config, log_files_to_clear, save_audio_devices, save_config
 from realtime_audio_translator.ai_orchestrator import plan_session
 from realtime_audio_translator.ai_auto_tuner import apply_tuning, recommend_tuning
-from realtime_audio_translator.ai_confidence import build_confidence_snapshot, format_confidence_status
+from realtime_audio_translator.ai_confidence import build_quality_snapshot, format_quality_status
 from realtime_audio_translator.scenarios import SCENARIO_CHOICES, apply_scenario, scenario_key, scenario_label
 
 
@@ -175,52 +175,27 @@ class AiTests(unittest.TestCase):
         self.assertIn("加快本機 TTS", [item.title for item in recommendations])
         self.assertEqual(tuned["tts_rate"], 2)
 
-    def test_auto_tuner_shows_original_when_translation_confidence_is_low(self):
+    def test_auto_tuner_does_not_change_settings_from_uncalibrated_quality_heuristics(self):
         config = DEFAULT_CONFIG.copy()
         config["show_original_text"] = False
-        config["last_translation_confidence"] = 0.3
-
-        recommendations = recommend_tuning(config, cuda_devices=1, vram_gb=8)
-        tuned = apply_tuning(config, recommendations)
-
-        self.assertIn("show_original_on_low_confidence", [item.code for item in recommendations])
-        self.assertIn("翻譯信心低時顯示原文", [item.title for item in recommendations])
-        self.assertTrue(tuned["show_original_text"])
-        self.assertIn("formal_style_on_low_confidence", [item.code for item in recommendations])
-        self.assertEqual(tuned["translation_style"], "formal")
-
-    def test_auto_tuner_locks_high_confidence_detected_language(self):
-        config = DEFAULT_CONFIG.copy()
-        config["source_language"] = "auto"
-        config["target_language"] = "zh"
+        config["last_provider_quality_signal"] = 0.3
+        config["last_language_model_score"] = 0.92
         config["last_detected_language"] = "en"
-        config["last_language_confidence"] = 0.92
-
-        recommendations = recommend_tuning(config, cuda_devices=1, vram_gb=8)
-        tuned = apply_tuning(config, recommendations)
-
-        self.assertIn("lock_detected_language", [item.code for item in recommendations])
-        self.assertIn("鎖定穩定偵測語言", [item.title for item in recommendations])
-        self.assertEqual(tuned["source_language"], "en")
-
-    def test_auto_tuner_does_not_lock_source_to_target_language(self):
-        config = DEFAULT_CONFIG.copy()
         config["source_language"] = "auto"
-        config["target_language"] = "en"
-        config["last_detected_language"] = "en"
-        config["last_language_confidence"] = 0.92
 
         recommendations = recommend_tuning(config, cuda_devices=1, vram_gb=8)
         tuned = apply_tuning(config, recommendations)
 
+        self.assertNotIn("show_original_on_low_confidence", [item.code for item in recommendations])
+        self.assertNotIn("formal_style_on_low_confidence", [item.code for item in recommendations])
         self.assertNotIn("lock_detected_language", [item.code for item in recommendations])
+        self.assertFalse(tuned["show_original_text"])
         self.assertEqual(tuned["source_language"], "auto")
-        self.assertEqual(tuned["target_language"], "en")
 
-    def test_confidence_status_reports_local_mode_latency_and_provider(self):
+    def test_quality_status_reports_local_mode_latency_and_provider(self):
         config = DEFAULT_CONFIG.copy()
-        snapshot = build_confidence_snapshot(config, "en", "zh", asr_latency_seconds=0.82, translation_latency_seconds=0.11)
-        status = format_confidence_status(snapshot)
+        snapshot = build_quality_snapshot(config, "en", "zh", asr_latency_seconds=0.82, translation_latency_seconds=0.11)
+        status = format_quality_status(snapshot)
 
         self.assertFalse(snapshot.cloud_enabled)
         self.assertFalse(snapshot.cost_risk)
@@ -228,32 +203,42 @@ class AiTests(unittest.TestCase):
         self.assertIn("延遲 0.93 秒", status)
         self.assertIn("翻譯服務 本機", status)
 
-    def test_confidence_status_reports_cloud_cost_and_advanced_details(self):
+    def test_quality_status_reports_cloud_cost_and_advanced_details(self):
         config = DEFAULT_CONFIG.copy()
         config["provider"] = "openai"
         config["tts_provider"] = "google"
-        snapshot = build_confidence_snapshot(
+        snapshot = build_quality_snapshot(
             config,
             "en",
             "zh",
             asr_latency_seconds=0.82,
             translation_latency_seconds=0.11,
             tts_latency_seconds=0.24,
-            language_confidence=0.92,
-            asr_confidence=0.8,
-            translation_confidence=0.7,
+            language_model_score=0.92,
+            asr_model_score=-0.4,
+            provider_quality_signal=None,
+            translation_heuristic_warning="快取結果，未重新評分",
         )
-        status = format_confidence_status(snapshot, advanced=True)
+        status = format_quality_status(snapshot, advanced=True)
 
         self.assertTrue(snapshot.cloud_enabled)
         self.assertTrue(snapshot.cost_risk)
         self.assertIn("雲端 API 模式", status)
         self.assertIn("費用 可能", status)
-        self.assertIn("偵測語言 en 92%", status)
+        self.assertIn("偵測語言 en 模型分數 0.92", status)
+        self.assertIn("ASR 模型分數 -0.40", status)
+        self.assertIn("未校準", status)
+        self.assertIn("翻譯品質訊號 無法取得", status)
+        self.assertIn("翻譯提示 快取結果，未重新評分", status)
+        self.assertNotIn("翻譯信心", status)
         self.assertIn("ASR 延遲 820ms", status)
         self.assertIn("翻譯延遲 110ms", status)
         self.assertIn("TTS 延遲 240ms", status)
         self.assertIn("TTS 服務 Google", status)
+
+        unavailable = format_quality_status(build_quality_snapshot(config, "en", "zh"), advanced=True)
+        self.assertIn("語言模型分數 無法取得", unavailable)
+        self.assertIn("ASR 模型分數 無法取得", unavailable)
 
 
 if __name__ == "__main__":

@@ -96,7 +96,8 @@ class GuiLogicTests(unittest.TestCase):
         self.assertEqual(DEFAULT_CONFIG["tts_voice_name"], "")
         self.assertTrue(DEFAULT_CONFIG["show_original_text"])
         self.assertTrue(DEFAULT_CONFIG["show_translated_text"])
-        self.assertEqual(DEFAULT_CONFIG["last_asr_confidence"], "")
+        self.assertIsNone(DEFAULT_CONFIG["last_asr_model_score"])
+        self.assertIsNone(DEFAULT_CONFIG["last_provider_quality_signal"])
 
     def test_advanced_settings_expose_openai_tts_options(self):
         settings = visible_setting_keys(True)

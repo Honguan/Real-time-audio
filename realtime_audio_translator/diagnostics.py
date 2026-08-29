@@ -28,6 +28,14 @@ def _count(config: dict, key: str) -> int:
         return 0
 
 
+def _optional_float(config: dict, key: str) -> float | None:
+    try:
+        value = config.get(key)
+        return None if value in (None, "") else float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _devices_overlap(left: str, right: str) -> bool:
     return same_device_identity(left, right)
 
@@ -175,30 +183,50 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
             "檢查翻譯服務、「本機翻譯 URL」或改用其他翻譯服務",
             "local_translation",
         ))
-    try:
-        asr_confidence = float(config.get("last_asr_confidence") or 1.0)
-    except Exception:
-        asr_confidence = 1.0
-    if asr_confidence < 0.5:
+    asr_model_score = _optional_float(config, "last_asr_model_score")
+    if asr_model_score is not None:
         issues.append(DiagnosticIssue(
-            "asr_confidence_low",
-            "warning",
-            "語音辨識信心偏低",
-            f"最近一次語音辨識信心約 {round(asr_confidence * 100)}%",
-            "先跑「測試麥克風」或「測試喇叭」，降低背景噪音，或改用較大模型",
+            "asr_model_score_available",
+            "info",
+            "語音辨識模型分數",
+            f"最近平均 log probability 為 {asr_model_score:.2f}；這是未校準模型分數，不是正確率",
+            "模型分數僅供比較；請用實際字幕品質判斷是否調整模型或音訊",
             "audio_settings",
         ))
-    try:
-        translation_confidence = float(config.get("last_translation_confidence") or 1.0)
-    except Exception:
-        translation_confidence = 1.0
-    if translation_confidence < 0.5:
+    elif config.get("last_source_text"):
         issues.append(DiagnosticIssue(
-            "translation_confidence_low",
+            "asr_model_score_unavailable",
             "info",
-            "翻譯信心偏低",
-            f"最近一次翻譯信心約 {round(translation_confidence * 100)}%",
-            "可按「修正上次翻譯」加入術語，或設定「本機翻譯 URL」",
+            "語音辨識模型分數無法取得",
+            "目前 ASR 後端未提供模型分數",
+            "請依實際字幕內容判斷辨識品質",
+            "audio_settings",
+        ))
+    if config.get("last_source_text"):
+        quality_signal = _optional_float(config, "last_provider_quality_signal")
+        if quality_signal is None:
+            detail = "翻譯供應商未提供可信品質分數"
+            code = "translation_quality_unavailable"
+            title = "翻譯品質訊號無法取得"
+        else:
+            detail = f"最近供應商品質訊號為 {quality_signal:.2f}；不視為校準後正確率"
+            code = "translation_quality_signal"
+            title = "翻譯供應商品質訊號"
+        issues.append(DiagnosticIssue(
+            code,
+            "info",
+            title,
+            detail,
+            "請依實際翻譯內容判斷品質；需要時可按「修正上次翻譯」加入術語",
+            "local_translation",
+        ))
+    if config.get("last_translation_heuristic_warning"):
+        issues.append(DiagnosticIssue(
+            "translation_heuristic_warning",
+            "info",
+            "翻譯啟發式提示",
+            str(config["last_translation_heuristic_warning"]),
+            "提示不是品質分數；請依實際翻譯內容判斷品質",
             "local_translation",
         ))
     if config.get("last_tts_failed"):
@@ -267,17 +295,23 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
             "audio_settings",
         ))
     if config.get("source_language") == "auto":
-        try:
-            language_confidence = float(config.get("last_language_confidence", 1.0))
-        except Exception:
-            language_confidence = 1.0
-        if language_confidence < 0.7:
+        language_model_score = _optional_float(config, "last_language_model_score")
+        if language_model_score is not None and language_model_score < 0.7:
             detected = config.get("last_detected_language") or "目前語言"
             issues.append(DiagnosticIssue(
-                "language_lock_recommended",
+                "language_model_score_low",
                 "info",
-                "語言判斷信心偏低",
-                f"最近偵測為 {detected}，信心約 {round(language_confidence * 100)}%",
+                "語言判斷模型分數偏低",
+                f"最近偵測為 {detected}，模型分數 {language_model_score:.2f}；不視為校準後正確率",
+                "若字幕語言跳動，請把「來源語言」從 auto 改成固定語言。",
+                "language_settings",
+            ))
+        elif config.get("last_detected_language") and language_model_score is None:
+            issues.append(DiagnosticIssue(
+                "language_model_score_unavailable",
+                "info",
+                "語言模型分數無法取得",
+                f"最近偵測為 {config['last_detected_language']}，但後端未提供模型分數",
                 "若字幕語言跳動，請把「來源語言」從 auto 改成固定語言。",
                 "language_settings",
             ))

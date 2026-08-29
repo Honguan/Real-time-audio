@@ -8,7 +8,7 @@ from typing import Callable
 
 from .asr import AudioTranscriber
 from .audio import AudioSegment, DeviceResolutionError, SegmentWorker, WorkerHealth, discard_audio_segment, find_device, same_device_identity, segmentation_policy, virtual_mic_recaptures_tts
-from .ai_confidence import build_confidence_snapshot, format_confidence_status
+from .ai_confidence import build_quality_snapshot, format_quality_status
 from .config import APP_DIR, DEFAULT_CONFIG, STATE_KEYS, TARGET_LANGUAGE_CHOICES, save_config_state, validate_language_pair
 from .logbook import ConversationLog
 from .models import models_dir
@@ -456,7 +456,22 @@ class RealtimeEngine:
                 text = trim_transcript_overlap(metrics.get("_last_asr_text", ""), raw_text) if timing.get("overlap_seconds", 0) else raw_text
                 metrics["_last_asr_text"] = raw_text
                 asr_latency = time.perf_counter() - asr_started
+                state_keys = {"last_language_model_score", "last_asr_model_score", "last_provider_quality_signal", "last_translation_heuristic_warning"}
+                detected_source = transcription.language if source == "auto" else None
+                source_for_output = detected_source or fallback_source
+                language_model_score = transcription.language_probability
+                if detected_source:
+                    metrics["last_detected_language"] = detected_source
+                    state_keys.add("last_detected_language")
+                metrics["last_language_model_score"] = language_model_score
+                asr_model_score = transcription.model_score
+                metrics["last_asr_model_score"] = asr_model_score
+                provider_quality_signal = None
+                translation_heuristic_warning = None
+                metrics["last_provider_quality_signal"] = None
+                metrics["last_translation_heuristic_warning"] = None
                 if not text:
+                    self._record_metrics(direction, metrics, state_keys)
                     continue
                 try:
                     segment_seconds = max(wav.duration_seconds if isinstance(wav, AudioSegment) else float(config.get("segment_seconds", 2.0)), 0.1)
@@ -465,21 +480,7 @@ class RealtimeEngine:
                 clean_text = text.strip()
                 speech_units = len(clean_text.split()) if " " in clean_text else len(clean_text)
                 metrics["last_speech_units_per_second"] = speech_units / segment_seconds
-                state_keys = {"last_speech_units_per_second"}
-                detected_source = transcription.language if source == "auto" else None
-                source_for_output = detected_source or fallback_source
-                language_confidence = transcription.language_probability
-                if detected_source:
-                    metrics["last_detected_language"] = detected_source
-                    state_keys.add("last_detected_language")
-                if language_confidence is not None:
-                    metrics["last_language_confidence"] = language_confidence
-                    state_keys.add("last_language_confidence")
-                asr_confidence = transcription.confidence
-                if asr_confidence is not None:
-                    metrics["last_asr_confidence"] = asr_confidence
-                    state_keys.add("last_asr_confidence")
-                translation_confidence = None
+                state_keys.add("last_speech_units_per_second")
                 translation_latency = None
                 tts_latency = None
                 translation_failed = False
@@ -492,10 +493,11 @@ class RealtimeEngine:
                         return
                     translated = translation.text
                     translation_latency = time.perf_counter() - translation_started
-                    translation_confidence = translation.confidence
-                    if translation_confidence is not None:
-                        metrics["last_translation_confidence"] = translation_confidence
-                        state_keys.add("last_translation_confidence")
+                    provider_quality_signal = translation.provider_quality_signal
+                    translation_heuristic_warning = translation.heuristic_warning
+                    metrics["last_provider_quality_signal"] = provider_quality_signal
+                    metrics["last_translation_heuristic_warning"] = translation_heuristic_warning
+                    state_keys.update({"last_provider_quality_signal", "last_translation_heuristic_warning"})
                 except Exception as exc:
                     timing["translation_completed_at"] = time.time()
                     translation_latency = time.perf_counter() - translation_started
@@ -570,18 +572,19 @@ class RealtimeEngine:
                     if not self._session_active(session):
                         return
                 if not translation_failed:
-                    snapshot = build_confidence_snapshot(
+                    snapshot = build_quality_snapshot(
                         {**config, **metrics},
                         source_for_output,
                         target,
                         asr_latency_seconds=asr_latency,
                         translation_latency_seconds=translation_latency,
                         tts_latency_seconds=tts_latency,
-                        language_confidence=language_confidence,
-                        asr_confidence=asr_confidence,
-                        translation_confidence=translation_confidence,
+                        language_model_score=language_model_score,
+                        asr_model_score=asr_model_score,
+                        provider_quality_signal=provider_quality_signal,
+                        translation_heuristic_warning=translation_heuristic_warning,
                     )
-                    self._publish(session, self.status, f"{direction_label(direction)}延遲 {latency:.2f} 秒；{format_confidence_status(snapshot, bool(config.get('advanced_mode')))}")
+                    self._publish(session, self.status, f"{direction_label(direction)}延遲 {latency:.2f} 秒；{format_quality_status(snapshot, bool(config.get('advanced_mode')))}")
             except Exception as exc:
                 self._publish(session, self.status, f"{direction_label(direction)}：{exc}")
             finally:

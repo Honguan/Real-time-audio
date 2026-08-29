@@ -82,36 +82,6 @@ def recommend_tuning(config: dict, cuda_devices: int, vram_gb: int) -> list[Tuni
             f"最近 TTS 延遲約 {tts_latency:.1f} 秒",
             {"tts_rate": 2},
         ))
-    try:
-        translation_confidence = float(config.get("last_translation_confidence") or 1.0)
-    except Exception:
-        translation_confidence = 1.0
-    if translation_confidence < 0.5 and not config.get("show_original_text", True):
-        recommendations.append(TuningRecommendation(
-            "show_original_on_low_confidence",
-            "翻譯信心低時顯示原文",
-            f"最近翻譯信心約 {round(translation_confidence * 100)}%",
-            {"show_original_text": True},
-        ))
-    if translation_confidence < 0.5 and config.get("translation_style", "plain") == "plain":
-        recommendations.append(TuningRecommendation(
-            "formal_style_on_low_confidence",
-            "翻譯信心低時改用正式風格",
-            f"最近翻譯信心約 {round(translation_confidence * 100)}%",
-            {"translation_style": "formal"},
-        ))
-    try:
-        language_confidence = float(config.get("last_language_confidence") or 0)
-    except Exception:
-        language_confidence = 0
-    detected_language = str(config.get("last_detected_language") or "")
-    if config.get("source_language") == "auto" and detected_language in {"zh", "en", "ja", "ko"} and detected_language != config.get("target_language") and language_confidence >= 0.85:
-        recommendations.append(TuningRecommendation(
-            "lock_detected_language",
-            "鎖定穩定偵測語言",
-            f"最近語言偵測信心約 {round(language_confidence * 100)}%",
-            {"source_language": detected_language},
-        ))
     if config.get("scenario") == "game_voice" and config.get("performance_mode") != "low_latency":
         recommendations.append(TuningRecommendation(
             "game_low_latency",
