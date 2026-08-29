@@ -73,7 +73,7 @@ SETTING_ROWS = (
     ("Google 專案", "google_project_id"),
     ("Google JSON", "google_service_account_json"),
     ("術語表 JSON", "glossary_path"),
-    ("分段秒數", "segment_seconds"),
+    ("最大語句秒數", "segment_seconds"),
     ("語音閾值", "speech_threshold"),
     ("字幕透明度", "overlay_opacity"),
     ("字幕字級", "overlay_font_size"),

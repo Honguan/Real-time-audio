@@ -8,12 +8,17 @@ from unittest.mock import patch
 from realtime_audio_translator.asr import TranscriptionResult
 from realtime_audio_translator.config import DEFAULT_CONFIG, _has_reparse_point, clear_cache, clear_logs, ensure_app_dirs, ensure_glossary_file, load_config, log_files_to_clear, save_audio_devices, save_config
 from realtime_audio_translator.audio import DeviceResolutionError, WorkerHealth, device_identity
-from realtime_audio_translator.engine import RealtimeEngine, audio_devices_overlap, direction_label, drain_queue, overlay_text_from_config, safe_target_language
+from realtime_audio_translator.engine import RealtimeEngine, audio_devices_overlap, direction_label, drain_queue, overlay_text_from_config, safe_target_language, trim_transcript_overlap
 from realtime_audio_translator.providers import TextToSpeech, TranslationResult, Translator, build_google_translate_request, build_openai_translation_request, google_access_token
 from tests.helpers import QueuedWorker, StaticTranscriber, StoppingTranslator, write_wav
 
 
 class EngineTests(unittest.TestCase):
+    def test_transcript_overlap_removes_only_shared_boundary(self):
+        self.assertEqual(trim_transcript_overlap("we cross the boundary", "the boundary without loss"), "without loss")
+        self.assertEqual(trim_transcript_overlap("跨越邊界", "邊界不漏字"), "不漏字")
+        self.assertEqual(trim_transcript_overlap("hello world", "new words"), "new words")
+
     def test_engine_stops_running_when_its_only_capture_direction_fails(self):
         statuses = []
         engine = RealtimeEngine(Path("."), DEFAULT_CONFIG.copy(), lambda speaker, mine: None, statuses.append)
@@ -42,7 +47,7 @@ class EngineTests(unittest.TestCase):
         engine._session = "health-thread"
         engine.transcriber = StaticTranscriber("hello")
 
-        with patch.object(engine_module, "find_device", return_value=1), patch.object(audio_module, "capture_audio", side_effect=RuntimeError("device removed")):
+        with patch.object(engine_module, "find_device", return_value=1), patch.object(audio_module, "audio_frame_stream", side_effect=RuntimeError("device removed")):
             self.assertTrue(engine._start_direction("me", "Microphone", False))
             for thread in engine.threads:
                 thread.join(1)
@@ -137,11 +142,12 @@ class EngineTests(unittest.TestCase):
             }
             engine._process_segments("speaker", worker)
             saved = load_config(state_root)
-            for key in ("last_latency_seconds", "last_vad_seconds", "last_asr_latency_seconds", "last_translation_latency_seconds", "last_end_to_end_p50_seconds", "last_end_to_end_p95_seconds", "last_end_to_end_p99_seconds", "last_real_time_factor", "last_cpu_percent"):
+            for key in ("last_latency_seconds", "last_vad_seconds", "last_asr_latency_seconds", "last_translation_latency_seconds", "last_end_to_end_p50_seconds", "last_end_to_end_p95_seconds", "last_end_to_end_p99_seconds", "last_first_subtitle_p50_seconds", "last_first_subtitle_p95_seconds", "last_first_subtitle_p99_seconds", "last_real_time_factor", "last_cpu_percent"):
                 self.assertIsInstance(saved[key], float)
             self.assertAlmostEqual(saved["last_capture_seconds"], 1.0, places=3)
             self.assertGreaterEqual(saved["last_queue_wait_seconds"], 0.5)
             self.assertGreaterEqual(saved["last_end_to_end_latency_seconds"], 2.0)
+            self.assertLessEqual(saved["last_first_subtitle_p95_seconds"], 3.0)
             self.assertFalse(wav.exists())
 
         self.assertTrue(any(status.startswith("喇叭延遲 ") for status in statuses))
@@ -1206,7 +1212,7 @@ class EngineTests(unittest.TestCase):
             engine_module.SegmentWorker = original_worker
             engine_module.threading.Thread = original_thread
 
-        self.assertEqual(worker_args[0][:3], (1, float(config["segment_seconds"]), True))
+        self.assertEqual(worker_args[0][:3], (1, True, float(config["speech_threshold"])))
 
     def test_speaker_and_microphone_use_independent_pipeline_state(self):
         import realtime_audio_translator.engine as engine_module

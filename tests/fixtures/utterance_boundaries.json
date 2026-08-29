@@ -1,0 +1,23 @@
+[
+  {
+    "name": "fast-speech-crosses-fixed-boundary",
+    "fixed_window_frames": 8,
+    "frames": [0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 0, 0, 0],
+    "expected_words": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+    "reference_words": ["we", "need", "international", "support", "for", "very", "fast", "speech", "across", "the", "old", "boundary"]
+  },
+  {
+    "name": "short-pause-keeps-one-utterance",
+    "fixed_window_frames": 8,
+    "frames": [0, 1, 1, 2, 2, 0, 0, 3, 3, 4, 4, 0, 0, 0],
+    "expected_words": [1, 2, 3, 4],
+    "reference_words": ["keep", "short", "pauses", "together"]
+  },
+  {
+    "name": "repeated-word-crosses-fixed-boundary",
+    "fixed_window_frames": 4,
+    "frames": [0, 1, 1, 2, 2, 3, 3, 0, 0, 0],
+    "expected_words": [1, 2, 3],
+    "reference_words": ["go", "go", "now"]
+  }
+]

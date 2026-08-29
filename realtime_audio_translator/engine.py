@@ -7,12 +7,12 @@ from pathlib import Path
 from typing import Callable
 
 from .asr import AudioTranscriber
-from .audio import DeviceResolutionError, SegmentWorker, WorkerHealth, audio_segment_active, discard_audio_segment, find_device, same_device_identity, virtual_mic_recaptures_tts
+from .audio import AudioSegment, DeviceResolutionError, SegmentWorker, WorkerHealth, discard_audio_segment, find_device, same_device_identity, segmentation_policy, virtual_mic_recaptures_tts
 from .ai_confidence import build_confidence_snapshot, format_confidence_status
 from .config import APP_DIR, DEFAULT_CONFIG, STATE_KEYS, TARGET_LANGUAGE_CHOICES, save_config_state, validate_language_pair
 from .logbook import ConversationLog
 from .models import models_dir
-from .performance import LatencyWindow
+from .performance import FIRST_SUBTITLE_P50, FIRST_SUBTITLE_P95, FIRST_SUBTITLE_P99, LatencyWindow
 from .providers import TextToSpeech, Translator
 from .tts import play_linear16
 
@@ -62,6 +62,19 @@ def safe_target_language(language: str, fallback: str) -> str:
     return language if language in TARGET_LANGUAGE_CHOICES else fallback
 
 
+def trim_transcript_overlap(previous: str, current: str) -> str:
+    if not previous or not current:
+        return current
+    use_words = " " in previous or " " in current
+    left = previous.split() if use_words else list(previous)
+    right = current.split() if use_words else list(current)
+    for count in range(min(len(left), len(right)), 0, -1):
+        if [part.casefold() for part in left[-count:]] == [part.casefold() for part in right[:count]]:
+            remainder = right[count:]
+            return " ".join(remainder) if use_words else "".join(remainder)
+    return current
+
+
 class RealtimeEngine:
     def __init__(self, repo_root: Path, config: dict, overlay: OverlayCallback, status: StatusCallback, state_root: Path | None = None):
         self.repo_root = repo_root
@@ -82,6 +95,7 @@ class RealtimeEngine:
         self._log_lock = threading.Lock()
         self._tts_lock = threading.Lock()
         self._latencies = LatencyWindow()
+        self._subtitle_latencies = LatencyWindow()
         self.threads: list[threading.Thread] = []
         self.workers: list[SegmentWorker] = []
         self.capture_health: dict[str, WorkerHealth] = {}
@@ -227,8 +241,9 @@ class RealtimeEngine:
         session = self._session
         worker = SegmentWorker(
             device,
-            float(self.config["segment_seconds"]),
             loopback,
+            float(self.config.get("speech_threshold", 0.01)),
+            segmentation_policy(self.config.get("performance_mode", "balanced"), self.config.get("segment_seconds")),
             self._cancel,
             lambda event: self._capture_health_changed(event, session),
         )
@@ -336,24 +351,21 @@ class RealtimeEngine:
                     self._publish(session, self.status, f"{direction_label(direction)}：處理落後，已略過 {dropped_segments} 段；佇列 {queue_depth}/{worker.queue.maxsize}")
                 started = time.perf_counter()
                 cpu_started = time.thread_time()
-                timing["vad_started_at"] = time.time()
-                active = audio_segment_active(wav, config.get("speech_threshold", 0.01))
-                timing["vad_completed_at"] = time.time()
-                vad_latency = time.perf_counter() - started
-                if not active:
-                    continue
+                vad_latency = timing.get("_vad_seconds", 0.0)
                 asr_started = time.perf_counter()
                 timing["asr_started_at"] = time.time()
                 transcription = self.transcriber.transcribe(wav, source)
                 timing["asr_completed_at"] = time.time()
                 if not self._session_active(session):
                     return
-                text = transcription.text
+                raw_text = transcription.text
+                text = trim_transcript_overlap(metrics.get("_last_asr_text", ""), raw_text) if timing.get("overlap_seconds", 0) else raw_text
+                metrics["_last_asr_text"] = raw_text
                 asr_latency = time.perf_counter() - asr_started
                 if not text:
                     continue
                 try:
-                    segment_seconds = max(float(config.get("segment_seconds", 2.0)), 0.1)
+                    segment_seconds = max(wav.duration_seconds if isinstance(wav, AudioSegment) else float(config.get("segment_seconds", 2.0)), 0.1)
                 except Exception:
                     segment_seconds = 2.0
                 clean_text = text.strip()
@@ -413,16 +425,22 @@ class RealtimeEngine:
                     if not self._session_active(session):
                         return
                     self._publish(session, self.overlay, overlay_text, "")
-                    timing["subtitle_published_at"] = time.time()
-                    if config.get("tts_enabled", True) and config.get("speaker_tts_enabled", False) and not self.muted and translated and not translation_failed:
-                        tts_latency = self._speak_translation(direction, translated, target, config.get("speaker_tts_output_device", ""), session, timing)
                 else:
                     if not self._session_active(session):
                         return
                     self._publish(session, self.overlay, "", overlay_text)
-                    timing["subtitle_published_at"] = time.time()
-                    if config.get("tts_enabled", True) and config.get("virtual_mic_enabled", False) and not self.muted and translated and not translation_failed:
-                        tts_latency = self._speak_translation(direction, translated, target, config.get("tts_output_device", ""), session, timing)
+                timing["subtitle_published_at"] = time.time()
+                subtitle_latency = max(0.0, time.perf_counter() - timing.get("_capture_started_perf", started))
+                with self._metrics_lock:
+                    self._subtitle_latencies.add(subtitle_latency)
+                    subtitle_percentiles = self._subtitle_latencies.snapshot((FIRST_SUBTITLE_P50, FIRST_SUBTITLE_P95, FIRST_SUBTITLE_P99))
+                subtitle_metrics = {"last_first_subtitle_latency_seconds": subtitle_latency, **subtitle_percentiles}
+                metrics.update(subtitle_metrics)
+                state_keys.update(subtitle_metrics)
+                if direction == "speaker" and config.get("tts_enabled", True) and config.get("speaker_tts_enabled", False) and not self.muted and translated and not translation_failed:
+                    tts_latency = self._speak_translation(direction, translated, target, config.get("speaker_tts_output_device", ""), session, timing)
+                elif direction != "speaker" and config.get("tts_enabled", True) and config.get("virtual_mic_enabled", False) and not self.muted and translated and not translation_failed:
+                    tts_latency = self._speak_translation(direction, translated, target, config.get("tts_output_device", ""), session, timing)
                 if not self._session_active(session):
                     return
                 if tts_latency is not None:
@@ -456,7 +474,7 @@ class RealtimeEngine:
                 if self.log and not translation_failed:
                     with self._log_lock:
                         public_timing = {key: value for key, value in timing.items() if not key.startswith("_")}
-                        performance_keys = set(backlog_metrics) | set(stage_metrics) | {"last_provider_error_count", "last_rate_limit_count"}
+                        performance_keys = set(backlog_metrics) | set(subtitle_metrics) | set(stage_metrics) | {"last_provider_error_count", "last_rate_limit_count"}
                         performance = {key: metrics[key] for key in performance_keys if key in metrics}
                         performance.update({key: self.config[key] for key in ("last_cuda_devices", "last_vram_gb", "last_model_load_seconds") if self.config.get(key) not in (None, "")})
                         self.log.append(direction, source_for_output, target, text, translated, config["provider"], latency_seconds=latency, performance=performance, timestamps=public_timing)
