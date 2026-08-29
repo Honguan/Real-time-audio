@@ -228,6 +228,7 @@ class TranslationCacheTests(unittest.TestCase):
             with patch.dict(sys.modules, {"argostranslate": argos_module, "argostranslate.settings": settings_module}):
                 before = translator._request_fingerprint("hello", "en", "zh")
                 metadata.write_text('{"from_code":"en","to_code":"zh","package_version":"1.1"}', encoding="utf-8")
+                translator._offline_registry().reload(install=False)
                 after = translator._request_fingerprint("hello", "en", "zh")
 
         self.assertNotEqual(before, after)

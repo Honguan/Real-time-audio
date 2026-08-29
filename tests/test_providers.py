@@ -1,8 +1,10 @@
 import json
 import os
+import shutil
 import sys
 import tempfile
 import threading
+import time
 import unittest
 import zipfile
 from datetime import datetime, timedelta, timezone
@@ -14,7 +16,7 @@ from realtime_audio_translator.archive_install import verify_install_manifest, w
 from realtime_audio_translator.audio import device_identity
 from realtime_audio_translator.config import DEFAULT_CONFIG, _has_reparse_point, clear_cache, clear_logs, ensure_app_dirs, ensure_glossary_file, load_config, log_files_to_clear, save_audio_devices, save_config
 from realtime_audio_translator.ai_memory import add_glossary_term, cache_translation, cached_translation
-from realtime_audio_translator.offline_translation import download_translation_models, install_translation_models, normalize_translation_text, translation_model_available, translation_model_pairs, translation_models_dir
+from realtime_audio_translator.offline_translation import OfflineTranslationRegistry, download_translation_models, install_translation_models, normalize_translation_text, translation_model_available, translation_model_pairs, translation_models_dir
 from realtime_audio_translator.providers import HttpClient, ProviderRequestError, TextToSpeech, Translator, build_google_translate_request, build_openai_translation_request, google_access_token
 
 
@@ -305,8 +307,6 @@ class ProvidersTests(unittest.TestCase):
             self.assertTrue(verify_install_manifest(package, verify_hashes=True))
 
     def test_changed_translation_model_discards_loaded_inference_objects(self):
-        import realtime_audio_translator.offline_translation as offline_module
-
         with tempfile.TemporaryDirectory() as tmp:
             config = DEFAULT_CONFIG.copy()
             config["models_path"] = str(Path(tmp) / "models")
@@ -316,19 +316,129 @@ class ProvidersTests(unittest.TestCase):
                 archive.writestr("translate-en_zh/metadata.json", '{"from_code":"en","to_code":"zh"}')
                 archive.writestr("translate-en_zh/model/model.bin", b"model")
                 archive.writestr("translate-en_zh/sentencepiece.model", b"sentencepiece")
+            registry = OfflineTranslationRegistry(config, install=False)
+            self.assertFalse(registry.available("en", "zh"))
             install_translation_models(config)
             package = translation_models_dir(config) / "packages" / "translate-en_zh"
-            self.assertTrue(translation_model_available(config, "en", "zh"))
-            offline_module._TRANSLATORS[package] = object()
-            offline_module._TOKENIZERS[package] = object()
+            registry.reload(install=False)
+            self.assertTrue(registry.available("en", "zh"))
+            registry.translators[package] = object()
+            registry.tokenizers[package] = object()
             (package / "model" / "model.bin").write_bytes(b"stale-model")
-            self.assertFalse(translation_model_available(config, "en", "zh"))
+            registry.reload(install=False)
+            self.assertFalse(registry.available("en", "zh"))
             write_install_manifest(package)
+            registry.reload(install=False)
 
-            self.assertTrue(translation_model_available(config, "en", "zh"))
+            self.assertTrue(registry.available("en", "zh"))
+            self.assertNotIn(package, registry.translators)
+            self.assertNotIn(package, registry.tokenizers)
 
-            self.assertNotIn(package, offline_module._TRANSLATORS)
-            self.assertNotIn(package, offline_module._TOKENIZERS)
+            shutil.rmtree(package)
+            registry.reload(install=False)
+            self.assertFalse(registry.available("en", "zh"))
+
+    def test_offline_registry_reuses_discovery_and_models_across_concurrent_translation(self):
+        import realtime_audio_translator.offline_translation as offline_module
+
+        tokenizer_loads = 0
+        translator_loads = 0
+
+        class Tokenizer:
+            def __init__(self, **_kwargs):
+                nonlocal tokenizer_loads
+                tokenizer_loads += 1
+
+            def encode(self, text, **_kwargs):
+                return [text]
+
+            def decode(self, _tokens):
+                return "translated"
+
+        class Result:
+            hypotheses = [["translated"]]
+
+        class Model:
+            def __init__(self, *_args, **_kwargs):
+                nonlocal translator_loads
+                translator_loads += 1
+
+            def translate_batch(self, *_args, **_kwargs):
+                return [Result()]
+
+        with tempfile.TemporaryDirectory() as tmp:
+            config = DEFAULT_CONFIG.copy()
+            config["models_path"] = str(Path(tmp) / "models")
+            package = translation_models_dir(config) / "packages" / "translate-en_zh"
+            (package / "model").mkdir(parents=True)
+            (package / "model" / "model.bin").write_bytes(b"model")
+            (package / "sentencepiece.model").write_bytes(b"sentencepiece")
+            (package / "metadata.json").write_text('{"from_code":"en","to_code":"zh"}', encoding="utf-8")
+            write_install_manifest(package)
+            ctranslate2 = type(sys)("ctranslate2")
+            ctranslate2.Translator = Model
+            sentencepiece = type(sys)("sentencepiece")
+            sentencepiece.SentencePieceProcessor = Tokenizer
+            with patch.object(offline_module, "_installed_packages", wraps=offline_module._installed_packages) as discovery:
+                registry = OfflineTranslationRegistry(config, install=False)
+                results = []
+                threads = [threading.Thread(target=lambda: results.append(registry.translate("hello", "en", "zh"))) for _ in range(12)]
+                with patch.dict(sys.modules, {"ctranslate2": ctranslate2, "sentencepiece": sentencepiece}):
+                    for thread in threads:
+                        thread.start()
+                    for thread in threads:
+                        thread.join()
+
+            self.assertEqual(results, ["translated"] * 12)
+            self.assertEqual(discovery.call_count, 1)
+            self.assertEqual((tokenizer_loads, translator_loads), (1, 1))
+            self.assertGreater(registry.stats()["model_bytes"], 0)
+            self.assertEqual(registry.stats()["loaded_models"], 1)
+
+            entered = threading.Event()
+            release = threading.Event()
+            reloaded = threading.Event()
+
+            class BlockingModel(Model):
+                def translate_batch(self, *_args, **_kwargs):
+                    entered.set()
+                    release.wait(1)
+                    return [Result()]
+
+            registry.translators[package] = BlockingModel()
+            translating = threading.Thread(target=registry.translate, args=("hello", "en", "zh"))
+            reloading = threading.Thread(target=lambda: (registry.reload(install=False), reloaded.set()))
+            with patch.dict(sys.modules, {"ctranslate2": ctranslate2, "sentencepiece": sentencepiece}):
+                translating.start()
+                self.assertTrue(entered.wait(1))
+                reloading.start()
+                self.assertFalse(reloaded.wait(0.05))
+                release.set()
+                translating.join()
+                reloading.join()
+            self.assertTrue(reloaded.is_set())
+
+    def test_offline_registry_benchmark_avoids_steady_state_discovery(self):
+        import realtime_audio_translator.offline_translation as offline_module
+
+        config = DEFAULT_CONFIG.copy()
+
+        def slow_discovery(_config):
+            time.sleep(0.002)
+            return []
+
+        with patch.object(offline_module, "_installed_packages", side_effect=slow_discovery):
+            started = time.monotonic()
+            for _ in range(10):
+                offline_module._installed_packages(config)
+            baseline = time.monotonic() - started
+            registry = OfflineTranslationRegistry(config, install=False)
+            started = time.monotonic()
+            for _ in range(10):
+                registry.available("en", "zh")
+            steady_state = time.monotonic() - started
+
+        self.assertLess(steady_state * 5, baseline)
 
     def test_argos_install_rejects_archive_escape(self):
         with tempfile.TemporaryDirectory() as tmp:
