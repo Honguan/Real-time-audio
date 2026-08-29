@@ -96,7 +96,8 @@ class RealtimeEngine:
         self.running = False
         self._closed = False
         self.paused = False
-        self.muted = bool(config.get("start_muted", False))
+        self.virtual_mic_muted = bool(config.get("start_virtual_mic_muted", False))
+        self.speaker_translation_muted = False
         self._session: str | None = None
         self._cancel = threading.Event()
         self._lifecycle_lock = threading.Lock()
@@ -105,7 +106,10 @@ class RealtimeEngine:
         self._health_lock = threading.Lock()
         self._log_lock = threading.Lock()
         self._tts_queue_lock = threading.Lock()
-        self._tts_cancel = threading.Event()
+        self._virtual_mic_cancel = threading.Event()
+        self._speaker_translation_cancel = threading.Event()
+        if self.virtual_mic_muted:
+            self._virtual_mic_cancel.set()
         self._tts_queues: dict[str, queue.Queue] = {}
         self._latencies = LatencyWindow()
         self._subtitle_latencies = LatencyWindow()
@@ -125,7 +129,12 @@ class RealtimeEngine:
             self._session = uuid.uuid4().hex
             session = self._session
             self._cancel = threading.Event()
-            self._tts_cancel = threading.Event()
+            self._virtual_mic_cancel = threading.Event()
+            self._speaker_translation_cancel = threading.Event()
+            if self.virtual_mic_muted:
+                self._virtual_mic_cancel.set()
+            if self.speaker_translation_muted:
+                self._speaker_translation_cancel.set()
             with self._tts_queue_lock:
                 self._tts_queues = {}
             self.running = True
@@ -184,7 +193,8 @@ class RealtimeEngine:
         if self._all_captures_failed():
             self.running = False
             self._cancel.set()
-            self._tts_cancel.set()
+            self._virtual_mic_cancel.set()
+            self._speaker_translation_cancel.set()
             self._discard_tts_queue()
         skips = []
         if skipped_feedback:
@@ -205,7 +215,8 @@ class RealtimeEngine:
             self.running = False
             self._closed = True
             self._cancel.set()
-            self._tts_cancel.set()
+            self._virtual_mic_cancel.set()
+            self._speaker_translation_cancel.set()
             workers = list(self.workers)
             threads = list(self.threads)
         self._discard_tts_queue()
@@ -233,14 +244,24 @@ class RealtimeEngine:
         self.paused = paused
         self.status("已暫停" if paused else self._capture_status("執行中"))
 
-    def set_muted(self, muted: bool) -> None:
-        self.muted = muted
+    def set_virtual_mic_muted(self, muted: bool) -> None:
+        with self._lifecycle_lock:
+            self.virtual_mic_muted = muted
+            self._virtual_mic_cancel = self._set_output_muted("me", muted, self._virtual_mic_cancel)
+        self.status("虛擬麥克風已靜音" if muted else self._capture_status("虛擬麥克風已取消靜音"))
+
+    def set_speaker_translation_muted(self, muted: bool) -> None:
+        with self._lifecycle_lock:
+            self.speaker_translation_muted = muted
+            self._speaker_translation_cancel = self._set_output_muted("speaker", muted, self._speaker_translation_cancel)
+        self.status("本機翻譯播放已靜音" if muted else self._capture_status("本機翻譯播放已取消靜音"))
+
+    def _set_output_muted(self, direction: str, muted: bool, cancel_event: threading.Event) -> threading.Event:
         if muted:
-            self._tts_cancel.set()
-            self._discard_tts_queue()
-        elif self._tts_cancel.is_set():
-            self._tts_cancel = threading.Event()
-        self.status("已靜音" if muted else self._capture_status("執行中"))
+            cancel_event.set()
+            self._discard_tts_queue(direction)
+            return cancel_event
+        return threading.Event() if cancel_event.is_set() else cancel_event
 
     def _capture_status(self, healthy: str) -> str:
         with self._health_lock:
@@ -311,7 +332,8 @@ class RealtimeEngine:
             if not self._starting_directions and self._all_captures_failed():
                 self.running = False
                 self._cancel.set()
-                self._tts_cancel.set()
+                self._virtual_mic_cancel.set()
+                self._speaker_translation_cancel.set()
                 self._discard_tts_queue()
 
     def _session_active(self, session: str | None) -> bool:
@@ -320,6 +342,8 @@ class RealtimeEngine:
     def _pipeline(self, direction: str) -> PipelineContext:
         if direction not in self.pipelines:
             config = {key: value for key, value in self.config.items() if key not in STATE_KEYS}
+            if direction == "speaker":
+                config["tts_volume"] = config["speaker_tts_volume"]
             self.pipelines[direction] = PipelineContext(config, Translator(config), TextToSpeech(config))
         return self.pipelines[direction]
 
@@ -464,9 +488,9 @@ class RealtimeEngine:
                 subtitle_metrics = {"last_first_subtitle_latency_seconds": subtitle_latency, **subtitle_percentiles}
                 metrics.update(subtitle_metrics)
                 state_keys.update(subtitle_metrics)
-                if direction == "speaker" and config.get("tts_enabled", True) and config.get("speaker_tts_enabled", False) and not self.muted and translated and not translation_failed:
+                if direction == "speaker" and config.get("tts_enabled", True) and config.get("speaker_tts_enabled", False) and not self.speaker_translation_muted and translated and not translation_failed:
                     self._enqueue_tts(direction, translated, target, config.get("speaker_tts_output_device", ""), session, timing)
-                elif direction != "speaker" and config.get("tts_enabled", True) and config.get("virtual_mic_enabled", False) and not self.muted and translated and not translation_failed:
+                elif direction != "speaker" and config.get("tts_enabled", True) and config.get("virtual_mic_enabled", False) and not self.virtual_mic_muted and translated and not translation_failed:
                     self._enqueue_tts(direction, translated, target, config.get("tts_output_device", ""), session, timing)
                 if not self._session_active(session):
                     return
@@ -522,16 +546,20 @@ class RealtimeEngine:
 
     def _enqueue_tts(self, direction: str, translated: str, target: str, tts_device: str, session: str | None, timing: dict) -> None:
         if session is None:
-            self._speak_translation(direction, translated, target, tts_device, session, timing, self._tts_cancel)
+            if self._output_muted(direction):
+                return
+            cancel_event = self._speaker_translation_cancel if direction == "speaker" else self._virtual_mic_cancel
+            self._speak_translation(direction, translated, target, tts_device, session, timing, cancel_event)
             return
-        task = TtsTask(direction, translated, target, tts_device, session, dict(timing), self._tts_cancel)
         try:
             key = f"device:{find_device(tts_device, want_output=True)}"
         except (DeviceResolutionError, OSError):
             key = f"unresolved:{tts_device}"
         with self._lifecycle_lock:
-            if not self._session_active(session):
+            if not self._session_active(session) or self._output_muted(direction):
                 return
+            cancel_event = self._speaker_translation_cancel if direction == "speaker" else self._virtual_mic_cancel
+            task = TtsTask(direction, translated, target, tts_device, session, dict(timing), cancel_event)
             with self._tts_queue_lock:
                 tasks = self._tts_queues.get(key)
                 if tasks is None:
@@ -559,7 +587,7 @@ class RealtimeEngine:
             try:
                 depth = self._tts_queue_depth()
                 self._record_metrics(task.direction, {"last_tts_queue_depth": depth}, {"last_tts_queue_depth"})
-                if not task.cancel.is_set() and not self.muted and self._session_active(task.session):
+                if not task.cancel.is_set() and not self._output_muted(task.direction) and self._session_active(task.session):
                     self._speak_translation(task.direction, task.translated, task.target, task.device, task.session, task.timing, task.cancel)
             finally:
                 tasks.task_done()
@@ -568,19 +596,28 @@ class RealtimeEngine:
         with self._tts_queue_lock:
             return sum(items.qsize() for items in self._tts_queues.values())
 
-    def _discard_tts_queue(self) -> None:
+    def _output_muted(self, direction: str) -> bool:
+        return self.speaker_translation_muted if direction == "speaker" else self.virtual_mic_muted
+
+    def _discard_tts_queue(self, direction: str | None = None) -> None:
         with self._tts_queue_lock:
             for tasks in self._tts_queues.values():
+                retained = []
                 while True:
                     try:
-                        tasks.get_nowait()
+                        task = tasks.get_nowait()
                         tasks.task_done()
+                        if direction is not None and task.direction != direction:
+                            retained.append(task)
                     except queue.Empty:
                         break
+                for task in retained:
+                    tasks.put_nowait(task)
+            depth = sum(tasks.qsize() for tasks in self._tts_queues.values())
         with self._metrics_lock:
             for pipeline in self.pipelines.values():
-                pipeline.metrics["last_tts_queue_depth"] = 0
-            self.config["last_tts_queue_depth"] = 0
+                pipeline.metrics["last_tts_queue_depth"] = depth
+            self.config["last_tts_queue_depth"] = depth
             self._save_state({"last_tts_queue_depth"})
 
     def _speak_translation(self, direction: str, translated: str, target: str, tts_device: str, session: str | None, timing: dict, cancel_event: threading.Event) -> float | None:
@@ -617,7 +654,7 @@ class RealtimeEngine:
                     return None
                 playback_started = time.perf_counter()
                 timing["tts_playback_started_at"] = time.time()
-                play_linear16(audio, tts_device) if session is None else play_linear16(audio, tts_device, cancel_event=cancel_event)
+                play_linear16(audio, tts_device, volume=config["tts_volume"]) if session is None else play_linear16(audio, tts_device, cancel_event=cancel_event, volume=config["tts_volume"])
                 playback_seconds = time.perf_counter() - playback_started
                 timing["tts_playback_completed_at"] = time.time()
             else:
@@ -632,7 +669,7 @@ class RealtimeEngine:
                     return None
                 playback_started = time.perf_counter()
                 timing["tts_playback_started_at"] = time.time()
-                play_linear16(audio, tts_device) if session is None else play_linear16(audio, tts_device, cancel_event=cancel_event)
+                play_linear16(audio, tts_device, volume=config["tts_volume"]) if session is None else play_linear16(audio, tts_device, cancel_event=cancel_event, volume=config["tts_volume"])
                 playback_seconds = time.perf_counter() - playback_started
                 timing["tts_playback_completed_at"] = time.time()
             if not self._session_active(session):

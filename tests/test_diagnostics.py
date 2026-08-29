@@ -26,7 +26,7 @@ class DiagnosticsTests(unittest.TestCase):
         self.assertFalse(DEFAULT_CONFIG["cloud_api_enabled"])
         self.assertTrue(DEFAULT_CONFIG["subtitle_always_on_top"])
         self.assertFalse(DEFAULT_CONFIG["virtual_mic_enabled"])
-        self.assertFalse(DEFAULT_CONFIG["start_muted"])
+        self.assertFalse(DEFAULT_CONFIG["start_virtual_mic_muted"])
         self.assertEqual(DEFAULT_CONFIG["provider"], "local")
         self.assertEqual(DEFAULT_CONFIG["tts_provider"], "local")
         self.assertFalse(DEFAULT_CONFIG["advanced_mode"])

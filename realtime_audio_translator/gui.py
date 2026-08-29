@@ -65,7 +65,8 @@ SETTING_ROWS = (
     ("虛擬麥克風檢查輸入", "virtual_mic_input_device"),
     ("對方翻譯播放輸出", "speaker_tts_output_device"),
     ("TTS 速度", "tts_rate"),
-    ("TTS 音量", "tts_volume"),
+    ("虛擬麥克風語音音量", "tts_volume"),
+    ("本機翻譯音量", "speaker_tts_volume"),
     ("TTS 聲音", "tts_voice_name"),
     ("Google TTS 聲音", "google_tts_voice"),
     ("OpenAI TTS 模型", "openai_tts_model"),
@@ -366,7 +367,7 @@ class TranslatorApp(tk.Tk):
         self.runtime_text = tk.StringVar(value="")
         self.mode_text = tk.StringVar(value=self._mode_text())
         self.overlay_generation = 0
-        self._push_to_talk_previous_muted = None
+        self._push_to_talk_previous_virtual_mic_muted = None
         self.overlay = Overlay(
             self,
             self.config["overlay_topmost"],
@@ -392,7 +393,7 @@ class TranslatorApp(tk.Tk):
         self.show_translated_text = tk.BooleanVar(value=bool(self.config.get("show_translated_text", True)))
         self.tts_enabled = tk.BooleanVar(value=bool(self.config.get("tts_enabled", True)))
         self.speaker_tts_enabled = tk.BooleanVar(value=bool(self.config.get("speaker_tts_enabled", False)))
-        self.start_muted = tk.BooleanVar(value=bool(self.config.get("start_muted", False)))
+        self.start_virtual_mic_muted = tk.BooleanVar(value=bool(self.config.get("start_virtual_mic_muted", False)))
         self.virtual_mic_enabled = tk.BooleanVar(value=bool(self.config.get("virtual_mic_enabled", False)))
         self.speaker_enabled = tk.BooleanVar(value=bool(self.config.get("speaker_enabled", True)))
         self.microphone_enabled = tk.BooleanVar(value=bool(self.config.get("microphone_enabled", True)))
@@ -478,9 +479,9 @@ class TranslatorApp(tk.Tk):
         record_logs_widget.grid(row=next_row + 6, column=0, sticky="w")
         speaker_tts_widget = ttk.Checkbutton(frame, text="播放對方翻譯", variable=self.speaker_tts_enabled, command=self._save)
         speaker_tts_widget.grid(row=next_row + 6, column=2, sticky="w")
-        start_muted_widget = ttk.Checkbutton(frame, text="啟動時先靜音", variable=self.start_muted, command=self._save)
-        start_muted_widget.grid(row=next_row + 7, column=0, sticky="w")
-        self.advanced_mode_widgets = [runtime_buttons_widget, overlay_topmost_widget, language_labels_widget, original_text_widget, translated_text_widget, speaker_capture_widget, microphone_capture_widget, record_logs_widget, speaker_tts_widget, start_muted_widget]
+        start_virtual_mic_muted_widget = ttk.Checkbutton(frame, text="虛擬麥克風啟動時靜音", variable=self.start_virtual_mic_muted, command=self._save)
+        start_virtual_mic_muted_widget.grid(row=next_row + 7, column=0, sticky="w")
+        self.advanced_mode_widgets = [runtime_buttons_widget, overlay_topmost_widget, language_labels_widget, original_text_widget, translated_text_widget, speaker_capture_widget, microphone_capture_widget, record_logs_widget, speaker_tts_widget, start_virtual_mic_muted_widget]
         ttk.Checkbutton(frame, text="輸出到虛擬麥克風", variable=self.virtual_mic_enabled, command=self._save).grid(row=next_row + 6, column=1, sticky="w")
 
         buttons = ttk.Frame(frame)
@@ -523,7 +524,8 @@ class TranslatorApp(tk.Tk):
             ("停止", self._stop),
             ("離開", self._quit),
             ("暫停/繼續", self._toggle_pause),
-            ("靜音/取消靜音", self._toggle_mute),
+            ("虛擬麥克風靜音/取消", self._toggle_virtual_mic_mute),
+            ("本機翻譯靜音/取消", self._toggle_speaker_translation_mute),
             ("切換字幕", self._toggle_subtitles),
             ("切換語音", self._toggle_speech),
             ("切換喇叭", self._toggle_speaker),
@@ -631,7 +633,7 @@ class TranslatorApp(tk.Tk):
         config["show_translated_text"] = self.show_translated_text.get()
         config["tts_enabled"] = self.tts_enabled.get()
         config["speaker_tts_enabled"] = self.speaker_tts_enabled.get()
-        config["start_muted"] = self.start_muted.get()
+        config["start_virtual_mic_muted"] = self.start_virtual_mic_muted.get()
         config["virtual_mic_enabled"] = self.virtual_mic_enabled.get()
         config["speaker_enabled"] = self.speaker_enabled.get()
         config["microphone_enabled"] = self.microphone_enabled.get()
@@ -657,8 +659,10 @@ class TranslatorApp(tk.Tk):
             config["tts_rate"] = 0
         try:
             config["tts_volume"] = max(0, min(100, int(config["tts_volume"])))
+            config["speaker_tts_volume"] = max(0, min(100, int(config["speaker_tts_volume"])))
         except Exception:
             config["tts_volume"] = 100
+            config["speaker_tts_volume"] = 100
         return config
 
     def _save(self) -> bool:
@@ -1087,7 +1091,7 @@ class TranslatorApp(tk.Tk):
         self.show_translated_text.set(bool(updated.get("show_translated_text", self.show_translated_text.get())))
         self.tts_enabled.set(bool(updated.get("tts_enabled", self.tts_enabled.get())))
         self.speaker_tts_enabled.set(bool(updated.get("speaker_tts_enabled", self.speaker_tts_enabled.get())))
-        self.start_muted.set(bool(updated.get("start_muted", self.start_muted.get())))
+        self.start_virtual_mic_muted.set(bool(updated.get("start_virtual_mic_muted", self.start_virtual_mic_muted.get())))
         self.virtual_mic_enabled.set(bool(updated.get("virtual_mic_enabled", self.virtual_mic_enabled.get())))
         self.speaker_enabled.set(bool(updated.get("speaker_enabled", self.speaker_enabled.get())))
         self.microphone_enabled.set(bool(updated.get("microphone_enabled", self.microphone_enabled.get())))
@@ -1379,9 +1383,13 @@ class TranslatorApp(tk.Tk):
         if self.engine:
             self.engine.set_paused(not self.engine.paused)
 
-    def _toggle_mute(self) -> None:
+    def _toggle_virtual_mic_mute(self) -> None:
         if self.engine:
-            self.engine.set_muted(not self.engine.muted)
+            self.engine.set_virtual_mic_muted(not self.engine.virtual_mic_muted)
+
+    def _toggle_speaker_translation_mute(self) -> None:
+        if self.engine:
+            self.engine.set_speaker_translation_muted(not self.engine.speaker_translation_muted)
 
     def _toggle_subtitles(self) -> None:
         self.overlay_visible.set(toggle_overlay_visibility(self.overlay_visible.get()))
@@ -1402,11 +1410,11 @@ class TranslatorApp(tk.Tk):
     def _push_to_talk(self, active: bool) -> None:
         if self.engine:
             if active:
-                self._push_to_talk_previous_muted = self.engine.muted
-                self.engine.set_muted(False)
+                self._push_to_talk_previous_virtual_mic_muted = self.engine.virtual_mic_muted
+                self.engine.set_virtual_mic_muted(False)
             else:
-                self.engine.set_muted(bool(getattr(self, "_push_to_talk_previous_muted", True)))
-                self._push_to_talk_previous_muted = None
+                self.engine.set_virtual_mic_muted(bool(getattr(self, "_push_to_talk_previous_virtual_mic_muted", True)))
+                self._push_to_talk_previous_virtual_mic_muted = None
 
     def _clear_cache(self) -> None:
         self._save()
