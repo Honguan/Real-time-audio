@@ -100,6 +100,7 @@ class RealtimeEngine:
         self.virtual_mic_muted = bool(config.get("start_virtual_mic_muted", False))
         self.speaker_translation_muted = False
         self._session: str | None = None
+        self._audio_timeline_started_perf: float | None = None
         self._cancel = threading.Event()
         self._lifecycle_lock = threading.Lock()
         self._callback_lock = threading.Lock()
@@ -185,6 +186,7 @@ class RealtimeEngine:
         self.config["last_asr_failed"] = False
         self._save_state({"last_asr_failed", "last_model_load_seconds"})
         started = []
+        self._audio_timeline_started_perf = time.perf_counter()
         self._starting_directions = True
         skipped_feedback = False
         skipped_mic_feedback = False
@@ -589,10 +591,25 @@ class RealtimeEngine:
                 log = self.log
                 if log and not translation_failed:
                     public_timing = {key: value for key, value in timing.items() if not key.startswith("_")}
+                    timeline_start = self._audio_timeline_started_perf
+                    audio_start = timing.get("_capture_started_perf")
+                    audio_end = timing.get("_capture_completed_perf")
                     performance_keys = set(backlog_metrics) | set(subtitle_metrics) | set(stage_metrics) | {"last_provider_error_count", "last_rate_limit_count"}
                     performance = {key: metrics[key] for key in performance_keys if key in metrics}
                     performance.update({key: self.config[key] for key in ("last_cuda_devices", "last_vram_gb", "last_model_load_seconds") if self.config.get(key) not in (None, "")})
-                    log.append(direction, source_for_output, target, text, translated, config["provider"], latency_seconds=latency, performance=performance, timestamps=public_timing)
+                    log.append(
+                        direction,
+                        source_for_output,
+                        target,
+                        text,
+                        translated,
+                        config["provider"],
+                        latency_seconds=latency,
+                        performance=performance,
+                        timestamps=public_timing,
+                        audio_start_seconds=audio_start - timeline_start if audio_start is not None and timeline_start is not None else None,
+                        audio_end_seconds=audio_end - timeline_start if audio_end is not None and timeline_start is not None else None,
+                    )
                     if not self._session_active(session):
                         return
                 if not translation_failed:

@@ -14,15 +14,24 @@ def export_jsonl_to_srt(jsonl_path: Path, output_dir: Path, cue_seconds: float =
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / f"{jsonl_path.stem}.srt"
     lines: list[str] = []
-    index = 1
+    cues = []
     for raw in jsonl_path.read_text(encoding="utf-8").splitlines():
         if not raw.strip():
             continue
         row = json.loads(raw)
-        start = (index - 1) * cue_seconds
-        end = start + cue_seconds
         text = row.get("translated_text") or row.get("text") or ""
         direction = row.get("direction") or "audio"
+        cues.append((row.get("audio_start_seconds"), row.get("audio_end_seconds"), direction, text))
+    timed = cues and all(isinstance(cue[0], (int, float)) for cue in cues)
+    if timed:
+        cues.sort(key=lambda cue: cue[0])
+    for offset, (recorded_start, recorded_end, direction, text) in enumerate(cues):
+        start = float(recorded_start) if timed else offset * cue_seconds
+        next_start = float(cues[offset + 1][0]) if timed and offset + 1 < len(cues) else None
+        end = float(recorded_end) if timed and isinstance(recorded_end, (int, float)) else None
+        if end is None or end <= start:
+            end = next_start if next_start is not None and next_start > start else start + cue_seconds
+        index = offset + 1
         lines.extend(
             [
                 str(index),
@@ -31,7 +40,6 @@ def export_jsonl_to_srt(jsonl_path: Path, output_dir: Path, cue_seconds: float =
                 "",
             ]
         )
-        index += 1
     output_path.write_text("\n".join(lines), encoding="utf-8", newline="\n")
     return output_path
 

@@ -8,6 +8,7 @@ from pathlib import Path
 
 _STOP = object()
 CONTENT_MODES = {"both", "original", "translation", "none"}
+LOG_SCHEMA_VERSION = 2
 
 
 def _managed_conversation_files(log_dir: Path) -> list[Path]:
@@ -106,8 +107,11 @@ class ConversationLog:
         latency_seconds: float | None = None,
         performance: dict | None = None,
         timestamps: dict | None = None,
+        audio_start_seconds: float | None = None,
+        audio_end_seconds: float | None = None,
     ) -> None:
         row = {
+            "schema_version": LOG_SCHEMA_VERSION,
             "session_id": self.session_id,
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "direction": direction,
@@ -125,6 +129,10 @@ class ConversationLog:
             row["performance"] = performance
         if timestamps:
             row["timestamps"] = timestamps
+        if audio_start_seconds is not None:
+            row["audio_start_seconds"] = max(0.0, float(audio_start_seconds))
+        if audio_end_seconds is not None:
+            row["audio_end_seconds"] = max(row.get("audio_start_seconds", 0.0), float(audio_end_seconds))
         with self._close_lock:
             if self._closed:
                 return

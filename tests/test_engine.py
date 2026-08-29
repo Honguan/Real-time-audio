@@ -247,6 +247,34 @@ class EngineTests(unittest.TestCase):
 
         self.assertTrue(any(status.startswith("喇叭延遲 ") for status in statuses))
 
+    def test_engine_logs_audio_ranges_relative_to_shared_session_timeline(self):
+        recorded = []
+        config = DEFAULT_CONFIG | {"record_logs": False, "tts_enabled": False}
+        engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, lambda status: None)
+
+        class Log:
+            def append(self, *args, **kwargs):
+                recorded.append(kwargs)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            wav = Path(tmp) / "clip.wav"
+            write_wav(wav, 12000)
+            worker = QueuedWorker(wav)
+            worker.take_timing = lambda _wav: {
+                "_capture_started_perf": 130.0,
+                "_capture_completed_perf": 131.25,
+            }
+            engine.running = True
+            engine._audio_timeline_started_perf = 100.0
+            engine.transcriber = StaticTranscriber("hello")
+            engine._pipeline("speaker").translator = StoppingTranslator(engine, "你好")
+            engine.log = Log()
+
+            engine._process_segments("speaker", worker)
+
+        self.assertEqual(recorded[0]["audio_start_seconds"], 30.0)
+        self.assertEqual(recorded[0]["audio_end_seconds"], 31.25)
+
     def test_engine_reports_bounded_queue_overload_metrics(self):
         statuses = []
         config = DEFAULT_CONFIG.copy()
