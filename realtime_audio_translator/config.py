@@ -56,7 +56,10 @@ DEFAULT_CONFIG = {
     "save_conversation_history": False,
     "cloud_api_enabled": False,
     "virtual_mic_enabled": False,
-    "log_dir": str(APP_DIR / "logs"),
+    "log_dir": str(APP_DIR / "logs" / "conversations"),
+    "conversation_log_retention_days": 7,
+    "conversation_log_max_mb": 100,
+    "conversation_log_content": "both",
     "advanced_mode": False,
     "ai_auto_optimize": True,
     "ai_self_diagnosis": True,
@@ -153,6 +156,7 @@ SETTING_CHOICES = {
     "performance_mode": {"low_latency", "balanced", "quality", "offline_light"},
     "compute_type": {"auto", "float16", "int8", "int8_float16"},
     "device": {"cuda", "cpu", "auto"},
+    "conversation_log_content": {"both", "original", "translation", "none"},
 }
 NUMERIC_STATE_KEYS = {
     "last_cuda_devices",
@@ -203,6 +207,8 @@ SETTING_RANGES = {
     "speaker_tts_volume": (0, 100),
     "segment_seconds": (0.5, 3.0),
     "speech_threshold": (0.0, 1.0),
+    "conversation_log_retention_days": (0, 3650),
+    "conversation_log_max_mb": (0, 10240),
 }
 _CONFIG_LOCKS: dict[Path, threading.RLock] = {}
 _CONFIG_LOCKS_GUARD = threading.Lock()
@@ -226,6 +232,7 @@ def ensure_app_dirs(root: Path = APP_DIR) -> None:
         "models/translation",
         "models/tts",
         "logs",
+        "logs/conversations",
         "cache/audio",
         "cache/temp_audio",
         "runtime/cuda12",
@@ -569,7 +576,8 @@ def _safe_log_dir(root: Path, log_dir: Path) -> Path:
 
 def log_files_to_clear(root: Path = APP_DIR, log_dir: Path | None = None) -> list[Path]:
     default_logs = _safe_log_dir(root, root / "logs")
-    targets = {_safe_log_dir(root, log_dir or root / "logs"), default_logs}
+    default_conversations = _safe_log_dir(root, root / "logs" / "conversations")
+    targets = {_safe_log_dir(root, log_dir or default_conversations), default_logs, default_conversations}
     files = []
     for target in targets:
         if not target.is_dir():
@@ -593,7 +601,7 @@ def _is_managed_log_file(path: Path, default_logs: Path) -> bool:
             with path.open("r", encoding="utf-8") as handle:
                 first = next((line for line in handle if line.strip()), "")
             row = json.loads(first)
-            required = {"timestamp", "direction", "source_language", "target_language", "text", "translated_text", "provider"}
+            required = {"timestamp", "direction", "source_language", "target_language", "provider"}
             return isinstance(row, dict) and required <= row.keys() and row.get("session_id", path.stem) == path.stem
     except (OSError, UnicodeError, json.JSONDecodeError):
         pass
