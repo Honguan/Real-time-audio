@@ -10,6 +10,9 @@ if (-not $SkipInstall) {
   python -m pip install -e ".[build]"
 }
 python -m realtime_audio_translator.tools.generate_assets
+if ($LASTEXITCODE -ne 0) {
+  throw "Asset generation failed: $LASTEXITCODE"
+}
 python -m PyInstaller `
   --noconfirm `
   --clean `
@@ -33,3 +36,6 @@ python -m PyInstaller `
   --hidden-import google.oauth2.service_account `
   --hidden-import google.auth.transport.requests `
   realtime_audio_translator\__main__.py
+if ($LASTEXITCODE -ne 0) {
+  throw "PyInstaller build failed: $LASTEXITCODE"
+}

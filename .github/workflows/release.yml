@@ -65,6 +65,29 @@ jobs:
           Copy-Item release-lock.json dist-release\RELEASE_MANIFEST.json
           & ./scripts/make_checksums.ps1
 
+      - name: Smoke-test packaged executable
+        shell: pwsh
+        run: |
+          $smokeRoot = Join-Path $env:RUNNER_TEMP ("realtime-audio-smoke-" + [guid]::NewGuid())
+          $smokeOutput = Join-Path $smokeRoot "result.json"
+          $env:REALTIME_AUDIO_HOME = Join-Path $smokeRoot "app-data"
+          New-Item -ItemType Directory -Path $smokeRoot | Out-Null
+          $process = Start-Process `
+            -FilePath "$env:GITHUB_WORKSPACE\dist\RealtimeAudioTranslator\RealtimeAudioTranslator.exe" `
+            -ArgumentList "--smoke-test", "--smoke-output", $smokeOutput `
+            -WorkingDirectory $smokeRoot `
+            -WindowStyle Hidden `
+            -Wait `
+            -PassThru
+          if ($process.ExitCode -ne 0 -or -not (Test-Path -LiteralPath $smokeOutput)) {
+            throw "Packaged executable smoke test failed with exit code $($process.ExitCode)."
+          }
+          $result = Get-Content -LiteralPath $smokeOutput -Raw | ConvertFrom-Json
+          if ($result.status -ne "ok" -or -not $result.frozen) {
+            throw "Packaged executable smoke test reported failure: $($result | ConvertTo-Json -Compress)"
+          }
+          $result | ConvertTo-Json -Depth 4
+
       - name: Upload GitHub Release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
