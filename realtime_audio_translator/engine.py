@@ -126,6 +126,8 @@ class RealtimeEngine:
             session = self._session
             self._cancel = threading.Event()
             self._tts_cancel = threading.Event()
+            with self._tts_queue_lock:
+                self._tts_queues = {}
             self.running = True
         try:
             validate_language_pair(self.config)
@@ -182,6 +184,8 @@ class RealtimeEngine:
         if self._all_captures_failed():
             self.running = False
             self._cancel.set()
+            self._tts_cancel.set()
+            self._discard_tts_queue()
         skips = []
         if skipped_feedback:
             skips.append("喇叭擷取已略過：和 TTS 輸出相同")
@@ -234,7 +238,7 @@ class RealtimeEngine:
         if muted:
             self._tts_cancel.set()
             self._discard_tts_queue()
-        else:
+        elif self._tts_cancel.is_set():
             self._tts_cancel = threading.Event()
         self.status("已靜音" if muted else self._capture_status("執行中"))
 
@@ -307,6 +311,8 @@ class RealtimeEngine:
             if not self._starting_directions and self._all_captures_failed():
                 self.running = False
                 self._cancel.set()
+                self._tts_cancel.set()
+                self._discard_tts_queue()
 
     def _session_active(self, session: str | None) -> bool:
         return session is None or (self.running and session == self._session and not self._cancel.is_set())
@@ -519,7 +525,10 @@ class RealtimeEngine:
             self._speak_translation(direction, translated, target, tts_device, session, timing, self._tts_cancel)
             return
         task = TtsTask(direction, translated, target, tts_device, session, dict(timing), self._tts_cancel)
-        key = tts_device or "__default__"
+        try:
+            key = f"device:{find_device(tts_device, want_output=True)}"
+        except (DeviceResolutionError, OSError):
+            key = f"unresolved:{tts_device}"
         with self._lifecycle_lock:
             if not self._session_active(session):
                 return
@@ -599,7 +608,9 @@ class RealtimeEngine:
             elif config.get("tts_provider") == "openai":
                 synthesis_started = time.perf_counter()
                 timing["tts_synthesis_started_at"] = time.time()
-                audio = tts.synthesize_openai_linear16(translated)
+                audio = self._cancellable_tts_synthesis(lambda: tts.synthesize_openai_linear16(translated), cancel_event)
+                if audio is None:
+                    return None
                 synthesis_seconds = time.perf_counter() - synthesis_started
                 timing["tts_synthesis_completed_at"] = time.time()
                 if not self._session_active(session):
@@ -612,7 +623,9 @@ class RealtimeEngine:
             else:
                 synthesis_started = time.perf_counter()
                 timing["tts_synthesis_started_at"] = time.time()
-                audio = tts.synthesize_google_linear16(translated, target)
+                audio = self._cancellable_tts_synthesis(lambda: tts.synthesize_google_linear16(translated, target), cancel_event)
+                if audio is None:
+                    return None
                 synthesis_seconds = time.perf_counter() - synthesis_started
                 timing["tts_synthesis_completed_at"] = time.time()
                 if not self._session_active(session):
@@ -645,6 +658,28 @@ class RealtimeEngine:
         }
         self._record_metrics(direction, tts_metrics, set(tts_metrics))
         return time.perf_counter() - tts_started
+
+    @staticmethod
+    def _cancellable_tts_synthesis(synthesize: Callable[[], bytes], cancel_event: threading.Event) -> bytes | None:
+        result = queue.Queue(maxsize=1)
+
+        def run() -> None:
+            try:
+                result.put((True, synthesize()))
+            except Exception as exc:
+                result.put((False, exc))
+
+        # ponytail: requests cannot interrupt in-flight I/O; the daemon exits at the provider timeout.
+        threading.Thread(target=run, daemon=True).start()
+        while not cancel_event.wait(0.05):
+            try:
+                succeeded, value = result.get_nowait()
+            except queue.Empty:
+                continue
+            if succeeded:
+                return value
+            raise value
+        return None
 
     def _record_provider_error(self, direction: str, error: Exception) -> None:
         status_code = getattr(error, "status_code", None) or getattr(getattr(error, "response", None), "status_code", None)
