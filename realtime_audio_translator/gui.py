@@ -19,7 +19,7 @@ from .config import APP_DIR, clear_cache, clear_logs, ensure_glossary_file, load
 from .diagnostics import collect_diagnostics
 from .engine import RealtimeEngine
 from .logbook import conversation_log_usage
-from .models import MODEL_INVALID, MODEL_READY, cuda_hardware_from_check_output, download_model, list_models, model_available, model_install_message, model_status, models_dir, recommend_model
+from .models import MODEL_INVALID, MODEL_READY, ModelDownloadCancelled, cuda_hardware_from_check_output, download_model, list_models, model_available, model_install_message, model_status, models_dir, recommend_model
 from .offline_translation import download_translation_models as download_offline_translation_models
 from .paths import resource_root
 from .providers import TextToSpeech, Translator, google_access_token
@@ -372,6 +372,7 @@ class TranslatorApp(tk.Tk):
         self.repo_root = repo_root or resource_root()
         self.config = load_config(APP_DIR)
         self._log_consent_granted = False
+        self._model_download_cancel: threading.Event | None = None
         self.engine: RealtimeEngine | None = None
         self._device_id_by_label: dict[str, str] = {"系統預設": ""}
         self._device_label_by_id: dict[str, str] = {"": "系統預設"}
@@ -521,6 +522,7 @@ class TranslatorApp(tk.Tk):
             ("自動優化", self._optimize_settings),
             ("推薦模型", self._recommend),
             ("下載模型", self._download_model),
+            ("取消模型下載", self._cancel_model_download),
             ("下載離線翻譯模型", self._download_translation_models),
             ("一鍵診斷", self._run_diagnostics),
             ("鎖定語言", self._lock_language),
@@ -1181,27 +1183,38 @@ class TranslatorApp(tk.Tk):
             self.status.set(f"自動優化有 {len(recommendations)} 項建議；請按「自動優化」預覽並確認")
 
     def _download_model(self) -> None:
-        self._save()
-        runtime = runtime_dir(self.config)
-        status = runtime_status(runtime, verify_hashes=True)
-        if not status["ready"]:
-            messagebox.showerror("找不到 runtime", runtime_install_message(runtime))
+        if self.__dict__.get("_model_download_cancel") is not None:
+            self.status.set("模型下載已在進行；可按「取消模型下載」")
             return
-        exe = whisper_exe(runtime)
+        self._save()
         model = self.config["model"]
         app_models = models_dir(self.config)
+        cancel = threading.Event()
+        self._model_download_cancel = cancel
         self.status.set(f"正在下載模型 {model}")
 
         def run() -> None:
             try:
-                code = download_model(exe, model, app_models)
-                message = "模型下載完成" if code == 0 else f"模型下載失敗：{code}"
+                installed = download_model(model, app_models, lambda message: self._post_ui("status", message), cancel)
+                message = f"模型下載完成：{installed.name}；版本與 SHA 完整性已驗證"
+            except ModelDownloadCancelled as exc:
+                message = str(exc)
             except Exception as exc:
                 message = f"模型下載失敗：{exc}"
+            finally:
+                self._model_download_cancel = None
             self._post_ui("status", message)
             self._post_ui("callback", self._refresh_lists)
 
         threading.Thread(target=run, daemon=True).start()
+
+    def _cancel_model_download(self) -> None:
+        cancel = self.__dict__.get("_model_download_cancel")
+        if cancel is None:
+            self.status.set("目前沒有模型下載工作")
+            return
+        cancel.set()
+        self.status.set("正在取消模型下載；已下載部分可供稍後續傳")
 
     def _download_translation_models(self) -> None:
         self._save()
@@ -1415,6 +1428,9 @@ class TranslatorApp(tk.Tk):
 
     def _quit(self) -> None:
         self._closing = True
+        cancel = self.__dict__.get("_model_download_cancel")
+        if cancel is not None:
+            cancel.set()
         self._stop()
         self.destroy()
 
