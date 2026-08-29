@@ -8,7 +8,7 @@ from collections import Counter
 from pathlib import Path
 from unittest.mock import patch
 from realtime_audio_translator.archive_install import write_install_manifest
-from realtime_audio_translator.audio import AudioSegment, DeviceResolutionError, SegmentationPolicy, SegmentWorker, UtteranceSegmenter, _pyaudio_output_for_device, audio_segment_active, device_identity, find_device, format_device_label, segmentation_policy, virtual_mic_recaptures_tts
+from realtime_audio_translator.audio import AudioSegment, DeviceResolutionError, SegmentationPolicy, SegmentWorker, UtteranceSegmenter, _pcm_rms, _pyaudio_output_for_device, audio_segment_active, device_identity, find_device, format_device_label, segmentation_policy, virtual_mic_recaptures_tts
 from realtime_audio_translator.asr import AudioTranscriber, add_runtime_dll_directory, add_xxl_data
 from realtime_audio_translator.engine import RealtimeEngine, audio_devices_overlap, direction_label, drain_queue, overlay_text_from_config, safe_target_language
 from tests.helpers import write_wav
@@ -467,6 +467,12 @@ class AudioTests(unittest.TestCase):
         self.assertFalse(audio_segment_active(quiet, 0.01))
         self.assertTrue(audio_segment_active(loud, 0.01))
 
+    def test_pcm_rms_supports_signed_24_bit_audio(self):
+        sample = 0x400000
+        frames = sample.to_bytes(3, "little", signed=True) + (-sample).to_bytes(3, "little", signed=True)
+
+        self.assertEqual(_pcm_rms(frames, 3), sample)
+
     def test_streaming_corpus_avoids_fixed_boundary_word_loss_and_duplicates(self):
         corpus = json.loads((Path(__file__).parent / "fixtures" / "utterance_boundaries.json").read_text(encoding="utf-8"))
         policy = SegmentationPolicy(0.05, 0.10, 0.15, 0.10, 2.0)
@@ -654,6 +660,7 @@ class AudioTests(unittest.TestCase):
 
         self.assertEqual(received[0].dtype.name, "float32")
         self.assertEqual(len(received[0]), 1600)
+        self.assertAlmostEqual(float(received[0].mean()), 12000 / 32768, places=4)
 
     def test_whisper_exe_cleans_temporary_pcm_wav(self):
         import realtime_audio_translator.asr as asr_module

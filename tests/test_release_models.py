@@ -252,7 +252,7 @@ class ReleaseModelsTests(unittest.TestCase):
         self.assertIn("build_runtime", workflow)
         self.assertIn("require_runtime_asset", workflow)
         self.assertIn("github.event_name == 'push' || inputs.build_runtime == 'true'", workflow)
-        self.assertIn("python -m pip install -r requirements.txt", workflow)
+        self.assertIn('python -m pip install ".[build]"', workflow)
         self.assertIn(".\\scripts\\test.ps1", workflow)
         self.assertIn("releases?per_page=20", workflow)
         self.assertNotIn("/releases/latest", workflow)
@@ -290,10 +290,25 @@ class ReleaseModelsTests(unittest.TestCase):
         self.assertIn("pull_request:", ci)
         self.assertGreaterEqual(ci.count("- master"), 2)
         self.assertIn('cache: "pip"', ci)
+        self.assertIn('python-version: ["3.10", "3.13"]', ci)
+        self.assertIn("python-version: ${{ matrix.python-version }}", ci)
+        self.assertIn("python -m pip install -e .", ci)
+        self.assertIn("cache-dependency-path: pyproject.toml", ci)
         self.assertIn(".\\scripts\\test.ps1", ci)
         self.assertIn("& $Python -m unittest discover -s tests", script)
         self.assertIn("& $Python -m compileall -q realtime_audio_translator tests", script)
         self.assertIn("$LASTEXITCODE", script)
+
+    def test_standard_package_metadata_defines_supported_python_and_gui_entry_point(self):
+        metadata = Path("pyproject.toml").read_text(encoding="utf-8")
+        build = Path("scripts/build.ps1").read_text(encoding="utf-8")
+
+        self.assertIn('requires-python = ">=3.10,<3.14"', metadata)
+        self.assertIn('[project.gui-scripts]', metadata)
+        self.assertIn('realtime-audio-translator = "realtime_audio_translator.gui:main"', metadata)
+        self.assertIn('python -m pip install -e ".[build]"', build)
+        self.assertNotIn("py -3.10", build)
+        self.assertFalse(Path("requirements.txt").exists())
 
     def test_release_workflow_packages_basic_offline_languages(self):
         workflow = Path(".github/workflows/release.yml").read_text(encoding="utf-8")

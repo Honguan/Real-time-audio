@@ -1,4 +1,3 @@
-import audioop
 import json
 import queue
 import threading
@@ -229,6 +228,20 @@ class UtteranceSegmenter:
         return AudioSegment(b"".join(frame.pcm for frame in frames), frames[0].sample_rate, timing)
 
 
+def _pcm_rms(frames: bytes, sample_width: int) -> int:
+    import numpy as np
+
+    if sample_width not in (1, 2, 3, 4) or len(frames) % sample_width:
+        raise ValueError("PCM sample width or frame length is invalid")
+    if sample_width == 3:
+        raw = np.frombuffer(frames, dtype=np.uint8).reshape(-1, 3)
+        samples = raw[:, 0].astype(np.int32) | raw[:, 1].astype(np.int32) << 8 | raw[:, 2].astype(np.int32) << 16
+        samples = (samples ^ 0x800000) - 0x800000
+    else:
+        samples = np.frombuffer(frames, dtype=np.dtype({1: "i1", 2: "<i2", 4: "<i4"}[sample_width]))
+    return int(np.sqrt(np.mean(np.square(samples, dtype=np.float64))))
+
+
 def audio_segment_active(segment: AudioSegment | Path, threshold: float) -> bool:
     threshold = min(1.0, max(0.0, float(threshold)))
     if threshold == 0:
@@ -243,7 +256,7 @@ def audio_segment_active(segment: AudioSegment | Path, threshold: float) -> bool
     if not frames:
         return False
     peak = float(2 ** (8 * sample_width - 1))
-    return audioop.rms(frames, sample_width) / peak >= threshold
+    return _pcm_rms(frames, sample_width) / peak >= threshold
 
 
 def write_audio_segment(path: Path, segment: AudioSegment) -> Path:

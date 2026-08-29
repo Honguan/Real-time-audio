@@ -17,7 +17,7 @@ This is a Windows-focused Python app for realtime audio translation.
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+python -m pip install -e ".[build]"
 ```
 
 Create and prepare a local development environment.
