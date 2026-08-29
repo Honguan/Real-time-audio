@@ -269,6 +269,10 @@ class ReleaseModelsTests(unittest.TestCase):
         self.assertNotIn("package_models_zip.ps1", workflow)
         self.assertIn("& ./scripts/build.ps1 -SkipInstall", workflow)
         self.assertIn("& ./scripts/package_app_zip.ps1 -Version $version -SkipBuild", workflow)
+        self.assertIn("dist\\RealtimeAudioTranslator\\RealtimeAudioTranslator.exe", workflow)
+        self.assertIn("--smoke-test", workflow)
+        self.assertIn("-WorkingDirectory $smokeRoot", workflow)
+        self.assertIn('$result.status -ne "ok"', workflow)
         self.assertIn("& ./scripts/make_checksums.ps1", workflow)
         self.assertNotIn("@args", workflow)
         self.assertNotIn("@packageArgs", workflow)
@@ -359,6 +363,7 @@ class ReleaseModelsTests(unittest.TestCase):
         self.assertIn('realtime-audio-translator = "realtime_audio_translator.gui:main"', metadata)
         self.assertIn('python -m pip install -e ".[build]"', build)
         self.assertNotIn("py -3.10", build)
+        self.assertIn("PyInstaller build failed", build)
         self.assertFalse(Path("requirements.txt").exists())
 
     def test_release_workflow_does_not_redistribute_offline_models(self):
