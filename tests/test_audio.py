@@ -618,7 +618,7 @@ class AudioTests(unittest.TestCase):
         finally:
             asr_module.subprocess.run = original_run
 
-    def test_whisper_model_records_language_probability_and_confidence(self):
+    def test_whisper_model_records_language_probability_and_uncalibrated_model_score(self):
         transcriber = AudioTranscriber.__new__(AudioTranscriber)
         transcriber._inference_lock = threading.Lock()
 
@@ -637,7 +637,7 @@ class AudioTests(unittest.TestCase):
         self.assertEqual(result.text, "hello world")
         self.assertEqual(result.language, "en")
         self.assertEqual(result.language_probability, 0.91)
-        self.assertAlmostEqual(result.confidence, (1.0 + 0.36787944117144233) / 2)
+        self.assertEqual(result.model_score, -0.5)
 
     def test_whisper_model_receives_resampled_float32_pcm(self):
         transcriber = AudioTranscriber.__new__(AudioTranscriber)

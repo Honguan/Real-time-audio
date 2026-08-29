@@ -234,12 +234,13 @@ class ReleaseModelsTests(unittest.TestCase):
         for text in (readme, notes):
             self.assertIn("輸出到虛擬麥克風", text)
 
-    def test_readme_and_release_notes_mention_confidence_status(self):
+    def test_readme_and_release_notes_explain_uncalibrated_quality_signals(self):
         readme = Path("README.md").read_text(encoding="utf-8")
         notes = Path("docs/RELEASE_NOTES.md").read_text(encoding="utf-8")
 
         for text in (readme, notes):
-            self.assertIn("信心", text)
+            self.assertIn("未校準", text)
+            self.assertIn("品質訊號", text)
             self.assertIn("本機/雲端", text)
             self.assertIn("費用", text)
 

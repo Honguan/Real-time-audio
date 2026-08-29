@@ -302,7 +302,7 @@ class EngineTests(unittest.TestCase):
         class Translator:
             def translate(self, text, source_language, target_language):
                 engine.running = False
-                return TranslationResult("你好", 0.8)
+                return TranslationResult("你好")
 
         class Worker:
             maxsize = 3
@@ -342,7 +342,7 @@ class EngineTests(unittest.TestCase):
         class Translator:
             def translate(self, text, source_language, target_language):
                 engine.running = False
-                return TranslationResult("hi", 0.8)
+                return TranslationResult("hi")
 
         class Worker:
             def __init__(self, wav):
@@ -377,7 +377,7 @@ class EngineTests(unittest.TestCase):
             def translate(self, text, source_language, target_language):
                 calls.append((text, source_language, target_language))
                 engine.running = False
-                return TranslationResult("你好", 0.8)
+                return TranslationResult("你好")
 
         class Worker:
             def __init__(self, wav):
@@ -491,7 +491,7 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(engine.config["last_source_text"], "push mid")
         self.assertEqual(engine.config["last_translated_text"], "推中")
 
-    def test_engine_reports_confidence_status_after_successful_segment(self):
+    def test_engine_reports_quality_status_after_successful_segment(self):
         statuses = []
         config = DEFAULT_CONFIG.copy()
         config["record_logs"] = False
@@ -510,7 +510,7 @@ class EngineTests(unittest.TestCase):
         self.assertIn("翻譯服務 本機", statuses[-1])
         self.assertIn("延遲", statuses[-1])
 
-    def test_engine_records_translation_confidence_for_diagnostics(self):
+    def test_engine_records_translation_quality_signal_and_heuristic_for_diagnostics(self):
         config = DEFAULT_CONFIG.copy()
         config["record_logs"] = False
         engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, lambda status: None)
@@ -520,12 +520,18 @@ class EngineTests(unittest.TestCase):
             write_wav(wav, 12000)
             engine.running = True
             engine.transcriber = StaticTranscriber("hello")
-            engine._pipeline("me").translator = StoppingTranslator(engine, "你好", last_confidence=0.3)
+            engine._pipeline("me").translator = StoppingTranslator(
+                engine,
+                "你好",
+                last_quality_signal=0.3,
+                last_heuristic_warning="供應商測試訊號",
+            )
             engine._process_segments("me", QueuedWorker(wav))
 
-        self.assertEqual(engine.config["last_translation_confidence"], 0.3)
+        self.assertEqual(engine.config["last_provider_quality_signal"], 0.3)
+        self.assertEqual(engine.config["last_translation_heuristic_warning"], "供應商測試訊號")
 
-    def test_engine_records_asr_confidence_for_diagnostics(self):
+    def test_engine_records_asr_model_score_for_diagnostics(self):
         config = DEFAULT_CONFIG.copy()
         config["record_logs"] = False
         engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, lambda status: None)
@@ -534,13 +540,38 @@ class EngineTests(unittest.TestCase):
             wav = Path(tmp) / "clip.wav"
             write_wav(wav, 12000)
             engine.running = True
-            engine.transcriber = StaticTranscriber("hello", last_confidence=0.4)
+            engine.transcriber = StaticTranscriber("hello", last_model_score=-0.4)
             engine._pipeline("me").translator = StoppingTranslator(engine, "你好")
             engine._process_segments("me", QueuedWorker(wav))
 
-        self.assertEqual(engine.config["last_asr_confidence"], 0.4)
+        self.assertEqual(engine.config["last_asr_model_score"], -0.4)
 
-    def test_engine_records_language_confidence_for_diagnostics(self):
+    def test_engine_clears_stale_quality_state_after_empty_asr_result(self):
+        config = DEFAULT_CONFIG.copy()
+        config.update({
+            "last_asr_model_score": -0.4,
+            "last_provider_quality_signal": 0.8,
+            "last_translation_heuristic_warning": "舊提示",
+        })
+        engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, lambda status: None)
+
+        class EmptyTranscriber:
+            def transcribe(self, wav, source_language):
+                engine.running = False
+                return TranscriptionResult("", source_language)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            wav = Path(tmp) / "clip.wav"
+            write_wav(wav, 12000)
+            engine.running = True
+            engine.transcriber = EmptyTranscriber()
+            engine._process_segments("me", QueuedWorker(wav))
+
+        self.assertIsNone(engine.config["last_asr_model_score"])
+        self.assertIsNone(engine.config["last_provider_quality_signal"])
+        self.assertIsNone(engine.config["last_translation_heuristic_warning"])
+
+    def test_engine_records_language_model_score_for_diagnostics(self):
         config = DEFAULT_CONFIG.copy()
         config["record_logs"] = False
         config["source_language"] = "auto"
@@ -555,7 +586,7 @@ class EngineTests(unittest.TestCase):
             engine._process_segments("me", QueuedWorker(wav))
 
         self.assertEqual(engine.config["last_detected_language"], "en")
-        self.assertEqual(engine.config["last_language_confidence"], 0.42)
+        self.assertEqual(engine.config["last_language_model_score"], 0.42)
 
     def test_engine_records_speech_speed_for_auto_tuning(self):
         config = DEFAULT_CONFIG.copy()
@@ -590,7 +621,7 @@ class EngineTests(unittest.TestCase):
         class Translator:
             def translate(self, text, source_language, target_language):
                 engine.running = False
-                return TranslationResult("hi", 0.8)
+                return TranslationResult("hi")
 
         class TTS:
             def synthesize_google_linear16(self, text, language_code):
@@ -639,7 +670,7 @@ class EngineTests(unittest.TestCase):
         class Translator:
             def translate(self, text, source_language, target_language):
                 engine.running = False
-                return TranslationResult("hi", 0.8)
+                return TranslationResult("hi")
 
         class TTS:
             def speak_local(self, text, device):
@@ -692,7 +723,7 @@ class EngineTests(unittest.TestCase):
         class Translator:
             def translate(self, text, source_language, target_language):
                 engine.running = False
-                return TranslationResult("你好", 0.8)
+                return TranslationResult("你好")
 
         class TTS:
             def speak_local(self, text, device):
@@ -732,7 +763,7 @@ class EngineTests(unittest.TestCase):
         class Translator:
             def translate(self, text, source_language, target_language):
                 engine.running = False
-                return TranslationResult("hi", 0.8)
+                return TranslationResult("hi")
 
         class TTS:
             def synthesize_google_linear16(self, text, language_code):
@@ -785,7 +816,7 @@ class EngineTests(unittest.TestCase):
         class Translator:
             def translate(self, text, source_language, target_language):
                 engine.running = False
-                return TranslationResult("hi", 0.8)
+                return TranslationResult("hi")
 
         class TTS:
             def speak_local(self, text, device):
@@ -845,7 +876,7 @@ class EngineTests(unittest.TestCase):
                 self.count += 1
                 if self.count == 2:
                     self.worker._stopped = True
-                return TranslationResult(f"translated-{self.count}", 0.8)
+                return TranslationResult(f"translated-{self.count}")
 
         class Worker:
             def __init__(self, wavs):
@@ -1191,7 +1222,7 @@ class EngineTests(unittest.TestCase):
         class Translator:
             def translate(self, text, source_language, target_language):
                 engine.running = False
-                return TranslationResult("hi", 0.8)
+                return TranslationResult("hi")
 
         class TTS:
             def synthesize_google_linear16(self, text, language_code):
@@ -1509,7 +1540,7 @@ class EngineTests(unittest.TestCase):
                 class Translator:
                     def translate(self, text, source_language, target_language):
                         block("translation")
-                        return TranslationResult("過期", 0.8)
+                        return TranslationResult("過期")
 
                 class Tts:
                     def speak_local(self, text, device, cancel_event=None):
@@ -1705,8 +1736,8 @@ class EngineTests(unittest.TestCase):
         class Transcriber:
             def transcribe(self, wav, source_language):
                 if wav.stem == "speaker":
-                    return TranscriptionResult("speaker text", "ja", 0.91, 0.81)
-                return TranscriptionResult("microphone text", "en", 0.92, 0.82)
+                    return TranscriptionResult("speaker text", "ja", language_probability=0.91, model_score=0.81)
+                return TranscriptionResult("microphone text", "en", language_probability=0.92, model_score=0.82)
 
         barrier = threading.Barrier(2)
 
@@ -1716,7 +1747,10 @@ class EngineTests(unittest.TestCase):
 
             def translate(self, text, source_language, target_language):
                 barrier.wait()
-                return TranslationResult(f"{self.direction} translation", 0.7 if self.direction == "speaker" else 0.6)
+                return TranslationResult(
+                    f"{self.direction} translation",
+                    provider_quality_signal=0.7 if self.direction == "speaker" else 0.6,
+                )
 
         with tempfile.TemporaryDirectory() as tmp:
             speaker_wav = Path(tmp) / "speaker.wav"
@@ -1741,10 +1775,10 @@ class EngineTests(unittest.TestCase):
         self.assertFalse(any(thread.is_alive() for thread in threads))
         self.assertIn(("ja: speaker text\nzh: speaker translation", ""), overlays)
         self.assertIn(("", "zh: microphone text\nen: microphone translation"), overlays)
-        self.assertEqual(engine.pipelines["speaker"].metrics["last_language_confidence"], 0.91)
-        self.assertEqual(engine.pipelines["me"].metrics["last_language_confidence"], 0.92)
-        self.assertEqual(engine.pipelines["speaker"].metrics["last_translation_confidence"], 0.7)
-        self.assertEqual(engine.pipelines["me"].metrics["last_translation_confidence"], 0.6)
+        self.assertEqual(engine.pipelines["speaker"].metrics["last_language_model_score"], 0.91)
+        self.assertEqual(engine.pipelines["me"].metrics["last_language_model_score"], 0.92)
+        self.assertEqual(engine.pipelines["speaker"].metrics["last_provider_quality_signal"], 0.7)
+        self.assertEqual(engine.pipelines["me"].metrics["last_provider_quality_signal"], 0.6)
 
 
 if __name__ == "__main__":

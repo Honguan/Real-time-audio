@@ -422,7 +422,7 @@ class DiagnosticsTests(unittest.TestCase):
         self.assertEqual(issue.severity, "warning")
         self.assertEqual(issue.action, "local_translation")
 
-    def test_diagnostics_report_low_translation_confidence(self):
+    def test_diagnostics_distinguish_unavailable_translation_quality_and_heuristics(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             runtime = root / "runtime"
@@ -436,15 +436,26 @@ class DiagnosticsTests(unittest.TestCase):
             config = DEFAULT_CONFIG.copy()
             config["runtime_dir"] = str(runtime)
             config["model"] = "medium"
-            config["last_translation_confidence"] = 0.3
+            config["last_source_text"] = "hello"
+            config["last_provider_quality_signal"] = None
+            config["last_translation_heuristic_warning"] = "快取結果，未重新評分"
 
             issues = collect_diagnostics(config, root)
+            config["last_provider_quality_signal"] = 0.73
+            config["last_translation_heuristic_warning"] = None
+            scored_issues = collect_diagnostics(config, root)
 
-        issue = next(item for item in issues if item.code == "translation_confidence_low")
+        issue = next(item for item in issues if item.code == "translation_quality_unavailable")
         self.assertEqual(issue.action, "local_translation")
-        self.assertIn("修正上次翻譯", issue.fix)
+        self.assertIn("未提供可信品質分數", issue.detail)
+        heuristic = next(item for item in issues if item.code == "translation_heuristic_warning")
+        self.assertIn("快取結果", heuristic.detail)
+        self.assertTrue(any(item.code == "asr_model_score_unavailable" for item in issues))
+        quality = next(item for item in scored_issues if item.code == "translation_quality_signal")
+        self.assertIn("0.73", quality.detail)
+        self.assertIn("不視為校準後正確率", quality.detail)
 
-    def test_diagnostics_report_low_asr_confidence(self):
+    def test_diagnostics_label_asr_model_score_as_uncalibrated(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             runtime = root / "runtime"
@@ -458,15 +469,15 @@ class DiagnosticsTests(unittest.TestCase):
             config = DEFAULT_CONFIG.copy()
             config["runtime_dir"] = str(runtime)
             config["model"] = "medium"
-            config["last_asr_confidence"] = 0.4
+            config["last_asr_model_score"] = -0.4
 
             issues = collect_diagnostics(config, root)
 
-        issue = next(item for item in issues if item.code == "asr_confidence_low")
+        issue = next(item for item in issues if item.code == "asr_model_score_available")
         self.assertEqual(issue.action, "audio_settings")
-        self.assertEqual(issue.title, "語音辨識信心偏低")
-        self.assertIn("語音辨識信心約 40%", issue.detail)
-        self.assertIn("較大模型", issue.fix)
+        self.assertEqual(issue.title, "語音辨識模型分數")
+        self.assertIn("-0.40", issue.detail)
+        self.assertIn("未校準模型分數", issue.detail)
 
     def test_diagnostics_report_tts_failure(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -673,13 +684,17 @@ class DiagnosticsTests(unittest.TestCase):
             config["model"] = "medium"
             config["source_language"] = "auto"
             config["last_detected_language"] = "en"
-            config["last_language_confidence"] = 0.42
+            config["last_language_model_score"] = 0.42
 
             issues = collect_diagnostics(config, root)
+            config["last_language_model_score"] = ""
+            unavailable_issues = collect_diagnostics(config, root)
 
-        issue = next(item for item in issues if item.code == "language_lock_recommended")
+        issue = next(item for item in issues if item.code == "language_model_score_low")
         self.assertEqual(issue.severity, "info")
         self.assertEqual(issue.action, "language_settings")
+        self.assertIn("不視為校準後正確率", issue.detail)
+        self.assertTrue(any(item.code == "language_model_score_unavailable" for item in unavailable_issues))
 
 
 if __name__ == "__main__":

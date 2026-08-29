@@ -17,10 +17,14 @@ class TranslationCacheTests(unittest.TestCase):
         config.update({"provider": "local", "translation_cache_enabled": False})
         translator = Translator(config)
         with patch.object(translator, "_local_translate", return_value="你好") as translate:
-            self.assertEqual(translator.translate("hello", "en", "zh-TW").text, "你好")
-            self.assertEqual(translator.translate("hello", "en", "zh-TW").text, "你好")
+            fresh = translator.translate("hello", "en", "zh-TW")
+            cached = translator.translate("hello", "en", "zh-TW")
 
         self.assertEqual(translate.call_count, 1)
+        self.assertEqual((fresh.text, cached.text), ("你好", "你好"))
+        self.assertIsNone(fresh.provider_quality_signal)
+        self.assertIsNone(cached.provider_quality_signal)
+        self.assertEqual(cached.heuristic_warning, "快取結果，未重新評分")
 
     def test_translator_sends_short_term_context_to_openai(self):
         import os
@@ -255,8 +259,8 @@ class TranslationCacheTests(unittest.TestCase):
                 config["translation_cache_path"] = str(Path(tmp) / "translation_cache.db")
                 http = HttpClient()
                 http.session.post = lambda *args, **kwargs: calls.append((args, kwargs)) or Response()
-                self.assertEqual(Translator(config, http=http).translate("hello", "en", "zh-TW").text, "你好")
-                self.assertEqual(Translator(config, http=http).translate("hello", "en", "zh-TW").text, "你好")
+                fresh = Translator(config, http=http).translate("hello", "en", "zh-TW")
+                cached = Translator(config, http=http).translate("hello", "en", "zh-TW")
         finally:
             if original_key is None:
                 os.environ.pop("OPENAI_API_KEY", None)
@@ -264,6 +268,9 @@ class TranslationCacheTests(unittest.TestCase):
                 os.environ["OPENAI_API_KEY"] = original_key
 
         self.assertEqual(len(calls), 1)
+        self.assertEqual((fresh.text, cached.text), ("你好", "你好"))
+        self.assertIsNone(cached.provider_quality_signal)
+        self.assertEqual(cached.heuristic_warning, "快取結果，未重新評分")
 
     def test_add_glossary_term_preserves_existing_terms(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -53,15 +53,26 @@ class ConfigTests(unittest.TestCase):
             root = Path(tmp)
             config = DEFAULT_CONFIG.copy()
             config["last_error"] = "runtime failed"
+            config["last_asr_model_score"] = -0.4
+            config["last_provider_quality_signal"] = 0.73
+            config["last_translation_heuristic_warning"] = "快取結果，未重新評分"
 
             save_config(root, config)
-            save_config_state(root, config, {"last_error"})
+            save_config_state(root, config, {
+                "last_error",
+                "last_asr_model_score",
+                "last_provider_quality_signal",
+                "last_translation_heuristic_warning",
+            })
 
             settings = json.loads((root / "config" / "settings.json").read_text(encoding="utf-8"))
             state = json.loads((root / "config" / "state.json").read_text(encoding="utf-8"))
             self.assertFalse((root / "config.json").exists())
             self.assertNotIn("last_error", settings["settings"])
             self.assertEqual(state["diagnostics"]["last_error"], "runtime failed")
+            self.assertEqual(load_config(root)["last_asr_model_score"], -0.4)
+            self.assertEqual(load_config(root)["last_provider_quality_signal"], 0.73)
+            self.assertEqual(load_config(root)["last_translation_heuristic_warning"], "快取結果，未重新評分")
 
     def test_concurrent_disjoint_state_updates_are_merged(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -83,6 +94,29 @@ class ConfigTests(unittest.TestCase):
             config = load_config(root)
             self.assertEqual(config["last_error"], "runtime failed")
             self.assertEqual(config["last_cuda_devices"], 2)
+
+    def test_load_config_removes_obsolete_confidence_state(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            save_config(root, DEFAULT_CONFIG.copy())
+            state_path = root / "config" / "state.json"
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+            state["session_metrics"].update({
+                "last_language_confidence": 0.8,
+                "last_asr_confidence": 0.7,
+                "last_translation_confidence": 1.0,
+            })
+            state_path.write_text(json.dumps(state), encoding="utf-8")
+
+            config = load_config(root)
+            rewritten = json.loads(state_path.read_text(encoding="utf-8"))
+
+            self.assertIsNone(config["last_language_model_score"])
+            self.assertIsNone(config["last_asr_model_score"])
+            self.assertIsNone(config["last_provider_quality_signal"])
+            self.assertNotIn("last_language_confidence", rewritten["session_metrics"])
+            self.assertNotIn("last_asr_confidence", rewritten["session_metrics"])
+            self.assertNotIn("last_translation_confidence", rewritten["session_metrics"])
 
     def test_load_config_migrates_legacy_settings_and_drops_unknown_fields(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -71,9 +71,10 @@ DEFAULT_CONFIG = {
     "last_cuda_devices": "",
     "last_vram_gb": "",
     "last_detected_language": "",
-    "last_language_confidence": "",
-    "last_asr_confidence": "",
-    "last_translation_confidence": "",
+    "last_language_model_score": None,
+    "last_asr_model_score": None,
+    "last_provider_quality_signal": None,
+    "last_translation_heuristic_warning": None,
     "last_error": "",
     "last_tts_latency_seconds": "",
     "last_latency_seconds": "",
@@ -156,9 +157,9 @@ SETTING_CHOICES = {
 NUMERIC_STATE_KEYS = {
     "last_cuda_devices",
     "last_vram_gb",
-    "last_language_confidence",
-    "last_asr_confidence",
-    "last_translation_confidence",
+    "last_language_model_score",
+    "last_asr_model_score",
+    "last_provider_quality_signal",
     "last_tts_latency_seconds",
     "last_latency_seconds",
     "last_capture_seconds",
@@ -187,6 +188,11 @@ NUMERIC_STATE_KEYS = {
     "last_processing_lag_seconds",
     "last_provider_error_count",
     "last_rate_limit_count",
+}
+OPTIONAL_NUMERIC_STATE_KEYS = {
+    "last_language_model_score",
+    "last_asr_model_score",
+    "last_provider_quality_signal",
 }
 SETTING_RANGES = {
     "overlay_opacity": (0.2, 1.0),
@@ -331,6 +337,8 @@ def _valid_setting_value(key: str, value):
 def _valid_state_value(key: str, value):
     if isinstance(DEFAULT_CONFIG[key], bool):
         return value if isinstance(value, bool) else DEFAULT_CONFIG[key]
+    if key in OPTIONAL_NUMERIC_STATE_KEYS:
+        return value if value is None or isinstance(value, (int, float)) and not isinstance(value, bool) else None
     if key in NUMERIC_STATE_KEYS:
         return value if value == "" or isinstance(value, (int, float)) and not isinstance(value, bool) else DEFAULT_CONFIG[key]
     return value if isinstance(value, str) else DEFAULT_CONFIG[key]
@@ -426,6 +434,7 @@ class ConfigStore:
             else:
                 raise ValueError(f"不支援的設定 schema_version：{version}")
             state_missing = not self.state_path.exists()
+            state_document = None
             if not state_missing:
                 state_document, state_recovered = _read_json_with_backup(self.state_path, self._valid_state_document)
                 loaded = {
@@ -436,7 +445,12 @@ class ConfigStore:
                 recovered = recovered or state_recovered
             config = _normalized_config(loaded)
             expected_settings = {key: config[key] for key in SETTINGS_KEYS}
-            if migrated or recovered or state_missing or source == self.legacy_path or document.get("settings") != expected_settings:
+            expected_state = {
+                "schema_version": CONFIG_SCHEMA_VERSION,
+                "session_metrics": {key: config[key] for key in SESSION_STATE_KEYS},
+                "diagnostics": {key: config[key] for key in DIAGNOSTIC_STATE_KEYS},
+            }
+            if migrated or recovered or state_missing or source == self.legacy_path or document.get("settings") != expected_settings or state_document != expected_state:
                 self._save_all(config)
             if self.legacy_path.exists() and self.settings_path.exists():
                 self.legacy_path.unlink()

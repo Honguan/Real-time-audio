@@ -39,12 +39,14 @@ class ProvidersTests(unittest.TestCase):
         session = translator.http.session
         session.post = lambda *args, **kwargs: calls.append((args, kwargs)) or Response()
         with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}):
-            translator.translate("one", "en", "zh")
-            translator.translate("two", "en", "zh")
+            first = translator.translate("one", "en", "zh")
+            second = translator.translate("two", "en", "zh")
 
         self.assertIs(translator.http.session, session)
         self.assertEqual(len(calls), 2)
         self.assertTrue(all(isinstance(call[1]["timeout"], tuple) for call in calls))
+        self.assertIsNone(first.provider_quality_signal)
+        self.assertIsNone(second.provider_quality_signal)
 
     def test_http_client_retries_429_and_5xx_with_defined_backoff(self):
         class Response:
@@ -158,7 +160,7 @@ class ProvidersTests(unittest.TestCase):
         self.assertEqual(openai["headers"]["Authorization"], "Bearer ${OPENAI_API_KEY}")
         self.assertIn("Translate", openai["json"]["input"])
 
-    def test_translation_returns_confidence_with_text(self):
+    def test_translation_returns_no_quality_signal_when_provider_does_not_supply_one(self):
         config = DEFAULT_CONFIG.copy()
         config["provider"] = "local"
         config["translation_cache_enabled"] = False
@@ -168,7 +170,18 @@ class ProvidersTests(unittest.TestCase):
         result = translator.translate("hello", "en", "zh")
 
         self.assertEqual(result.text, "你好")
-        self.assertEqual(result.confidence, 0.8)
+        self.assertIsNone(result.provider_quality_signal)
+        self.assertIsNone(result.heuristic_warning)
+
+        translator._local_translate = lambda text, source, target: text
+        passthrough = translator.translate("unchanged", "en", "zh")
+        self.assertIsNone(passthrough.provider_quality_signal)
+        self.assertIn("與原文相同", passthrough.heuristic_warning)
+
+        google_config = {**config, "provider": "google"}
+        google = Translator(google_config)
+        google._google_translate = lambda text, source, target: "你好"
+        self.assertIsNone(google.translate("hello", "en", "zh").provider_quality_signal)
 
         contextual = build_openai_translation_request("it", "zh-TW", "en", context=[("hello", "你好")])
         self.assertIn("Recent context", contextual["json"]["input"])
@@ -227,7 +240,8 @@ class ProvidersTests(unittest.TestCase):
                 translator = Translator(config)
 
                 result = translator.translate("hello", "en", "zh-TW")
-                self.assertEqual((result.text, result.confidence), ("本機:hello", 0.8))
+                self.assertEqual(result.text, "本機:hello")
+                self.assertIsNone(result.provider_quality_signal)
         finally:
             if original_package is None:
                 sys.modules.pop("argostranslate", None)
@@ -287,7 +301,8 @@ class ProvidersTests(unittest.TestCase):
                 translator = Translator(config)
 
                 result = translator.translate("hello", "en", "zh")
-                self.assertEqual((result.text, result.confidence), ("離線:hello", 0.8))
+                self.assertEqual(result.text, "離線:hello")
+                self.assertIsNone(result.provider_quality_signal)
 
     def test_local_translation_model_assets_import_from_configured_directory(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -637,7 +652,7 @@ class ProvidersTests(unittest.TestCase):
                         with self.assertRaises(RuntimeError):
                             translator.translate("你好", "zh", "en")
 
-    def test_translator_does_not_set_success_confidence_without_local_backend(self):
+    def test_translator_does_not_invent_quality_signal_without_local_backend(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = DEFAULT_CONFIG.copy()
             config["provider"] = "local"
@@ -648,7 +663,7 @@ class ProvidersTests(unittest.TestCase):
                 with self.assertRaises(RuntimeError):
                     translator.translate("hello", "auto", "zh-TW")
 
-        self.assertNotIn("last_confidence", translator.__dict__)
+        self.assertNotIn("provider_quality_signal", translator.__dict__)
 
     def test_local_provider_can_call_libretranslate_endpoint(self):
         import realtime_audio_translator.providers as providers_module
