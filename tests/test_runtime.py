@@ -17,6 +17,7 @@ class RuntimeTests(unittest.TestCase):
         data = b'{"assets":[{"name":"RealtimeAudioTranslator-v0.1.29-win-x64.zip","browser_download_url":"app"},{"name":"RealtimeAudioTranslator-runtime-cuda12-core-v0.1.29.7z","browser_download_url":"core","digest":"sha256:corehash"},{"name":"RealtimeAudioTranslator-runtime-cuda12-dlls-v0.1.29.zip","browser_download_url":"dlls","digest":"sha256:dllhash"}]}'
 
         self.assertEqual(runtime_assets_from_json(data), [("RealtimeAudioTranslator-runtime-cuda12-core-v0.1.29.7z", "core", "corehash"), ("RealtimeAudioTranslator-runtime-cuda12-dlls-v0.1.29.zip", "dlls", "dllhash")])
+        self.assertEqual(runtime_assets_from_json(data, "cpu"), [("RealtimeAudioTranslator-runtime-cuda12-core-v0.1.29.7z", "core", "corehash")])
 
     def test_runtime_status_reports_missing_files(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -38,8 +39,34 @@ class RuntimeTests(unittest.TestCase):
             (root / "ffmpeg.exe").write_text("ff", encoding="utf-8")
             (root / "_xxl_data").mkdir()
             write_install_manifest(root)
-            self.assertTrue(runtime_status(root)["ready"])
-            self.assertIn("cublasLt64_12.dll", runtime_status(root)["warnings"])
+            status = runtime_status(root, "cpu")
+            self.assertTrue(status["ready"])
+            self.assertTrue(status["cpu_ready"])
+            self.assertFalse(status["cuda_ready"])
+            self.assertIn("cublasLt64_12.dll", status["cuda_missing"])
+
+    def test_runtime_status_blocks_cuda_until_dlls_and_probe_are_ready(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "_xxl_data").mkdir()
+            (root / "faster-whisper-xxl.exe").write_text("exe", encoding="utf-8")
+            (root / "ffmpeg.exe").write_text("ff", encoding="utf-8")
+            for name in ("cublas64_12.dll", "cublasLt64_12.dll", "cudnn64_9.dll"):
+                (root / name).write_text("dll", encoding="utf-8")
+            write_install_manifest(root)
+
+            failed = subprocess.CompletedProcess([], 0, "CUDA device: 0", "")
+            with patch("realtime_audio_translator.runtime.subprocess.run", return_value=failed):
+                status = runtime_status(root, "cuda")
+            self.assertFalse(status["ready"])
+            self.assertIn("CUDA --checkcuda probe", status["missing"])
+
+            passed = subprocess.CompletedProcess([], 0, "CUDA device: 1", "")
+            with patch("realtime_audio_translator.runtime.subprocess.run", return_value=passed):
+                status = runtime_status(root, "cuda")
+            self.assertTrue(status["ready"])
+            self.assertTrue(status["cuda_ready"])
+            self.assertEqual(status["cuda_probe_output"], "CUDA device: 1")
 
     def test_runtime_status_rejects_exe_directories(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -78,6 +105,9 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("cuBLAS.and.cuDNN_CUDA12_win_v3.7z", message)
         self.assertIn("faster-whisper-xxl.exe", message)
         self.assertIn("ffmpeg.exe", message)
+        cpu_message = runtime_install_message(Path("runtime"), "cpu")
+        self.assertIn("CPU 模式不需要 CUDA DLL", cpu_message)
+        self.assertNotIn("runtime-cuda12-dlls", cpu_message)
 
     def test_gui_runtime_missing_prompts_use_runtime_install_message(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")

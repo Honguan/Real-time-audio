@@ -877,7 +877,8 @@ class TranslatorApp(tk.Tk):
         self.vars["runtime_dir"].set(str(target))
         self._save()
         self._refresh_runtime_status()
-        status = runtime_status(target)
+        config = self._config_from_vars()
+        status = runtime_status(target, config.get("device", "auto"), config.get("compute_type", "auto"))
         if not status["ready"]:
             messagebox.showerror("runtime 不完整", "缺少：" + ", ".join(status["missing"]))
             return
@@ -890,13 +891,15 @@ class TranslatorApp(tk.Tk):
         self.status.set("runtime 已匯入；commands.json 已更新")
 
     def _download_runtime(self) -> None:
-        if not messagebox.askyesno("一鍵安裝 runtime", "將下載約 2.1GB，安裝時需要至少 10GB 可用空間。是否繼續？"):
+        device = self._config_from_vars().get("device", "cuda")
+        cuda = device == "cuda"
+        if not messagebox.askyesno("一鍵安裝 runtime", f"將下載約 {'2.1' if cuda else '1.5'}GB，安裝時需要至少 {10 if cuda else 5}GB 可用空間。是否繼續？"):
             return
         target = DEFAULT_RUNTIME_DIR
 
         def run() -> None:
             try:
-                download_runtime(target, lambda message: self._post_ui("status", message))
+                download_runtime(target, lambda message: self._post_ui("status", message), device)
                 error = ""
             except Exception as exc:
                 error = str(exc)
@@ -923,7 +926,7 @@ class TranslatorApp(tk.Tk):
 
     def _refresh_runtime_status(self) -> None:
         config = self._config_from_vars()
-        status = runtime_status(runtime_dir(config))
+        status = runtime_status(runtime_dir(config), config.get("device", "auto"), config.get("compute_type", "auto"))
         if status["ready"]:
             try:
                 result = subprocess.run([str(runtime_dir(config) / "ffmpeg.exe"), "-version"], capture_output=True, text=True, timeout=2, check=False)
@@ -933,14 +936,12 @@ class TranslatorApp(tk.Tk):
             self.vars["last_ffmpeg_failed"].set(str(config["last_ffmpeg_failed"]))
             self.config = config
             save_config_state(APP_DIR, self.config, {"last_ffmpeg_failed"})
-            note = "runtime 已就緒"
-            if status["warnings"]:
-                note += f"；建議 CUDA 套件：{status['cuda_package']}"
+            note = f"runtime 已就緒；CPU：{'可用' if status['cpu_ready'] else '不可用'}；CUDA：{'可用' if status['cuda_ready'] else '不可用'}"
             if not model_available(config["model"], self.repo_root / "_models", models_dir(config)):
                 note += f"；找不到模型：{config['model']}"
             self.runtime_text.set(note)
         else:
-            self.runtime_text.set(runtime_install_message(runtime_dir(config)))
+            self.runtime_text.set(runtime_install_message(runtime_dir(config), config.get("device", "auto")))
 
     def _diagnostic_message(self, issues=None) -> str:
         config = self._config_from_vars()
@@ -1081,17 +1082,12 @@ class TranslatorApp(tk.Tk):
     def _recommend(self) -> None:
         config = self._config_from_vars()
         runtime = runtime_dir(config)
-        status = runtime_status(runtime, verify_hashes=True)
+        status = runtime_status(runtime, "auto", config.get("compute_type", "auto"), verify_hashes=True)
         if not status["ready"]:
             self.status.set("找不到 runtime：" + ", ".join(status["missing"]))
             self.vars["model"].set("medium")
             return
-        exe = whisper_exe(runtime)
-        try:
-            cuda = subprocess.run([str(exe), "--checkcuda"], capture_output=True, text=True, timeout=5, check=False)
-            devices, vram_gb = cuda_hardware_from_check_output(cuda.stdout + cuda.stderr)
-        except Exception:
-            devices, vram_gb = 0, 0
+        devices, vram_gb = cuda_hardware_from_check_output(status["cuda_probe_output"]) if status["cuda_ready"] else (0, 0)
         config["last_cuda_devices"] = devices
         config["last_vram_gb"] = vram_gb
         self.config.update({"last_cuda_devices": devices, "last_vram_gb": vram_gb})
@@ -1159,15 +1155,10 @@ class TranslatorApp(tk.Tk):
 
     def _cuda_hardware(self, config: dict) -> tuple[int, int]:
         runtime = runtime_dir(config)
-        status = runtime_status(runtime, verify_hashes=True)
-        if not status["ready"]:
+        status = runtime_status(runtime, "cuda", config.get("compute_type", "auto"), verify_hashes=True)
+        if not status["cuda_ready"]:
             return 0, 0
-        exe = whisper_exe(runtime)
-        try:
-            cuda = subprocess.run([str(exe), "--checkcuda"], capture_output=True, text=True, timeout=5, check=False)
-            return cuda_hardware_from_check_output(cuda.stdout + cuda.stderr)
-        except Exception:
-            return 0, 0
+        return cuda_hardware_from_check_output(status["cuda_probe_output"])
 
     def _auto_optimize_before_start(self) -> None:
         if not self.config.get("ai_auto_optimize", True):
@@ -1244,9 +1235,9 @@ class TranslatorApp(tk.Tk):
 
     def _refresh_commands(self) -> None:
         runtime = runtime_dir(self._config_from_vars())
-        status = runtime_status(runtime, verify_hashes=True)
+        status = runtime_status(runtime, "cpu", verify_hashes=True)
         if not status["ready"]:
-            messagebox.showerror("找不到 runtime", runtime_install_message(runtime))
+            messagebox.showerror("找不到 runtime", runtime_install_message(runtime, "cpu"))
             return
         exe = whisper_exe(runtime)
         try:
@@ -1383,11 +1374,13 @@ class TranslatorApp(tk.Tk):
         if not self._save():
             return
         self._auto_optimize_before_start()
-        status = runtime_status(runtime_dir(self.config), verify_hashes=True)
+        status = runtime_status(runtime_dir(self.config), self.config.get("device", "auto"), self.config.get("compute_type", "auto"), verify_hashes=True)
         if not status["ready"]:
             append_app_log(APP_DIR, "runtime_missing", missing=status["missing"])
-            messagebox.showerror("找不到 runtime", runtime_install_message(runtime_dir(self.config)))
             error = "找不到 runtime：" + ", ".join(status["missing"])
+            if "CUDA --checkcuda probe" in status["missing"]:
+                error += "；CUDA probe：" + status["cuda_probe_output"]
+            messagebox.showerror("runtime 不可用", error + "\n\n" + runtime_install_message(runtime_dir(self.config), self.config.get("device", "auto")))
             self._set_last_error(error)
             self.status.set(error)
             return
