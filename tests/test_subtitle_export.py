@@ -20,6 +20,7 @@ class SubtitleExportTests(unittest.TestCase):
             log.append("speaker", "en", "zh-TW", "hello", "你好", "google")
             self.assertTrue(log.close())
             row = json.loads((Path(tmp) / "session.jsonl").read_text(encoding="utf-8").splitlines()[0])
+            self.assertEqual(row["schema_version"], 2)
             self.assertEqual(row["session_id"], "session")
             self.assertEqual(row["translated_text"], "你好")
             md = (Path(tmp) / "session.md").read_text(encoding="utf-8")
@@ -58,12 +59,24 @@ class SubtitleExportTests(unittest.TestCase):
     def test_conversation_log_writes_pipeline_performance_and_timestamps(self):
         with tempfile.TemporaryDirectory() as tmp:
             log = ConversationLog(Path(tmp), "session")
-            log.append("speaker", "en", "zh-TW", "hello", "hi", "google", performance={"last_asr_latency_seconds": 0.4}, timestamps={"capture_started_at": 10.0, "subtitle_published_at": 11.2})
+            log.append(
+                "speaker",
+                "en",
+                "zh-TW",
+                "hello",
+                "hi",
+                "google",
+                performance={"last_asr_latency_seconds": 0.4},
+                timestamps={"capture_started_at": 10.0, "subtitle_published_at": 11.2},
+                audio_start_seconds=30.0,
+                audio_end_seconds=31.25,
+            )
             self.assertTrue(log.close())
             row = json.loads((Path(tmp) / "session.jsonl").read_text(encoding="utf-8").splitlines()[0])
 
             self.assertEqual(row["performance"]["last_asr_latency_seconds"], 0.4)
             self.assertEqual(row["timestamps"]["subtitle_published_at"], 11.2)
+            self.assertEqual((row["audio_start_seconds"], row["audio_end_seconds"]), (30.0, 31.25))
 
     def test_conversation_log_append_is_bounded_and_non_blocking(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -143,6 +156,42 @@ class SubtitleExportTests(unittest.TestCase):
             self.assertEqual(txt, root / "exports" / "subtitles" / "session.txt")
             self.assertEqual(txt.read_text(encoding="utf-8"), "speaker: 你好\nmicrophone: thanks\n")
             self.assertEqual(srt_timestamp(3.25), "00:00:03,250")
+
+    def test_jsonl_log_exports_real_audio_ranges_and_orders_two_way_cues(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            jsonl = root / "session.jsonl"
+            jsonl.write_text(
+                "\n".join(
+                    json.dumps(row, ensure_ascii=False)
+                    for row in (
+                        {"direction": "me", "translated_text": "later", "audio_start_seconds": 32.0},
+                        {"direction": "speaker", "translated_text": "after silence", "audio_start_seconds": 30.0, "audio_end_seconds": 31.25},
+                    )
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            text = export_jsonl_to_srt(jsonl, root).read_text(encoding="utf-8")
+
+            self.assertLess(text.index("speaker: after silence"), text.index("me: later"))
+            self.assertIn("00:00:30,000 --> 00:00:31,250", text)
+            self.assertIn("00:00:32,000 --> 00:00:35,000", text)
+
+    def test_jsonl_point_timestamps_use_next_cue_as_end(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            jsonl = root / "session.jsonl"
+            jsonl.write_text(
+                json.dumps({"text": "one", "audio_start_seconds": 5.0}) + "\n"
+                + json.dumps({"text": "two", "audio_start_seconds": 7.5}) + "\n",
+                encoding="utf-8",
+            )
+
+            text = export_jsonl_to_srt(jsonl, root).read_text(encoding="utf-8")
+
+            self.assertIn("00:00:05,000 --> 00:00:07,500", text)
 
     def test_pause_discards_stale_audio_segments(self):
         segments = queue.Queue()

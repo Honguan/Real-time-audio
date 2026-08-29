@@ -71,7 +71,7 @@ Whisper 模型可放在 `models\whisper-small`；翻譯模型放在 `models\tran
 - 「紀錄內容」/「紀錄保留天數」/「紀錄容量上限 MB」：可選原文與譯文、僅原文、僅譯文或不含對話文字；預設保留 7 天、上限 100 MB，背景寫入後會自動輪替與清理。
 - 「開啟紀錄」：開啟紀錄資料夾 `%USERPROFILE%\.realtime-audio\logs\conversations`；應用程式事件另存於 `logs\app.log`。
 - 「清除快取」/「清除紀錄」/「清除本機資料」：清除本機翻譯快取、暫存音訊與對話紀錄。
-- 「匯出字幕」：把最新 JSONL 對話紀錄匯出成 SRT 與 TXT，檔案放在 `%USERPROFILE%\.realtime-audio\exports\subtitles`。
+- 「匯出字幕」：把最新 JSONL 對話紀錄匯出成 SRT 與 TXT；新版紀錄依實際音訊起訖排序與定時，舊紀錄則沿用每段 3 秒的相容 fallback。檔案放在 `%USERPROFILE%\.realtime-audio\exports\subtitles`。
 - 「開啟程式資料夾」：開啟 `%USERPROFILE%\.realtime-audio`；唯一設定檔在 `config\settings.json`，執行狀態另存於 `config\state.json`，術語表在 `config\glossary.json`，音訊裝置快照在 `config\audio_devices.json`。
 - 「新增術語」：加入固定術語翻譯，例如 `cooldown` → `冷卻`。
 - 「顯示語言」：在字幕前顯示語言代碼。
