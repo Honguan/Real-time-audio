@@ -30,9 +30,16 @@ def translation_models_dir(config: dict) -> Path:
     return models_dir(config) / "translation"
 
 
+def _discard_inference(package_dir: Path) -> None:
+    with _INFERENCE_LOCK:
+        _TRANSLATORS.pop(package_dir, None)
+        _TOKENIZERS.pop(package_dir, None)
+
+
 def _verified_package(package_dir: Path) -> bool:
     if not verify_install_manifest(package_dir):
         _VERIFIED_PACKAGES.pop(package_dir, None)
+        _discard_inference(package_dir)
         return False
     try:
         signature = tuple(
@@ -43,11 +50,17 @@ def _verified_package(package_dir: Path) -> bool:
             )
         )
     except OSError:
+        _VERIFIED_PACKAGES.pop(package_dir, None)
+        _discard_inference(package_dir)
         return False
-    if _VERIFIED_PACKAGES.get(package_dir) == signature:
+    previous_signature = _VERIFIED_PACKAGES.get(package_dir)
+    if previous_signature == signature:
         return True
+    if previous_signature is not None:
+        _discard_inference(package_dir)
     if not verify_install_manifest(package_dir, verify_hashes=True):
         _VERIFIED_PACKAGES.pop(package_dir, None)
+        _discard_inference(package_dir)
         return False
     _VERIFIED_PACKAGES[package_dir] = signature
     return True
@@ -135,8 +148,11 @@ def install_translation_models(config: dict) -> int:
             target = packages_dir / package_dir.name
             if _verified_package(target):
                 continue
-            atomic_replace_tree(package_dir, target)
-            _VERIFIED_PACKAGES.pop(target, None)
+            with _INFERENCE_LOCK:
+                atomic_replace_tree(package_dir, target)
+                _VERIFIED_PACKAGES.pop(target, None)
+                _TRANSLATORS.pop(target, None)
+                _TOKENIZERS.pop(target, None)
             installed += 1
     return installed
 

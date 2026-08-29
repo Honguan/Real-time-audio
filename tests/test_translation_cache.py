@@ -1,46 +1,26 @@
 import json
 import os
+import sqlite3
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 from realtime_audio_translator.config import DEFAULT_CONFIG, _has_reparse_point, clear_cache, clear_logs, ensure_app_dirs, ensure_glossary_file, load_config, log_files_to_clear, save_audio_devices, save_config
-from realtime_audio_translator.ai_memory import add_glossary_term, cache_translation, cached_translation
-from realtime_audio_translator.providers import HttpClient, TextToSpeech, Translator, build_google_translate_request, build_openai_translation_request, google_access_token
+from realtime_audio_translator.ai_memory import CACHE_SCHEMA_VERSION, _ensure_cache, add_glossary_term, cache_translation, cached_translation
+from realtime_audio_translator.providers import HttpClient, TRANSLATION_MEMORY_CACHE_SIZE, TextToSpeech, Translator, build_google_translate_request, build_openai_translation_request, google_access_token
 
 
 class TranslationCacheTests(unittest.TestCase):
     def test_translator_caches_repeated_requests(self):
-        import os
-        import realtime_audio_translator.providers as providers_module
+        config = DEFAULT_CONFIG.copy()
+        config.update({"provider": "local", "translation_cache_enabled": False})
+        translator = Translator(config)
+        with patch.object(translator, "_local_translate", return_value="你好") as translate:
+            self.assertEqual(translator.translate("hello", "en", "zh-TW").text, "你好")
+            self.assertEqual(translator.translate("hello", "en", "zh-TW").text, "你好")
 
-        calls = []
-
-        class Response:
-            def raise_for_status(self):
-                return None
-
-            def json(self):
-                return {"output_text": "你好"}
-
-        original_key = os.environ.get("OPENAI_API_KEY")
-        os.environ["OPENAI_API_KEY"] = "test-key"
-        try:
-            with tempfile.TemporaryDirectory() as tmp:
-                config = DEFAULT_CONFIG.copy()
-                config["provider"] = "openai"
-                config["translation_cache_path"] = str(Path(tmp) / "translation_cache.db")
-                translator = Translator(config)
-                translator.http.session.post = lambda *args, **kwargs: calls.append((args, kwargs)) or Response()
-                self.assertEqual(translator.translate("hello", "en", "zh-TW").text, "你好")
-                self.assertEqual(translator.translate("hello", "en", "zh-TW").text, "你好")
-        finally:
-            if original_key is None:
-                os.environ.pop("OPENAI_API_KEY", None)
-            else:
-                os.environ["OPENAI_API_KEY"] = original_key
-
-        self.assertEqual(len(calls), 1)
+        self.assertEqual(translate.call_count, 1)
 
     def test_translator_sends_short_term_context_to_openai(self):
         import os
@@ -128,10 +108,129 @@ class TranslationCacheTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             db = Path(tmp) / "translation_cache.db"
 
-            cache_translation(db, "openai", "en", "zh-TW", "hello", "你好")
+            cache_translation(db, "openai-request", "openai", "en", "zh-TW", "hello", "你好")
 
-            self.assertEqual(cached_translation(db, "openai", "en", "zh-TW", "hello"), "你好")
-            self.assertIsNone(cached_translation(db, "google", "en", "zh-TW", "hello"))
+            self.assertEqual(cached_translation(db, "openai-request"), "你好")
+            self.assertIsNone(cached_translation(db, "different-request"))
+
+    def test_cache_migration_preserves_legacy_rows_without_unsafe_hits(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = Path(tmp) / "translation_cache.db"
+            db = sqlite3.connect(db_path)
+            try:
+                db.execute(
+                    """
+                    CREATE TABLE translations (
+                        provider TEXT NOT NULL,
+                        source_language TEXT NOT NULL,
+                        target_language TEXT NOT NULL,
+                        source_text TEXT NOT NULL,
+                        translated_text TEXT NOT NULL,
+                        PRIMARY KEY (provider, source_language, target_language, source_text)
+                    )
+                    """
+                )
+                db.execute("INSERT INTO translations VALUES (?, ?, ?, ?, ?)", ("openai", "en", "zh-TW", "hello", "你好"))
+                db.commit()
+            finally:
+                db.close()
+
+            _ensure_cache(db_path)
+
+            db = sqlite3.connect(db_path)
+            try:
+                columns = {row[1] for row in db.execute("PRAGMA table_info(translations)")}
+                rows = db.execute("SELECT provider, source_language, target_language, source_text, translated_text FROM translations").fetchall()
+                version = db.execute("PRAGMA user_version").fetchone()[0]
+            finally:
+                db.close()
+            self.assertIn("request_fingerprint", columns)
+            self.assertEqual(rows, [("openai", "en", "zh-TW", "hello", "你好")])
+            self.assertEqual(version, CACHE_SCHEMA_VERSION)
+            self.assertIsNone(cached_translation(db_path, "new-version-request"))
+
+            db = sqlite3.connect(db_path)
+            try:
+                db.execute(f"PRAGMA user_version = {CACHE_SCHEMA_VERSION + 1}")
+            finally:
+                db.close()
+            with self.assertRaises(RuntimeError):
+                _ensure_cache(db_path)
+
+    def test_memory_cache_is_lru_bounded(self):
+        translator = Translator(DEFAULT_CONFIG.copy())
+        for index in range(TRANSLATION_MEMORY_CACHE_SIZE + 1):
+            translator._remember_cached(str(index), f"translated-{index}")
+
+        self.assertEqual(len(translator.cache), TRANSLATION_MEMORY_CACHE_SIZE)
+        self.assertNotIn("0", translator.cache)
+        self.assertEqual(translator._memory_cached("1"), "translated-1")
+        translator._remember_cached("next", "translated-next")
+        self.assertIn("1", translator.cache)
+        self.assertNotIn("2", translator.cache)
+
+    def test_request_fingerprint_invalidates_changed_translation_inputs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            glossary = Path(tmp) / "glossary.json"
+            glossary.write_text(json.dumps({"push": "推進"}), encoding="utf-8")
+            config = DEFAULT_CONFIG.copy()
+            db = Path(tmp) / "translation_cache.db"
+            config.update({"provider": "openai", "glossary_path": str(glossary), "translation_cache_path": str(db)})
+            translator = Translator(config)
+            initial = translator._request_fingerprint("push", "en", "zh-TW")
+            cache_translation(db, initial, "openai", "en", "zh-TW", "push", "推進")
+            fingerprints = {initial}
+
+            for key, value in (
+                ("translation_style", "formal"),
+                ("openai_model", "different-model"),
+                ("translation_backend_revision", "2"),
+            ):
+                original = translator.config[key]
+                translator.config[key] = value
+                changed = translator._request_fingerprint("push", "en", "zh-TW")
+                fingerprints.add(changed)
+                self.assertIsNone(cached_translation(db, changed))
+                translator.config[key] = original
+            glossary.write_text(json.dumps({"push": "前推"}), encoding="utf-8")
+            changed = translator._request_fingerprint("push", "en", "zh-TW")
+            fingerprints.add(changed)
+            self.assertIsNone(cached_translation(db, changed))
+            translator.context.append(("hold", "堅守"))
+            changed = translator._request_fingerprint("push", "en", "zh-TW")
+            fingerprints.add(changed)
+            self.assertIsNone(cached_translation(db, changed))
+
+        self.assertEqual(len(fingerprints), 6)
+
+    def test_changed_style_is_a_cache_miss(self):
+        config = DEFAULT_CONFIG.copy()
+        config.update({"provider": "local", "translation_cache_enabled": False})
+        translator = Translator(config)
+        with patch.object(translator, "_local_translate", side_effect=("plain-result", "formal-result")) as translate:
+            self.assertEqual(translator.translate("hello", "en", "zh-TW").text, "plain-result")
+            translator.config["translation_style"] = "formal"
+            self.assertEqual(translator.translate("hello", "en", "zh-TW").text, "formal-result")
+
+        self.assertEqual(translate.call_count, 2)
+
+    def test_installed_argos_package_upgrade_changes_fingerprint(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            package_dir = Path(tmp) / "translate-en_zh"
+            package_dir.mkdir()
+            metadata = package_dir / "metadata.json"
+            metadata.write_text('{"from_code":"en","to_code":"zh","package_version":"1.0"}', encoding="utf-8")
+            settings_module = type(sys)("argostranslate.settings")
+            settings_module.package_dirs = [Path(tmp)]
+            argos_module = type(sys)("argostranslate")
+            argos_module.settings = settings_module
+            translator = Translator(DEFAULT_CONFIG.copy())
+            with patch.dict(sys.modules, {"argostranslate": argos_module, "argostranslate.settings": settings_module}):
+                before = translator._request_fingerprint("hello", "en", "zh")
+                metadata.write_text('{"from_code":"en","to_code":"zh","package_version":"1.1"}', encoding="utf-8")
+                after = translator._request_fingerprint("hello", "en", "zh")
+
+        self.assertNotEqual(before, after)
 
     def test_translator_uses_persistent_translation_cache(self):
         import os

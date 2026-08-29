@@ -304,6 +304,32 @@ class ProvidersTests(unittest.TestCase):
             self.assertTrue((package / "metadata.json").is_file())
             self.assertTrue(verify_install_manifest(package, verify_hashes=True))
 
+    def test_changed_translation_model_discards_loaded_inference_objects(self):
+        import realtime_audio_translator.offline_translation as offline_module
+
+        with tempfile.TemporaryDirectory() as tmp:
+            config = DEFAULT_CONFIG.copy()
+            config["models_path"] = str(Path(tmp) / "models")
+            model_file = translation_models_dir(config) / "en_zh.argosmodel"
+            model_file.parent.mkdir(parents=True)
+            with zipfile.ZipFile(model_file, "w") as archive:
+                archive.writestr("translate-en_zh/metadata.json", '{"from_code":"en","to_code":"zh"}')
+                archive.writestr("translate-en_zh/model/model.bin", b"model")
+                archive.writestr("translate-en_zh/sentencepiece.model", b"sentencepiece")
+            install_translation_models(config)
+            package = translation_models_dir(config) / "packages" / "translate-en_zh"
+            self.assertTrue(translation_model_available(config, "en", "zh"))
+            offline_module._TRANSLATORS[package] = object()
+            offline_module._TOKENIZERS[package] = object()
+            (package / "model" / "model.bin").write_bytes(b"stale-model")
+            self.assertFalse(translation_model_available(config, "en", "zh"))
+            write_install_manifest(package)
+
+            self.assertTrue(translation_model_available(config, "en", "zh"))
+
+            self.assertNotIn(package, offline_module._TRANSLATORS)
+            self.assertNotIn(package, offline_module._TOKENIZERS)
+
     def test_argos_install_rejects_archive_escape(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = DEFAULT_CONFIG.copy()
@@ -454,9 +480,11 @@ class ProvidersTests(unittest.TestCase):
                 config["provider"] = "local"
                 config["models_path"] = str(Path(tmp) / "models")
                 config["translation_cache_path"] = str(db)
+                translator = Translator(config)
+                fingerprint = translator._request_fingerprint("hello", "en", "zh-TW")
 
-                self.assertEqual(Translator(config).translate("hello", "en", "zh-TW").text, "本機:hello")
-                self.assertEqual(cached_translation(db, "local", "en", "zh-TW", "hello"), "本機:hello")
+                self.assertEqual(translator.translate("hello", "en", "zh-TW").text, "本機:hello")
+                self.assertEqual(cached_translation(db, fingerprint), "本機:hello")
         finally:
             if original_package is None:
                 sys.modules.pop("argostranslate", None)
@@ -475,10 +503,11 @@ class ProvidersTests(unittest.TestCase):
             config["translation_cache_path"] = str(db)
 
             translator = Translator(config)
+            fingerprint = translator._request_fingerprint("hello", "auto", "zh-TW")
             with patch("realtime_audio_translator.providers.translate_offline", return_value=""), patch.object(translator, "_argos_translate", return_value=""):
                 with self.assertRaises(RuntimeError):
                     translator.translate("hello", "auto", "zh-TW")
-            self.assertIsNone(cached_translation(db, "local", "auto", "zh-TW", "hello"))
+            self.assertIsNone(cached_translation(db, fingerprint))
 
     def test_local_provider_rejects_cached_source_text_when_backend_is_missing(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -486,13 +515,14 @@ class ProvidersTests(unittest.TestCase):
             config = DEFAULT_CONFIG.copy()
             config["provider"] = "local"
             config["translation_cache_path"] = str(db)
-            cache_translation(db, "local", "zh", "en", "你好", "你好")
 
             for memory_cached in (False, True):
                 with self.subTest(memory_cached=memory_cached):
                     translator = Translator(config)
+                    fingerprint = translator._request_fingerprint("你好", "zh", "en")
+                    cache_translation(db, fingerprint, "local", "zh", "en", "你好", "你好")
                     if memory_cached:
-                        translator.cache[("local", "zh", "en", "你好")] = "你好"
+                        translator._remember_cached(fingerprint, "你好")
                     with patch("realtime_audio_translator.providers.translate_offline", return_value=""), patch.object(translator, "_argos_translate", return_value=""):
                         with self.assertRaises(RuntimeError):
                             translator.translate("你好", "zh", "en")

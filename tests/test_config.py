@@ -421,10 +421,10 @@ class ConfigTests(unittest.TestCase):
             (custom_logs / "unrelated" / "keep.jsonl").write_text("keep", encoding="utf-8")
             (root / "cache" / "audio" / "clip.wav").write_bytes(b"audio")
             (root / "cache" / "temp_audio" / "clip.wav").write_bytes(b"audio")
-            cache_translation(root / "cache" / "translation_cache.db", "local", "en", "zh", "hello", "你好")
+            cache_translation(root / "cache" / "translation_cache.db", "root-entry", "local", "en", "zh", "hello", "你好")
 
             custom_cache = root / "custom-cache.db"
-            cache_translation(custom_cache, "local", "en", "zh", "hello", "custom")
+            cache_translation(custom_cache, "custom-entry", "local", "en", "zh", "hello", "custom")
 
             clear_logs(root)
             clear_logs(root, custom_logs)
@@ -440,7 +440,7 @@ class ConfigTests(unittest.TestCase):
             self.assertTrue((custom_logs / "unrelated" / "keep.jsonl").exists())
             self.assertEqual(list((root / "cache" / "audio").iterdir()), [])
             self.assertEqual(list((root / "cache" / "temp_audio").iterdir()), [])
-            self.assertIsNone(cached_translation(root / "cache" / "translation_cache.db", "local", "en", "zh", "hello"))
+            self.assertIsNone(cached_translation(root / "cache" / "translation_cache.db", "root-entry"))
             self.assertFalse(custom_cache.exists())
 
     def test_log_cleanup_rejects_root_relative_and_reparse_targets(self):

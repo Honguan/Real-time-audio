@@ -55,6 +55,7 @@ SETTING_ROWS = (
     ("場景", "scenario"),
     ("效能模式", "performance_mode"),
     ("本機翻譯 URL", "local_translate_url"),
+    ("翻譯後端版本", "translation_backend_revision"),
     ("OpenAI 模型", "openai_model"),
     ("模型", "model"),
     ("ASR 裝置", "device"),
@@ -683,7 +684,7 @@ class TranslatorApp(tk.Tk):
         self.mode_text.set(self._mode_text())
         save_config(APP_DIR, self.config)
         if self.engine:
-            self.engine.config = self.config
+            self.engine.update_config(self.config)
         return True
 
     def _set_last_error(self, message: str) -> None:
