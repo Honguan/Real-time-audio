@@ -24,7 +24,7 @@ from .offline_translation import download_translation_models as download_offline
 from .paths import resource_root
 from .providers import TextToSpeech, Translator, google_access_token
 from .release_updater import RELEASES_URL, current_version, latest_release_tag, release_update_message
-from .runtime import DEFAULT_RUNTIME_DIR, UPSTREAM_RUNTIME_RELEASE_URL, download_runtime, install_runtime_from, runtime_dir, runtime_install_message, runtime_status, whisper_exe
+from .runtime import DEFAULT_RUNTIME_DIR, UPSTREAM_RUNTIME_RELEASE_URL, install_runtime_from, runtime_dir, runtime_install_message, runtime_status, whisper_exe
 from .scenarios import SCENARIO_CHOICES, apply_scenario, scenario_key, scenario_label
 from .subtitle_export import export_jsonl_to_srt, export_jsonl_to_txt
 from .tts import list_windows_sapi_voices, play_linear16
@@ -475,8 +475,7 @@ class TranslatorApp(tk.Tk):
         runtime_buttons_widget.grid(row=next_row + 2, column=0, columnspan=3, sticky="ew", pady=4)
         ttk.Button(runtime_buttons_widget, text="開啟 runtime 資料夾", command=self._open_runtime_dir).pack(side="left", padx=3)
         ttk.Button(runtime_buttons_widget, text="匯入已解壓 runtime", command=self._import_runtime).pack(side="left", padx=3)
-        ttk.Button(runtime_buttons_widget, text="一鍵安裝 runtime", command=self._download_runtime).pack(side="left", padx=3)
-        ttk.Button(runtime_buttons_widget, text="備用 runtime 來源", command=lambda: webbrowser.open(UPSTREAM_RUNTIME_RELEASE_URL)).pack(side="left", padx=3)
+        ttk.Button(runtime_buttons_widget, text="下載上游 runtime", command=lambda: webbrowser.open(UPSTREAM_RUNTIME_RELEASE_URL)).pack(side="left", padx=3)
 
         ttk.Checkbutton(frame, text="顯示字幕", variable=self.overlay_visible, command=self._apply_overlay).grid(row=next_row + 3, column=0, sticky="w")
         overlay_topmost_widget = ttk.Checkbutton(frame, text="字幕最上層", variable=self.overlay_topmost, command=self._apply_overlay)
@@ -890,40 +889,6 @@ class TranslatorApp(tk.Tk):
         self._refresh_lists()
         self.status.set("runtime 已匯入；commands.json 已更新")
 
-    def _download_runtime(self) -> None:
-        device = self._config_from_vars().get("device", "cuda")
-        cuda = device == "cuda"
-        if not messagebox.askyesno("一鍵安裝 runtime", f"將下載約 {'2.1' if cuda else '1.5'}GB，安裝時需要至少 {10 if cuda else 5}GB 可用空間。是否繼續？"):
-            return
-        target = DEFAULT_RUNTIME_DIR
-
-        def run() -> None:
-            try:
-                download_runtime(target, lambda message: self._post_ui("status", message), device)
-                error = ""
-            except Exception as exc:
-                error = str(exc)
-            self._post_ui("callback", self._finish_runtime_download, target, error)
-
-        self.status.set("正在取得最新版 runtime")
-        threading.Thread(target=run, daemon=True).start()
-
-    def _finish_runtime_download(self, target: Path, error: str) -> None:
-        if error:
-            messagebox.showerror("runtime 安裝失敗", error)
-            self.status.set(f"runtime 安裝失敗：{error}")
-            return
-        self.vars["runtime_dir"].set(str(target))
-        self._save()
-        try:
-            refresh_commands(whisper_exe(target), APP_DIR / "commands.json")
-        except Exception as exc:
-            self.status.set(f"runtime 已安裝；commands.json 更新失敗：{exc}")
-            return
-        self._refresh_lists()
-        self._refresh_runtime_status()
-        self.status.set("runtime 已安裝")
-
     def _refresh_runtime_status(self) -> None:
         config = self._config_from_vars()
         status = runtime_status(runtime_dir(config), config.get("device", "auto"), config.get("compute_type", "auto"))
@@ -1022,7 +987,7 @@ class TranslatorApp(tk.Tk):
 
     def _run_diagnostic_action(self, action: str) -> None:
         if action == "open_runtime":
-            self._download_runtime()
+            webbrowser.open(UPSTREAM_RUNTIME_RELEASE_URL)
         elif action == "download_model":
             self._download_model()
         elif action == "download_translation_models":

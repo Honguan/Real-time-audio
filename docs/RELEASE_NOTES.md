@@ -1,6 +1,7 @@
 # Realtime Audio Translator 發布說明
 
 - 設定改用單一具 schema 版本的 `config/settings.json`，透過原子寫入與備份復原避免中斷或並行保存造成損毀；執行狀態分離至 `config/state.json`。
+- 新增 MIT LICENSE、第三方授權 notices 與 CycloneDX SBOM；未能確認完整再散布授權的 runtime 與 Argos 模型不再隨 Release 封裝。
 
 ## v0.1.34
 
@@ -50,28 +51,19 @@
 8. 可按「匯出字幕」把最新 JSONL 對話紀錄匯出成 SRT 與 TXT；schema v2 會依實際音訊起訖產生字幕，舊紀錄沒有音訊時間時沿用每段 3 秒。檔案放在 `%USERPROFILE%\.realtime-audio\exports\subtitles`；也可按「清除本機資料」一次清除快取與紀錄。
 9. 預設是自動發話；勾選「虛擬麥克風啟動時靜音」後可用「按住說話」（Push to talk）按住才送出我方翻譯語音，且不影響本機翻譯播放。
 10. 切換到 Google 或 OpenAI 時，工具會先提示語音或文字可能傳送到第三方服務並可能產生費用。
-11. 若提示缺 runtime，按「一鍵安裝 runtime」自動下載、驗證與安裝；自動安裝失敗時，再手動下載兩個 runtime 壓縮檔：
-
-```text
-RealtimeAudioTranslator-runtime-cuda12-core-<tag>.7z
-RealtimeAudioTranslator-runtime-cuda12-dlls-<tag>.zip
-```
-
-兩個壓縮檔解壓到同一個暫存資料夾，再於程式內按「手動匯入 runtime」選擇該資料夾；程式會驗證後安裝到：
+11. 若提示缺 runtime，按「下載上游 runtime」，從 Faster-Whisper-XXL 上游取得 Windows runtime；CUDA 模式另需 `cuBLAS.and.cuDNN_CUDA12_win_v3.7z`。解壓到同一個暫存資料夾，再於程式內按「手動匯入 runtime」選擇該資料夾；程式會驗證後安裝到：
 
 ```text
 %USERPROFILE%\.realtime-audio\runtime\cuda12
 ```
 
 解壓後該資料夾內應直接看到 `faster-whisper-xxl.exe` 與 CUDA12 DLL。
-若檔案總管無法開啟 core `.7z`，請使用 7-Zip 解壓。
+若檔案總管無法開啟 `.7z`，請使用 7-Zip 解壓。
 
 ## 下載檔案
 
 - 主程式：`RealtimeAudioTranslator-<tag>-win-x64.zip`
-- CUDA12 runtime 核心：`RealtimeAudioTranslator-runtime-cuda12-core-<tag>.7z`
-- CUDA12 runtime DLL：`RealtimeAudioTranslator-runtime-cuda12-dlls-<tag>.zip`
-- 模型可選包：`RealtimeAudioTranslator-models-<model>-<tag>.zip`
+- 授權與 SBOM：`LICENSE`、`THIRD_PARTY_NOTICES.md`、`THIRD_PARTY_LICENSES.txt`、`SBOM.cdx.json`
 - 檔案校驗：`SHA256SUMS.txt`
 
 模型 zip 若有提供，請解壓到：
@@ -82,7 +74,7 @@ RealtimeAudioTranslator-runtime-cuda12-dlls-<tag>.zip
 
 主程式不需要安裝 Python。Whisper 模型下載不再建立或轉錄靜音 probe；會顯示百分比、下載量與速度，預檢磁碟空間，支援取消與 `.partial` 續傳，並依官方版本／檔案雜湊驗證後原子安裝。模型資料夾會快速驗證 `config.json`、`model.bin`、`tokenizer.json` 與 `vocabulary.*`；診斷會區分模型缺失與不完整／損毀。
 
-若 Release 沒有 runtime 檔案，可到 https://github.com/Purfview/whisper-standalone-win/releases 下載 Faster-Whisper-XXL Windows runtime 和 `cuBLAS.and.cuDNN_CUDA12_win_v3.7z`。
+Release 不再散布第三方 runtime。請直接到 https://github.com/Purfview/whisper-standalone-win/releases 下載 Faster-Whisper-XXL Windows runtime 和 `cuBLAS.and.cuDNN_CUDA12_win_v3.7z`，並遵守上游及 NVIDIA 的授權條款。
 
 本機翻譯預設使用 Argos Translate 離線模型。進階模式按「下載離線翻譯模型」會下載目前語言的雙向模型並放到：
 
@@ -90,7 +82,7 @@ RealtimeAudioTranslator-runtime-cuda12-dlls-<tag>.zip
 %USERPROFILE%\.realtime-audio\models\translation
 ```
 
-若無法在 App 內下載，下載 `RealtimeAudioTranslator-models-translation-<tag>.zip`（透過英文中繼支援中文、英文、日文、韓文），解壓到 `%USERPROFILE%\.realtime-audio\models`，保留內含的 `translation` 資料夾。其他語言配對請在 App 內切換語言後下載。也可在進階模式的「本機翻譯 URL」填入 LibreTranslate 端點。
+Argos 套件未完整明示整個 `.argosmodel` 成品的再散布條款，因此本專案 Release 不封裝模型；App 仍可直接從 Argos 上游下載。也可在進階模式的「本機翻譯 URL」填入 LibreTranslate 端點。
 
 翻譯快取會保存在 `%USERPROFILE%\.realtime-audio\cache\translation_cache.db`，術語可用「新增術語」加入，也可用「修正上次翻譯」修正最近一句，確認後加入術語，或用「開啟術語表」編輯。
 
@@ -108,9 +100,9 @@ RealtimeAudioTranslator-runtime-cuda12-dlls-<tag>.zip
 
 - 沒有字幕：確認「顯示字幕」已開啟，並按「測試字幕」。
 - 聽不到對方聲音：確認喇叭來源選的是 Discord 或遊戲正在播放的裝置，再按「測試喇叭」。
-- 找不到 runtime：把 core `.7z` 與 DLL `.zip` 解壓到同一暫存資料夾，再使用「手動匯入 runtime」完成驗證安裝。
+- 找不到 runtime：從上游下載 Faster-Whisper-XXL 與 CUDA DLL，解壓到同一暫存資料夾，再使用「手動匯入 runtime」完成驗證安裝。
 - 找不到模型：在工具內下載模型，或解壓模型 zip 到 `%USERPROFILE%\.realtime-audio\models`。
-- 找不到離線翻譯模型：按「下載離線翻譯模型」，或解壓 `RealtimeAudioTranslator-models-translation-<tag>.zip` 到 `%USERPROFILE%\.realtime-audio\models`。
+- 找不到離線翻譯模型：按「下載離線翻譯模型」直接從 Argos 上游取得。
 - 對方聽不到翻譯語音：確認「播放翻譯語音」與「輸出到虛擬麥克風」已開啟，且「TTS 輸出」選 `CABLE Input`。
 - Discord 沒有收到虛擬麥克風聲音：Discord 麥克風請選 `CABLE Output (VB-Audio Virtual Cable)`。
 - 字幕延遲太高：在進階模式把「效能模式」改成 `low_latency`，並先用較小模型測試。

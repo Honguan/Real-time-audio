@@ -64,10 +64,9 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
             "error",
             f"找不到可供 {status['device'].upper()} 使用的語音辨識 runtime",
             f"缺少：{', '.join(status['missing'])}{probe}",
-            (("下載 RealtimeAudioTranslator-runtime-cuda12-core-<version>.7z 與 "
-              "RealtimeAudioTranslator-runtime-cuda12-dlls-<version>.zip，兩個都解壓到 ")
-             if status["device"] == "cuda" else "下載 RealtimeAudioTranslator-runtime-cuda12-core-<version>.7z 並解壓到 ")
-            + status["path"],
+            "從 Faster-Whisper-XXL 上游下載 Windows runtime"
+            + (" 與 CUDA DLL" if status["device"] == "cuda" else "")
+            + "，解壓後使用「手動匯入 runtime」安裝",
             "open_runtime",
         ))
     if status["cpu_ready"]:

@@ -7,6 +7,7 @@ name = "realtime-audio-translator"
 dynamic = ["version"]
 description = "Windows realtime audio translation application"
 readme = "README.md"
+license = "MIT"
 requires-python = ">=3.10,<3.14"
 dependencies = [
     "ctranslate2>=4.0,<5",

@@ -409,7 +409,7 @@ class GuiLogicTests(unittest.TestCase):
         self.assertIn("ttk.Scrollbar", gui_source)
         self.assertIn('text="關閉"', gui_source)
         self.assertIn("def _run_diagnostic_action", gui_source)
-        self.assertIn("self._download_runtime()", gui_source)
+        self.assertIn("webbrowser.open(UPSTREAM_RUNTIME_RELEASE_URL)", gui_source)
         self.assertIn("collect_diagnostics", gui_source)
 
         self.assertIn("問題名稱", gui_source)
@@ -429,11 +429,13 @@ class GuiLogicTests(unittest.TestCase):
         self.assertIn('("檢查更新", self._check_updates)', gui_source)
         self.assertIn("latest_release_tag", gui_source)
 
-    def test_gui_can_download_and_install_runtime(self):
+    def test_gui_links_to_upstream_runtime_and_can_import_it(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
 
-        self.assertIn('text="一鍵安裝 runtime", command=self._download_runtime', gui_source)
-        self.assertIn("download_runtime", gui_source)
+        self.assertIn('text="下載上游 runtime"', gui_source)
+        self.assertIn("UPSTREAM_RUNTIME_RELEASE_URL", gui_source)
+        self.assertIn("install_runtime_from", gui_source)
+        self.assertNotIn("download_runtime", gui_source)
 
     def test_auto_optimize_before_start_only_reports_recommendations(self):
         app = TranslatorApp.__new__(TranslatorApp)

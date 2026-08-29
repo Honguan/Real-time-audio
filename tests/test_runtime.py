@@ -1,6 +1,4 @@
 import os
-import hashlib
-import io
 import tempfile
 import unittest
 import subprocess
@@ -9,16 +7,10 @@ from pathlib import Path
 from unittest.mock import patch
 
 from realtime_audio_translator.archive_install import verify_install_manifest, write_install_manifest
-from realtime_audio_translator.runtime import DEFAULT_RUNTIME_DIR, download_runtime, install_runtime_from, runtime_assets_from_json, runtime_dir, runtime_install_message, runtime_status, whisper_exe
+from realtime_audio_translator.runtime import DEFAULT_RUNTIME_DIR, install_runtime_from, runtime_dir, runtime_install_message, runtime_status, whisper_exe
 
 
 class RuntimeTests(unittest.TestCase):
-    def test_runtime_assets_select_latest_core_and_dll_packages(self):
-        data = b'{"assets":[{"name":"RealtimeAudioTranslator-v0.1.29-win-x64.zip","browser_download_url":"app"},{"name":"RealtimeAudioTranslator-runtime-cuda12-core-v0.1.29.7z","browser_download_url":"core","digest":"sha256:corehash"},{"name":"RealtimeAudioTranslator-runtime-cuda12-dlls-v0.1.29.zip","browser_download_url":"dlls","digest":"sha256:dllhash"}]}'
-
-        self.assertEqual(runtime_assets_from_json(data), [("RealtimeAudioTranslator-runtime-cuda12-core-v0.1.29.7z", "core", "corehash"), ("RealtimeAudioTranslator-runtime-cuda12-dlls-v0.1.29.zip", "dlls", "dllhash")])
-        self.assertEqual(runtime_assets_from_json(data, "cpu"), [("RealtimeAudioTranslator-runtime-cuda12-core-v0.1.29.7z", "core", "corehash")])
-
     def test_runtime_status_reports_missing_files(self):
         with tempfile.TemporaryDirectory() as tmp:
             status = runtime_status(Path(tmp))
@@ -95,12 +87,9 @@ class RuntimeTests(unittest.TestCase):
         message = runtime_install_message(Path("runtime"))
 
         self.assertIn("runtime", message)
-        self.assertIn("RealtimeAudioTranslator-runtime-cuda12-core-<version>.7z", message)
-        self.assertIn("RealtimeAudioTranslator-runtime-cuda12-dlls-<version>.zip", message)
         self.assertIn("手動匯入 runtime", message)
         self.assertIn("驗證內容後安全替換", message)
         self.assertIn("Faster-Whisper-XXL Windows runtime", message)
-        self.assertIn("https://github.com/Honguan/Real-time-audio/releases", message)
         self.assertIn("https://github.com/Purfview/whisper-standalone-win/releases", message)
         self.assertIn("cuBLAS.and.cuDNN_CUDA12_win_v3.7z", message)
         self.assertIn("faster-whisper-xxl.exe", message)
@@ -182,75 +171,6 @@ class RuntimeTests(unittest.TestCase):
 
             self.assertEqual(current.read_text(encoding="utf-8"), "working")
             self.assertTrue(verify_install_manifest(target, verify_hashes=True))
-
-    def test_download_failure_preserves_existing_runtime(self):
-        class Response(io.BytesIO):
-            def __enter__(self):
-                return self
-
-            def __exit__(self, *args):
-                self.close()
-
-        with tempfile.TemporaryDirectory() as tmp:
-            target = Path(tmp) / "runtime"
-            target.mkdir()
-            executable = target / "faster-whisper-xxl.exe"
-            executable.write_text("working", encoding="utf-8")
-            archive_data = b"archive"
-            digest = hashlib.sha256(archive_data).hexdigest()
-
-            def fail_extraction(archive, destination):
-                (destination / "faster-whisper-xxl.exe").write_text("partial", encoding="utf-8")
-                raise subprocess.CalledProcessError(1, ["tar", str(archive)])
-
-            disk_usage = type("DiskUsage", (), {"free": 20 * 1024**3})()
-            with patch("realtime_audio_translator.runtime.shutil.disk_usage", return_value=disk_usage), patch(
-                "realtime_audio_translator.runtime.urllib.request.urlopen",
-                side_effect=[Response(b"{}"), Response(archive_data)],
-            ), patch(
-                "realtime_audio_translator.runtime.runtime_assets_from_json",
-                return_value=[("runtime.zip", "https://example.invalid/runtime.zip", digest)],
-            ), patch("realtime_audio_translator.runtime.safe_extract_archive", side_effect=fail_extraction):
-                with self.assertRaises(subprocess.CalledProcessError):
-                    download_runtime(target)
-
-            self.assertEqual(executable.read_text(encoding="utf-8"), "working")
-
-    def test_download_runtime_installs_valid_archives_atomically(self):
-        class Response(io.BytesIO):
-            def __enter__(self):
-                return self
-
-            def __exit__(self, *args):
-                self.close()
-
-        def zip_bytes(files):
-            output = io.BytesIO()
-            with zipfile.ZipFile(output, "w") as archive:
-                for name, content in files.items():
-                    archive.writestr(name, content)
-            return output.getvalue()
-
-        with tempfile.TemporaryDirectory() as tmp:
-            target = Path(tmp) / "runtime"
-            target.mkdir()
-            (target / "old.dll").write_text("old", encoding="utf-8")
-            core = zip_bytes({"faster-whisper-xxl.exe": b"exe", "ffmpeg.exe": b"ffmpeg", "_xxl_data/data.bin": b"data"})
-            dlls = zip_bytes({"cublas64_12.dll": b"cuda", "cublasLt64_12.dll": b"cuda", "cudnn64_9.dll": b"cuda"})
-            assets = [
-                ("runtime-core.zip", "https://example.invalid/core.zip", hashlib.sha256(core).hexdigest()),
-                ("runtime-dlls.zip", "https://example.invalid/dlls.zip", hashlib.sha256(dlls).hexdigest()),
-            ]
-            disk_usage = type("DiskUsage", (), {"free": 20 * 1024**3})()
-            with patch("realtime_audio_translator.runtime.shutil.disk_usage", return_value=disk_usage), patch(
-                "realtime_audio_translator.runtime.urllib.request.urlopen",
-                side_effect=[Response(b"{}"), Response(core), Response(dlls)],
-            ), patch("realtime_audio_translator.runtime.runtime_assets_from_json", return_value=assets):
-                self.assertEqual(download_runtime(target), target)
-
-            self.assertTrue(runtime_status(target)["ready"])
-            self.assertTrue(verify_install_manifest(target, verify_hashes=True))
-            self.assertFalse((target / "old.dll").exists())
 
     def test_runtime_import_writes_verifiable_manifest(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -366,6 +286,8 @@ class RuntimeTests(unittest.TestCase):
                 self.assertIn("assets/icon.png", archive.namelist())
                 self.assertIn("README_QUICK_START_zh-TW.txt", archive.namelist())
                 self.assertIn("release_version.txt", archive.namelist())
+                for name in ("LICENSE", "THIRD_PARTY_NOTICES.md", "THIRD_PARTY_LICENSES.txt", "SBOM.cdx.json"):
+                    self.assertIn(name, archive.namelist())
             with zipfile.ZipFile(runtime_zip) as archive:
                 self.assertIn("faster-whisper-xxl.exe", archive.namelist())
                 self.assertIn("ffmpeg.exe", archive.namelist())
@@ -374,6 +296,8 @@ class RuntimeTests(unittest.TestCase):
                 self.assertIn("cudnn64_9.dll", archive.namelist())
                 self.assertIn("_xxl_data/data.txt", archive.namelist())
                 self.assertIn("runtime_manifest.json", archive.namelist())
+                self.assertIn("THIRD_PARTY_NOTICES.md", archive.namelist())
+                self.assertIn("SBOM.cdx.json", archive.namelist())
                 runtime_readme = archive.read("RUNTIME_README.txt").decode("utf-8-sig")
                 self.assertIn("解壓縮到", runtime_readme)
                 self.assertIn("%USERPROFILE%\\.realtime-audio\\runtime\\cuda12", runtime_readme)
@@ -422,11 +346,13 @@ class RuntimeTests(unittest.TestCase):
                 self.assertIn("faster-whisper-xxl.exe", archive.namelist())
                 self.assertIn("_xxl_data/data.txt", archive.namelist())
                 self.assertNotIn("cublas64_12.dll", archive.namelist())
+                self.assertIn("THIRD_PARTY_NOTICES.md", archive.namelist())
             with zipfile.ZipFile(dll_zip) as archive:
                 self.assertIn("cublas64_12.dll", archive.namelist())
                 self.assertIn("cublasLt64_12.dll", archive.namelist())
                 self.assertIn("cudnn64_9.dll", archive.namelist())
                 self.assertNotIn("faster-whisper-xxl.exe", archive.namelist())
+                self.assertIn("THIRD_PARTY_NOTICES.md", archive.namelist())
 
     def test_package_script_rejects_incomplete_runtime_source(self):
         root = Path(__file__).parents[1]
@@ -581,6 +507,9 @@ class RuntimeTests(unittest.TestCase):
             with zipfile.ZipFile(model_zip) as archive:
                 self.assertIn("whisper-small/model.bin", archive.namelist())
                 self.assertIn("MODEL_README.txt", archive.namelist())
+                self.assertIn("LICENSE", archive.namelist())
+                self.assertIn("THIRD_PARTY_NOTICES.md", archive.namelist())
+                self.assertIn("SBOM.cdx.json", archive.namelist())
                 model_readme = archive.read("MODEL_README.txt").decode("utf-8-sig")
                 self.assertIn("解壓縮到", model_readme)
                 self.assertIn("%USERPROFILE%\\.realtime-audio\\models\\whisper-small", model_readme)
@@ -660,6 +589,8 @@ class RuntimeTests(unittest.TestCase):
             checksums = (out / "SHA256SUMS.txt").read_text(encoding="utf-8")
             self.assertIn("RealtimeAudioTranslator-v0.0.0-test-win-x64.zip", checksums)
             self.assertIn("RealtimeAudioTranslator-runtime-cuda12-v0.0.0-test.zip", checksums)
+            for name in ("LICENSE", "THIRD_PARTY_NOTICES.md", "THIRD_PARTY_LICENSES.txt", "SBOM.cdx.json"):
+                self.assertIn(name, checksums)
 
 
 if __name__ == "__main__":

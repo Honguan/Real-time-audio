@@ -784,8 +784,7 @@ class AudioTests(unittest.TestCase):
     def test_runtime_controls_link_cuda12_dependency(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
 
-        self.assertIn('text="一鍵安裝 runtime"', gui_source)
-        self.assertIn('text="備用 runtime 來源"', gui_source)
+        self.assertIn('text="下載上游 runtime"', gui_source)
         self.assertIn("UPSTREAM_RUNTIME_RELEASE_URL", gui_source)
         self.assertIn('subprocess.run([str(runtime_dir(config) / "ffmpeg.exe"), "-version"]', gui_source)
         self.assertIn('config["last_ffmpeg_failed"]', gui_source)
