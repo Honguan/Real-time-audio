@@ -13,6 +13,7 @@ ASR_LATENCY = "last_asr_latency_seconds"
 TRANSLATION_LATENCY = "last_translation_latency_seconds"
 TTS_SYNTHESIS = "last_tts_synthesis_seconds"
 TTS_PLAYBACK = "last_tts_playback_seconds"
+TTS_QUEUE_DEPTH = "last_tts_queue_depth"
 REAL_TIME_FACTOR = "last_real_time_factor"
 CPU_PERCENT = "last_cpu_percent"
 
@@ -35,6 +36,7 @@ DEFINED_METRICS = {
     TRANSLATION_LATENCY,
     TTS_SYNTHESIS,
     TTS_PLAYBACK,
+    TTS_QUEUE_DEPTH,
     REAL_TIME_FACTOR,
     CPU_PERCENT,
 }

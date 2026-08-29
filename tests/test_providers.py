@@ -574,6 +574,46 @@ class ProvidersTests(unittest.TestCase):
 
         self.assertFalse(sounddevice.played)
 
+    def test_pcm_playback_uses_cancellable_device_stream(self):
+        import realtime_audio_translator.tts as tts_module
+
+        cancel = threading.Event()
+
+        class Stream:
+            aborted = False
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return None
+
+            def write(self, data):
+                cancel.set()
+
+            def abort(self):
+                self.aborted = True
+
+        stream = Stream()
+        devices = []
+
+        class SoundDevice:
+            def OutputStream(self, **kwargs):
+                devices.append(kwargs["device"])
+                return stream
+
+        numpy = type("Numpy", (), {"frombuffer": staticmethod(lambda audio, dtype: list(range(2400)))})()
+        original_find_device = tts_module.find_device
+        tts_module.find_device = lambda *args, **kwargs: 7
+        try:
+            with patch.dict(sys.modules, {"numpy": numpy, "sounddevice": SoundDevice()}):
+                tts_module.play_linear16(b"audio", samplerate=24000, cancel_event=cancel)
+        finally:
+            tts_module.find_device = original_find_device
+
+        self.assertEqual(devices, [7])
+        self.assertTrue(stream.aborted)
+
     def test_windows_sapi_lists_voice_names(self):
         import realtime_audio_translator.tts as tts_module
 

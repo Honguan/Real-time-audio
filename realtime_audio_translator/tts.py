@@ -1,15 +1,11 @@
 import os
 import subprocess
 import tempfile
-import threading
 import time
 import wave
 from pathlib import Path
 
 from .audio import find_device
-
-
-_PLAYBACK_LOCK = threading.Lock()
 
 
 def write_linear16_wav(path: Path, audio: bytes, samplerate: int = 24000) -> Path:
@@ -26,24 +22,17 @@ def play_linear16(audio: bytes, device_name: str = "", samplerate: int = 24000, 
     import numpy as np
     import sounddevice as sd
 
-    while not _PLAYBACK_LOCK.acquire(timeout=0.05):
-        if cancel_event is not None and cancel_event.is_set():
-            return
-    try:
-        device = find_device(device_name, want_output=True)
-        data = np.frombuffer(audio, dtype="int16")
-        if cancel_event is None:
-            sd.play(data, samplerate=samplerate, device=device, blocking=True)
-            return
-        if cancel_event.is_set():
-            return
-        sd.play(data, samplerate=samplerate, device=device, blocking=False)
-        while sd.get_stream().active:
-            if cancel_event.wait(0.05):
-                sd.stop()
+    if cancel_event is not None and cancel_event.is_set():
+        return
+    device = find_device(device_name, want_output=True)
+    data = np.frombuffer(audio, dtype="int16")
+    block_frames = max(1, samplerate // 20)
+    with sd.OutputStream(samplerate=samplerate, device=device, channels=1, dtype="int16") as stream:
+        for offset in range(0, len(data), block_frames):
+            if cancel_event is not None and cancel_event.is_set():
+                stream.abort()
                 return
-    finally:
-        _PLAYBACK_LOCK.release()
+            stream.write(data[offset:offset + block_frames])
 
 
 def _play_wav(path: Path, device_name: str, cancel_event=None) -> None:
