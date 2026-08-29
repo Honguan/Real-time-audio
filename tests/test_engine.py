@@ -73,7 +73,7 @@ class EngineTests(unittest.TestCase):
         self.assertIn("麥克風擷取失敗 [portaudio_-9985]：device unavailable；請停止後重新啟動", statuses)
 
         engine.set_paused(False)
-        engine.set_muted(False)
+        engine.set_virtual_mic_muted(False)
 
         self.assertEqual(statuses[-2:], ["部分可用；麥克風擷取失敗；請停止後重新啟動"] * 2)
 
@@ -688,13 +688,14 @@ class EngineTests(unittest.TestCase):
 
         self.assertEqual(played, [])
 
-    def test_engine_can_start_muted_for_push_to_talk_mode(self):
+    def test_engine_can_start_virtual_mic_muted_for_push_to_talk_mode(self):
         config = DEFAULT_CONFIG.copy()
-        config["start_muted"] = True
+        config["start_virtual_mic_muted"] = True
 
         engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, lambda status: None)
 
-        self.assertTrue(engine.muted)
+        self.assertTrue(engine.virtual_mic_muted)
+        self.assertFalse(engine.speaker_translation_muted)
 
     def test_engine_records_tts_failure_for_diagnostics(self):
         config = DEFAULT_CONFIG.copy()
@@ -884,13 +885,102 @@ class EngineTests(unittest.TestCase):
         self.assertTrue(started.wait(1))
         engine._enqueue_tts("me", "queued", "en", "output", "tts-session", {})
 
-        engine.set_muted(True)
+        engine.set_virtual_mic_muted(True)
 
         self.assertTrue(cancelled.wait(1))
         self.assertEqual(engine.config["last_tts_queue_depth"], 0)
         engine.stop()
 
-    def test_repeated_unmute_keeps_active_tts_cancellable(self):
+    def test_virtual_mic_mute_does_not_cancel_speaker_translation(self):
+        config = DEFAULT_CONFIG.copy()
+        config.update({"record_logs": False, "tts_provider": "local"})
+        started = threading.Event()
+        release = threading.Event()
+        cancelled = []
+        engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, lambda status: None)
+        engine.running = True
+        engine._session = "tts-session"
+
+        class TTS:
+            def speak_local(self, text, device, cancel_event):
+                started.set()
+                while not release.wait(0.01):
+                    if cancel_event.is_set():
+                        cancelled.append(True)
+                        return {}
+                return {}
+
+        engine._pipeline("speaker").tts = TTS()
+        engine._enqueue_tts("speaker", "local", "zh", "speaker-output", "tts-session", {})
+        self.assertTrue(started.wait(1))
+
+        engine.set_virtual_mic_muted(True)
+
+        self.assertTrue(engine.virtual_mic_muted)
+        self.assertFalse(engine.speaker_translation_muted)
+        self.assertFalse(engine._speaker_translation_cancel.is_set())
+        self.assertEqual(cancelled, [])
+        release.set()
+        engine.stop()
+
+    def test_speaker_translation_mute_does_not_mute_virtual_mic(self):
+        engine = RealtimeEngine(Path("."), DEFAULT_CONFIG.copy(), lambda speaker, mine: None, lambda status: None)
+
+        engine.set_speaker_translation_muted(True)
+
+        self.assertTrue(engine.speaker_translation_muted)
+        self.assertFalse(engine.virtual_mic_muted)
+        self.assertTrue(engine._speaker_translation_cancel.is_set())
+        self.assertFalse(engine._virtual_mic_cancel.is_set())
+
+    def test_muting_virtual_mic_preserves_speaker_task_on_shared_output(self):
+        config = DEFAULT_CONFIG.copy()
+        config.update({"record_logs": False, "tts_provider": "local"})
+        mic_started = threading.Event()
+        speaker_spoken = threading.Event()
+        engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, lambda status: None)
+        engine.running = True
+        engine._session = "tts-session"
+
+        class MicTTS:
+            def speak_local(self, text, device, cancel_event):
+                mic_started.set()
+                cancel_event.wait(2)
+                return {}
+
+        class SpeakerTTS:
+            def speak_local(self, text, device, cancel_event):
+                speaker_spoken.set()
+                return {}
+
+        engine._pipeline("me").tts = MicTTS()
+        engine._pipeline("speaker").tts = SpeakerTTS()
+        engine._enqueue_tts("me", "external", "en", "shared-output", "tts-session", {})
+        self.assertTrue(mic_started.wait(1))
+        engine._enqueue_tts("speaker", "local", "zh", "shared-output", "tts-session", {})
+
+        engine.set_virtual_mic_muted(True)
+
+        self.assertTrue(speaker_spoken.wait(1))
+        self.assertEqual(engine.config["last_tts_queue_depth"], 0)
+        engine.stop()
+
+    def test_muted_channel_rejects_direct_tts_call(self):
+        engine = RealtimeEngine(Path("."), DEFAULT_CONFIG.copy(), lambda speaker, mine: None, lambda status: None)
+        spoken = []
+
+        class TTS:
+            def speak_local(self, text, device):
+                spoken.append(text)
+
+        engine._pipeline("me").tts = TTS()
+        engine.set_virtual_mic_muted(True)
+
+        engine._enqueue_tts("me", "blocked", "en", "", None, {})
+
+        self.assertEqual(spoken, [])
+
+    def test_repeated_virtual_mic_unmute_keeps_active_tts_cancellable(self):
         config = DEFAULT_CONFIG.copy()
         config.update({"record_logs": False, "tts_provider": "local"})
         started = threading.Event()
@@ -911,7 +1001,7 @@ class EngineTests(unittest.TestCase):
         engine._enqueue_tts("me", "active", "en", "output", "tts-session", {})
         self.assertTrue(started.wait(1))
 
-        engine.set_muted(False)
+        engine.set_virtual_mic_muted(False)
         message = engine.stop(join_timeout=1)
 
         self.assertTrue(cancelled.wait(1))

@@ -76,7 +76,7 @@ class GuiLogicTests(unittest.TestCase):
         app.vars = {"last_error": stale}
         for name in (
             "overlay_visible", "overlay_topmost", "show_language_labels", "show_original_text",
-            "show_translated_text", "tts_enabled", "speaker_tts_enabled", "start_muted",
+            "show_translated_text", "tts_enabled", "speaker_tts_enabled", "start_virtual_mic_muted",
             "virtual_mic_enabled", "speaker_enabled", "microphone_enabled", "record_logs", "advanced_mode",
         ):
             variable = Mock()
@@ -109,11 +109,11 @@ class GuiLogicTests(unittest.TestCase):
 
         self.assertIn('record_logs_widget = ttk.Checkbutton(frame, text="儲存對話紀錄", variable=self.record_logs, command=self._save)', gui_source)
         self.assertIn('speaker_tts_widget = ttk.Checkbutton(frame, text="播放對方翻譯", variable=self.speaker_tts_enabled, command=self._save)', gui_source)
-        self.assertIn('start_muted_widget = ttk.Checkbutton(frame, text="啟動時先靜音", variable=self.start_muted, command=self._save)', gui_source)
+        self.assertIn('start_virtual_mic_muted_widget = ttk.Checkbutton(frame, text="虛擬麥克風啟動時靜音", variable=self.start_virtual_mic_muted, command=self._save)', gui_source)
         self.assertIn('overlay_topmost_widget = ttk.Checkbutton(frame, text="字幕最上層", variable=self.overlay_topmost, command=self._apply_overlay)', gui_source)
         self.assertIn('language_labels_widget = ttk.Checkbutton(frame, text="顯示語言", variable=self.show_language_labels, command=self._save)', gui_source)
         self.assertIn('speaker_capture_widget = ttk.Checkbutton(frame, text="擷取喇叭", variable=self.speaker_enabled, command=self._save)', gui_source)
-        self.assertIn("self.advanced_mode_widgets = [runtime_buttons_widget, overlay_topmost_widget, language_labels_widget, original_text_widget, translated_text_widget, speaker_capture_widget, microphone_capture_widget, record_logs_widget, speaker_tts_widget, start_muted_widget]", gui_source)
+        self.assertIn("self.advanced_mode_widgets = [runtime_buttons_widget, overlay_topmost_widget, language_labels_widget, original_text_widget, translated_text_widget, speaker_capture_widget, microphone_capture_widget, record_logs_widget, speaker_tts_widget, start_virtual_mic_muted_widget]", gui_source)
         self.assertIn("for widget in self.advanced_mode_widgets:", gui_source)
         self.assertIn('translated_text_widget = ttk.Checkbutton(frame, text="顯示譯文", variable=self.show_translated_text, command=self._save)', gui_source)
 
@@ -152,13 +152,13 @@ class GuiLogicTests(unittest.TestCase):
     def test_push_to_talk_button_holds_unmute(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
 
-        self.assertIn('self.start_muted = tk.BooleanVar(value=bool(self.config.get("start_muted", False)))', gui_source)
-        self.assertIn('ttk.Checkbutton(frame, text="啟動時先靜音", variable=self.start_muted, command=self._save)', gui_source)
-        self.assertIn('config["start_muted"] = self.start_muted.get()', gui_source)
+        self.assertIn('self.start_virtual_mic_muted = tk.BooleanVar(value=bool(self.config.get("start_virtual_mic_muted", False)))', gui_source)
+        self.assertIn('ttk.Checkbutton(frame, text="虛擬麥克風啟動時靜音", variable=self.start_virtual_mic_muted, command=self._save)', gui_source)
+        self.assertIn('config["start_virtual_mic_muted"] = self.start_virtual_mic_muted.get()', gui_source)
         self.assertIn('ptt_button = ttk.Button(buttons, text="按住說話")', gui_source)
         self.assertIn('ptt_button.bind("<ButtonPress-1>", lambda _event: self._push_to_talk(True))', gui_source)
         self.assertIn('ptt_button.bind("<ButtonRelease-1>", lambda _event: self._push_to_talk(False))', gui_source)
-        self.assertIn('self.engine.set_muted(False)', gui_source)
+        self.assertIn('self.engine.set_virtual_mic_muted(False)', gui_source)
 
     def test_subtitle_test_button_updates_overlay(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
@@ -306,11 +306,12 @@ class GuiLogicTests(unittest.TestCase):
 
         class Engine:
             def __init__(self):
-                self.muted = False
+                self.virtual_mic_muted = False
+                self.speaker_translation_muted = True
                 self.calls = []
 
-            def set_muted(self, muted):
-                self.muted = muted
+            def set_virtual_mic_muted(self, muted):
+                self.virtual_mic_muted = muted
                 self.calls.append(muted)
 
         app.engine = Engine()
@@ -319,6 +320,30 @@ class GuiLogicTests(unittest.TestCase):
         app._push_to_talk(False)
 
         self.assertEqual(app.engine.calls, [False, False])
+        self.assertTrue(app.engine.speaker_translation_muted)
+
+    def test_output_mute_buttons_control_channels_independently(self):
+        app = TranslatorApp.__new__(TranslatorApp)
+
+        class Engine:
+            virtual_mic_muted = False
+            speaker_translation_muted = True
+
+            def set_virtual_mic_muted(self, muted):
+                self.virtual_mic_muted = muted
+
+            def set_speaker_translation_muted(self, muted):
+                self.speaker_translation_muted = muted
+
+        app.engine = Engine()
+
+        app._toggle_virtual_mic_mute()
+        self.assertTrue(app.engine.virtual_mic_muted)
+        self.assertTrue(app.engine.speaker_translation_muted)
+
+        app._toggle_speaker_translation_mute()
+        self.assertTrue(app.engine.virtual_mic_muted)
+        self.assertFalse(app.engine.speaker_translation_muted)
 
     def test_quit_button_stops_engine_and_closes_window(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")

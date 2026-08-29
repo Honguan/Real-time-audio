@@ -218,12 +218,12 @@ class ReleaseModelsTests(unittest.TestCase):
         readme = Path("README.md").read_text(encoding="utf-8")
         notes = Path("docs/RELEASE_NOTES.md").read_text(encoding="utf-8")
 
-        self.assertIn("啟動時先靜音", readme)
+        self.assertIn("虛擬麥克風啟動時靜音", readme)
         self.assertIn("Push to talk", readme)
         self.assertIn("按住說話", readme)
-        self.assertIn("按住才暫時取消靜音", readme)
+        self.assertIn("只暫時取消虛擬麥克風靜音", readme)
         self.assertNotIn("hold it to unmute TTS output", readme)
-        self.assertIn("啟動時先靜音", notes)
+        self.assertIn("虛擬麥克風啟動時靜音", notes)
         self.assertIn("Push to talk", notes)
         self.assertIn("按住說話", notes)
 
