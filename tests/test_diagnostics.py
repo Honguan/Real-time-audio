@@ -68,10 +68,10 @@ class DiagnosticsTests(unittest.TestCase):
         self.assertIn("cloud_credentials_missing", codes)
         runtime_issue = next(issue for issue in issues if issue.code == "runtime_missing")
         cloud_issue = next(issue for issue in issues if issue.code == "cloud_credentials_missing")
-        self.assertIn("RealtimeAudioTranslator-runtime-cuda12-core-<version>.7z", runtime_issue.fix)
-        self.assertIn("RealtimeAudioTranslator-runtime-cuda12-dlls-<version>.zip", runtime_issue.fix)
+        self.assertIn("Faster-Whisper-XXL 上游", runtime_issue.fix)
+        self.assertIn("CUDA DLL", runtime_issue.fix)
         self.assertIn("專案 ID", cloud_issue.detail)
-        self.assertIn("兩個都", runtime_issue.fix)
+        self.assertIn("手動匯入 runtime", runtime_issue.fix)
         self.assertTrue(all(isinstance(issue.title, str) for issue in issues))
         self.assertTrue(all(issue.action for issue in issues))
 

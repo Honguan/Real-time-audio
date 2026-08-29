@@ -2,34 +2,28 @@
 
 Windows x64 即時雙向語音翻譯工具。可擷取喇叭與麥克風聲音，轉文字、翻譯、顯示字幕 overlay，並可把翻譯語音送到 VB-CABLE 給 Discord、遊戲或會議軟體使用。
 
+專案採 [MIT License](LICENSE)；第三方來源、授權與未再散布項目記錄於 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)，Release 另附 CycloneDX SBOM。
+
 ## 最快使用
 
 1. 到 GitHub Releases 下載 `RealtimeAudioTranslator-<tag>-win-x64.zip`。
 2. 解壓後執行 `RealtimeAudioTranslator.exe`。
-3. 若提示缺 runtime，按「一鍵安裝 runtime」；工具會下載、驗證並解壓最新版 runtime（約 2.1GB，需要至少 10GB 可用空間）。
+3. 若提示缺 runtime，按「下載上游 runtime」，從 Faster-Whisper-XXL 上游取得 Windows runtime；CUDA 模式另需 `cuBLAS.and.cuDNN_CUDA12_win_v3.7z`。
 
-自動安裝失敗時，再從同一個 Release 手動下載兩個 runtime 壓縮檔：
-
-```text
-RealtimeAudioTranslator-runtime-cuda12-core-<tag>.7z
-RealtimeAudioTranslator-runtime-cuda12-dlls-<tag>.zip
-```
-
-把兩個壓縮檔解壓到同一個暫存資料夾，再於程式內按「手動匯入 runtime」並選擇該資料夾；程式會驗證內容後安全安裝到：
+把上游檔案解壓到同一個暫存資料夾，再於程式內按「手動匯入 runtime」並選擇該資料夾；程式會驗證內容後安全安裝到：
 
 ```text
 %USERPROFILE%\.realtime-audio\runtime\cuda12
 ```
 
 匯入來源資料夾內應直接看到 `faster-whisper-xxl.exe` 與 CUDA12 DLL。主程式已包含 Python runtime，不需要另外安裝 Python。
-若檔案總管無法開啟 core `.7z`，請使用 7-Zip 解壓。
+若檔案總管無法開啟 `.7z`，請使用 7-Zip 解壓。
 
 ## 需要下載哪些檔案
 
 - 必下載：`RealtimeAudioTranslator-<tag>-win-x64.zip`
-- NVIDIA CUDA12 runtime 核心：`RealtimeAudioTranslator-runtime-cuda12-core-<tag>.7z`
-- NVIDIA CUDA12 DLL：`RealtimeAudioTranslator-runtime-cuda12-dlls-<tag>.zip`
-- 模型無法由工具下載時才下載：`RealtimeAudioTranslator-models-<model>-<tag>.zip`
+- Runtime：從 Faster-Whisper-XXL 上游 Releases 下載，不隨本專案 Release 再散布
+- 授權與供應鏈清單：`LICENSE`、`THIRD_PARTY_NOTICES.md`、`SBOM.cdx.json`
 - 校驗用：`SHA256SUMS.txt`
 
 模型 zip 若有提供，請解壓到：
@@ -87,13 +81,13 @@ Whisper 模型可放在 `models\whisper-small`；完整資料夾需直接包含 
 
 ## 翻譯與 TTS
 
-預設本機翻譯不會上傳雲端。進階模式可按「下載離線翻譯模型」，工具會下載目前來源語言與目標語言的雙向 Argos Translate 模型。Release 的 `RealtimeAudioTranslator-models-translation-<tag>.zip` 透過英文中繼支援中文、英文、日文、韓文互譯。下載後模型放在：
+預設本機翻譯不會上傳雲端。進階模式可按「下載離線翻譯模型」，工具會直接從 Argos 來源下載目前語言配對。下載後模型放在：
 
 ```text
 %USERPROFILE%\.realtime-audio\models\translation
 ```
 
-若無法在工具內下載，可從 GitHub Releases 下載 `RealtimeAudioTranslator-models-translation-<tag>.zip`（透過英文中繼支援中文、英文、日文、韓文），解壓到 `%USERPROFILE%\.realtime-audio\models`；資料夾內應保留 `translation`。其他語言配對請在工具內切換語言後下載。若要改用 LibreTranslate，請在進階模式把「本機翻譯 URL」填成例如：
+Argos 套件未完整明示整個 `.argosmodel` 成品的再散布條款，因此本專案 Release 不封裝模型。若要改用 LibreTranslate，請在進階模式把「本機翻譯 URL」填成例如：
 
 切換到 Google 或 OpenAI 時，工具會先提示語音或文字可能傳送到第三方服務並可能產生費用。
 

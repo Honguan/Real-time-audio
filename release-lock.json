@@ -6,6 +6,34 @@
     "requirements": "requirements-release.txt",
     "requirements_sha256": "ee80d6e13f4a30f48bd94b291efcec87fef3de5af39e6c8e428c5389228e593f"
   },
+  "python_packages": [
+    {"name": "altgraph", "version": "0.17.5", "license": "MIT", "source": "https://github.com/ronaldoussoren/altgraph"},
+    {"name": "certifi", "version": "2026.7.22", "license": "MPL-2.0", "source": "https://github.com/certifi/python-certifi"},
+    {"name": "cffi", "version": "2.1.1", "license": "MIT", "source": "https://github.com/python-cffi/cffi"},
+    {"name": "charset-normalizer", "version": "3.5.1", "license": "MIT", "source": "https://github.com/jawah/charset_normalizer"},
+    {"name": "cryptography", "version": "50.0.1", "license": "Apache-2.0 OR BSD-3-Clause", "source": "https://github.com/pyca/cryptography"},
+    {"name": "ctranslate2", "version": "4.8.1", "license": "MIT", "source": "https://github.com/OpenNMT/CTranslate2"},
+    {"name": "google-auth", "version": "2.57.0", "license": "Apache-2.0", "source": "https://github.com/googleapis/google-auth-library-python"},
+    {"name": "idna", "version": "3.19", "license": "BSD-3-Clause", "source": "https://github.com/kjd/idna"},
+    {"name": "numpy", "version": "2.2.6", "license": "BSD-3-Clause", "source": "https://github.com/numpy/numpy"},
+    {"name": "packaging", "version": "26.3", "license": "Apache-2.0 OR BSD-2-Clause", "source": "https://github.com/pypa/packaging"},
+    {"name": "pefile", "version": "2024.8.26", "license": "MIT", "source": "https://github.com/erocarrera/pefile"},
+    {"name": "pillow", "version": "12.3.0", "license": "MIT-CMU", "source": "https://github.com/python-pillow/Pillow"},
+    {"name": "pyasn1", "version": "0.6.4", "license": "BSD-2-Clause", "source": "https://github.com/pyasn1/pyasn1"},
+    {"name": "pyasn1-modules", "version": "0.4.2", "license": "BSD-2-Clause", "source": "https://github.com/pyasn1/pyasn1-modules"},
+    {"name": "pyaudiowpatch", "version": "0.2.12.8", "license": "Apache-2.0", "source": "https://github.com/s0d3s/PyAudioWPatch"},
+    {"name": "pycparser", "version": "3.0", "license": "BSD-3-Clause", "source": "https://github.com/eliben/pycparser"},
+    {"name": "pyinstaller", "version": "6.22.2", "license": "GPL-2.0-or-later with PyInstaller bootloader exception", "source": "https://github.com/pyinstaller/pyinstaller"},
+    {"name": "pyinstaller-hooks-contrib", "version": "2026.7", "license": "Apache-2.0", "source": "https://github.com/pyinstaller/pyinstaller-hooks-contrib"},
+    {"name": "pywin32-ctypes", "version": "0.2.3", "license": "BSD-3-Clause", "source": "https://github.com/enthought/pywin32-ctypes"},
+    {"name": "pyyaml", "version": "6.0.3", "license": "MIT", "source": "https://github.com/yaml/pyyaml"},
+    {"name": "requests", "version": "2.34.2", "license": "Apache-2.0", "source": "https://github.com/psf/requests"},
+    {"name": "sentencepiece", "version": "0.2.2", "license": "Apache-2.0", "source": "https://github.com/google/sentencepiece"},
+    {"name": "sounddevice", "version": "0.5.6", "license": "MIT", "source": "https://github.com/spatialaudio/python-sounddevice"},
+    {"name": "typing-extensions", "version": "4.16.0", "license": "PSF-2.0", "source": "https://github.com/python/typing_extensions"},
+    {"name": "urllib3", "version": "2.7.0", "license": "MIT", "source": "https://github.com/urllib3/urllib3"},
+    {"name": "setuptools", "version": "84.0.0", "license": "MIT", "source": "https://github.com/pypa/setuptools"}
+  ],
   "github_actions": [
     {
       "name": "actions/checkout",
@@ -26,82 +54,10 @@
       "source": "https://github.com/softprops/action-gh-release"
     }
   ],
-  "runtime": [
-    {
-      "kind": "core",
-      "version": "r245.4",
-      "name": "Faster-Whisper-XXL_r245.4_windows.7z",
-      "url": "https://github.com/Purfview/whisper-standalone-win/releases/download/Faster-Whisper-XXL/Faster-Whisper-XXL_r245.4_windows.7z",
-      "size": 1424256246,
-      "sha256": "237dee23939cdabfc96ef859fc5e584b842c3a5557e0d2ca744e1f87c14c5844"
-    },
-    {
-      "kind": "cuda",
-      "version": "CUDA12_v3",
-      "name": "cuBLAS.and.cuDNN_CUDA12_win_v3.7z",
-      "url": "https://github.com/Purfview/whisper-standalone-win/releases/download/libs/cuBLAS.and.cuDNN_CUDA12_win_v3.7z",
-      "size": 849141159,
-      "sha256": "ec00119dbeec2adff661302883becd004028784031a4547ea1749e7683ffb67f"
-    }
-  ],
+  "runtime": [],
   "translation_models": {
     "index_revision": "ff90de60728f7c1338ff6b75974e4c89b2442d22",
     "index_source": "https://raw.githubusercontent.com/argosopentech/argospm-index/ff90de60728f7c1338ff6b75974e4c89b2442d22/index.json",
-    "packages": [
-      {
-        "from": "zh",
-        "to": "en",
-        "version": "1.9",
-        "name": "translate-zh_en-1_9.argosmodel",
-        "url": "https://argos-net.com/v1/translate-zh_en-1_9.argosmodel",
-        "size": 74481402,
-        "sha256": "62e7af5a3a48b530e47b7b3e5c78c2de79073ecd815750d2bf3ab35b4a67da2d"
-      },
-      {
-        "from": "en",
-        "to": "zh",
-        "version": "1.9",
-        "name": "translate-en_zh-1_9.argosmodel",
-        "url": "https://argos-net.com/v1/translate-en_zh-1_9.argosmodel",
-        "size": 70743021,
-        "sha256": "433e7c4f034d87fbe2353161e05f18646d7999452f801a4e1f0378522b9850ab"
-      },
-      {
-        "from": "ja",
-        "to": "en",
-        "version": "1.1",
-        "name": "translate-ja_en-1_1.argosmodel",
-        "url": "https://argos-net.com/v1/translate-ja_en-1_1.argosmodel",
-        "size": 117155716,
-        "sha256": "623e3477959a815eb0a5ef53e09079ae8f1f9d3bbcd230473baf28c03fb83335"
-      },
-      {
-        "from": "en",
-        "to": "ja",
-        "version": "1.1",
-        "name": "translate-en_ja-1_1.argosmodel",
-        "url": "https://argos-net.com/v1/translate-en_ja-1_1.argosmodel",
-        "size": 120470284,
-        "sha256": "16300cc4eaa85320520cabcf433b63d01be40ef6966251de72043a083408f716"
-      },
-      {
-        "from": "ko",
-        "to": "en",
-        "version": "1.1",
-        "name": "translate-ko_en-1_1.argosmodel",
-        "url": "https://argos-net.com/v1/translate-ko_en-1_1.argosmodel",
-        "size": 118852077,
-        "sha256": "6da8f3db6ca40f42b1875570a1c06856f6e17c7ef62845d85de217ba548c1471"
-      },
-      {
-        "from": "en",
-        "to": "ko",
-        "version": "1.1",
-        "name": "translate-en_ko-1_1.argosmodel",
-        "url": "https://argos-net.com/v1/translate-en_ko-1_1.argosmodel",
-        "size": 120789009,
-        "sha256": "e03d8e65e6d44525ec5808c3409fcf8728c76c2c76925372b6d3dc3278de17fc"
-      }
-    ]
+    "packages": []
   }
 }

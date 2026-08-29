@@ -45,6 +45,13 @@ if (-not (Test-Path -LiteralPath $Out)) {
   New-Item -ItemType Directory -Path $Out | Out-Null
 }
 
+python scripts\generate_sbom.py $Out --version $Version
+if ($LASTEXITCODE -ne 0) {
+  throw "SBOM generation failed: $LASTEXITCODE"
+}
+$LegalFiles = @("LICENSE", "THIRD_PARTY_NOTICES.md", "THIRD_PARTY_LICENSES.txt", "SBOM.cdx.json")
+Copy-Item -LiteralPath (Join-Path $Root "LICENSE"), (Join-Path $Root "THIRD_PARTY_NOTICES.md") -Destination $Out -Force
+
 function New-UnicodeString([int[]]$Codes) {
   -join ($Codes | ForEach-Object { [char]$_ })
 }
@@ -108,6 +115,9 @@ if ($CreateApp) {
   Copy-Item -LiteralPath (Join-Path $Root "README.md") -Destination (Join-Path $AppStage "README.md") -Force
   Copy-Item -LiteralPath (Join-Path $Root "docs\RELEASE_NOTES.md") -Destination (Join-Path $AppStage "RELEASE_NOTES.md") -Force
   Copy-Item -LiteralPath (Join-Path $Root "docs\README_QUICK_START_zh-TW.txt") -Destination (Join-Path $AppStage "README_QUICK_START_zh-TW.txt") -Force
+  foreach ($LegalFile in $LegalFiles) {
+    Copy-Item -LiteralPath (Join-Path $Out $LegalFile) -Destination $AppStage -Force
+  }
   Set-Content -LiteralPath (Join-Path $AppStage "release_version.txt") -Value "$Version" -Encoding UTF8
 
   $AppZip = Join-Path $Out "RealtimeAudioTranslator-$Version-win-x64.zip"
@@ -140,6 +150,11 @@ if ($CreateRuntime) {
       Copy-Item -Destination $RuntimeCoreStage -Recurse -Force
     foreach ($CudaDll in $CudaDlls) {
       Copy-Item -LiteralPath (Join-Path $RuntimeSource $CudaDll) -Destination $RuntimeDllStage -Force
+    }
+    foreach ($LegalFile in $LegalFiles) {
+      foreach ($Stage in $RuntimeCoreStage, $RuntimeDllStage) {
+        Copy-Item -LiteralPath (Join-Path $Out $LegalFile) -Destination $Stage -Force
+      }
     }
     @(
       "Extract this archive and the CUDA DLL archive to:",
@@ -181,6 +196,9 @@ if ($CreateRuntime) {
     $RuntimeStage = Join-Path $Out "_stage_runtime"
     New-Item -ItemType Directory -Path $RuntimeStage | Out-Null
     Copy-Item -Path (Join-Path $RuntimeSource "*") -Destination $RuntimeStage -Recurse -Force
+    foreach ($LegalFile in $LegalFiles) {
+      Copy-Item -LiteralPath (Join-Path $Out $LegalFile) -Destination $RuntimeStage -Force
+    }
     @(
       $ExtractToLabel,
       "%USERPROFILE%\.realtime-audio\runtime\cuda12",
@@ -213,6 +231,9 @@ if ($CreateModels) {
   $ModelsStage = Join-Path $Out "_stage_models"
   New-Item -ItemType Directory -Path $ModelsStage | Out-Null
   Copy-Item -LiteralPath $ModelsSource -Destination (Join-Path $ModelsStage $ModelName) -Recurse -Force
+  foreach ($LegalFile in $LegalFiles) {
+    Copy-Item -LiteralPath (Join-Path $Out $LegalFile) -Destination $ModelsStage -Force
+  }
   @(
     $ExtractToLabel,
     "%USERPROFILE%\.realtime-audio\models",
@@ -228,7 +249,7 @@ $Checksums = Join-Path $Out "SHA256SUMS.txt"
 $Sha256 = [System.Security.Cryptography.SHA256]::Create()
 try {
   Get-ChildItem -LiteralPath $Out |
-    Where-Object { $_.Extension -in ".zip", ".7z" } |
+    Where-Object { $_.Name -ne "SHA256SUMS.txt" -and ($_.Name -eq "LICENSE" -or $_.Extension -in ".zip", ".7z", ".json", ".md", ".txt") } |
     ForEach-Object {
       $Path = $_.FullName
       $Stream = [System.IO.File]::OpenRead((Resolve-Path -LiteralPath $Path))

@@ -9,6 +9,7 @@ from unittest.mock import patch
 import requests
 from realtime_audio_translator.models import MODEL_INVALID, MODEL_MARKER, ModelDownloadCancelled, cuda_hardware_from_check_output, download_model, list_models, model_available, model_install_message, model_status, models_dir, recommend_model, verify_model_integrity
 from tests.helpers import write_model
+from scripts.generate_sbom import generate
 
 
 def git_blob_digest(data: bytes) -> str:
@@ -235,6 +236,8 @@ class ReleaseModelsTests(unittest.TestCase):
         self.assertIn("RuntimeCoreFormat", script)
         self.assertIn("README.md", script)
         self.assertIn("RELEASE_NOTES.md", script)
+        for name in ("LICENSE", "THIRD_PARTY_NOTICES.md", "THIRD_PARTY_LICENSES.txt", "SBOM.cdx.json"):
+            self.assertIn(name, script)
 
     def test_package_script_writes_sha256sums(self):
         script = Path("scripts/package.ps1").read_text(encoding="utf-8")
@@ -249,9 +252,6 @@ class ReleaseModelsTests(unittest.TestCase):
         self.assertIn("tags:", workflow)
         self.assertIn("v*", workflow)
         self.assertIn("workflow_dispatch", workflow)
-        self.assertIn("build_runtime", workflow)
-        self.assertIn("require_runtime_asset", workflow)
-        self.assertIn("github.event_name == 'push' || inputs.build_runtime == 'true'", workflow)
         self.assertIn("ref: ${{ inputs.version || github.ref }}", workflow)
         self.assertIn("python-version: \"3.10.11\"", workflow)
         self.assertIn("--require-hashes -r requirements-release.txt", workflow)
@@ -261,15 +261,11 @@ class ReleaseModelsTests(unittest.TestCase):
         self.assertNotIn("argospm-index/main", workflow)
         self.assertIn("Get-Content release-lock.json", workflow)
         self.assertIn("Get-FileHash", workflow)
-        self.assertIn("cublas64_12.dll", workflow)
-        self.assertIn("cublasLt64_12.dll", workflow)
-        self.assertIn("cudnn64_9.dll", workflow)
-        self.assertGreaterEqual(workflow.count("$LASTEXITCODE -ne 0"), 2)
-        self.assertIn('Test-Path "runtime-download\\.complete"', workflow)
-        self.assertNotIn("-Filter *.dll", workflow)
+        self.assertNotIn("whisper-standalone-win", workflow)
+        self.assertNotIn("package_runtime_zip.ps1", workflow)
+        self.assertNotIn("package_models_zip.ps1", workflow)
         self.assertIn("& ./scripts/build.ps1 -SkipInstall", workflow)
         self.assertIn("& ./scripts/package_app_zip.ps1 -Version $version -SkipBuild", workflow)
-        self.assertIn("& ./scripts/package_runtime_zip.ps1 -Version $version -RuntimeSource \"downloaded-runtime\" -SplitRuntime -RuntimeCoreFormat 7z", workflow)
         self.assertIn("& ./scripts/make_checksums.ps1", workflow)
         self.assertNotIn("@args", workflow)
         self.assertNotIn("@packageArgs", workflow)
@@ -278,7 +274,9 @@ class ReleaseModelsTests(unittest.TestCase):
         self.assertIn("tag_name:", workflow)
         self.assertIn("inputs.version || github.ref_name", workflow)
         self.assertIn("dist-release/*.zip", workflow)
-        self.assertIn("dist-release/*.7z", workflow)
+        self.assertIn("dist-release/SBOM.cdx.json", workflow)
+        self.assertIn("dist-release/THIRD_PARTY_NOTICES.md", workflow)
+        self.assertIn("dist-release/THIRD_PARTY_LICENSES.txt", workflow)
         self.assertIn("dist-release/RELEASE_MANIFEST.json", workflow)
         self.assertIn("dist-release/SHA256SUMS.txt", workflow)
 
@@ -291,17 +289,28 @@ class ReleaseModelsTests(unittest.TestCase):
         self.assertEqual(lock["python"]["index_url"], "https://pypi.org/simple")
         requirements_bytes = requirements.read_bytes().replace(b"\r\n", b"\n")
         self.assertEqual(hashlib.sha256(requirements_bytes).hexdigest(), lock["python"]["requirements_sha256"])
-        self.assertEqual(len(lock["runtime"]), 2)
-        self.assertEqual(len(lock["translation_models"]["packages"]), 6)
+        self.assertEqual(lock["runtime"], [])
+        self.assertEqual(lock["translation_models"]["packages"], [])
         self.assertRegex(lock["translation_models"]["index_revision"], r"^[0-9a-f]{40}$")
         for action in lock["github_actions"]:
             self.assertRegex(action["commit"], r"^[0-9a-f]{40}$")
             self.assertIn(f'{action["name"]}@{action["commit"]}', workflows)
-        for asset in lock["runtime"] + lock["translation_models"]["packages"]:
-            self.assertGreater(asset["size"], 0)
-            self.assertRegex(asset["sha256"], r"^[0-9a-f]{64}$")
-            self.assertNotIn("latest", asset["url"])
         self.assertIn('".json"', Path("scripts/make_checksums.ps1").read_text(encoding="utf-8"))
+
+    def test_release_sbom_is_generated_from_locked_inventory(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            generate(Path(tmp), "v1.2.3")
+            sbom = json.loads((Path(tmp) / "SBOM.cdx.json").read_text(encoding="utf-8"))
+
+        self.assertEqual((sbom["bomFormat"], sbom["specVersion"]), ("CycloneDX", "1.6"))
+        self.assertEqual(sbom["metadata"]["component"]["version"], "1.2.3")
+        self.assertTrue(any(component["name"] == "numpy" for component in sbom["components"]))
+        cryptography = next(component for component in sbom["components"] if component["name"] == "cryptography")
+        self.assertEqual(cryptography["licenses"], [{"expression": "Apache-2.0 OR BSD-3-Clause"}])
+        self.assertEqual(
+            {component["name"] for component in sbom["components"] if component["type"] == "machine-learning-model"},
+            set(),
+        )
 
     def test_ci_workflow_gates_push_and_pull_requests_with_shared_tests(self):
         ci_path = Path(".github/workflows/ci.yml")
@@ -320,6 +329,9 @@ class ReleaseModelsTests(unittest.TestCase):
         self.assertIn('python-version: ["3.10", "3.13"]', ci)
         self.assertIn("python-version: ${{ matrix.python-version }}", ci)
         self.assertIn("python -m pip install -e .", ci)
+        self.assertIn("python -m pip install --require-hashes -r requirements-release.txt", ci)
+        self.assertIn('cyclonedx-python-lib[validation]==11.12.0', ci)
+        self.assertIn("python scripts/generate_sbom.py build/sbom-check --verify-installed --validate", ci)
         self.assertIn("cache-dependency-path: pyproject.toml", ci)
         self.assertIn(".\\scripts\\test.ps1", ci)
         self.assertIn("& $Python -m unittest discover -s tests", script)
@@ -337,19 +349,18 @@ class ReleaseModelsTests(unittest.TestCase):
         self.assertNotIn("py -3.10", build)
         self.assertFalse(Path("requirements.txt").exists())
 
-    def test_release_workflow_packages_basic_offline_languages(self):
+    def test_release_workflow_does_not_redistribute_offline_models(self):
         lock = json.loads(Path("release-lock.json").read_text(encoding="utf-8"))
-        pairs = {(item["from"], item["to"]) for item in lock["translation_models"]["packages"]}
+        workflow = Path(".github/workflows/release.yml").read_text(encoding="utf-8")
 
-        self.assertEqual(pairs, {("zh", "en"), ("en", "zh"), ("ja", "en"), ("en", "ja"), ("ko", "en"), ("en", "ko")})
+        self.assertEqual(lock["translation_models"]["packages"], [])
+        self.assertNotIn("package_models_zip.ps1", workflow)
 
     def test_release_notes_include_public_download_instructions(self):
         notes = Path("docs/RELEASE_NOTES.md").read_text(encoding="utf-8")
 
         self.assertIn("最快使用", notes)
         self.assertIn("RealtimeAudioTranslator.exe", notes)
-        self.assertIn("RealtimeAudioTranslator-runtime-cuda12-core-<tag>.7z", notes)
-        self.assertIn("RealtimeAudioTranslator-runtime-cuda12-dlls-<tag>.zip", notes)
         self.assertIn("%USERPROFILE%\\.realtime-audio\\runtime\\cuda12", notes)
         self.assertIn("%USERPROFILE%\\.realtime-audio\\models", notes)
         self.assertIn("VB-CABLE", notes)
@@ -357,14 +368,14 @@ class ReleaseModelsTests(unittest.TestCase):
         self.assertIn("https://github.com/Purfview/whisper-standalone-win/releases", notes)
         self.assertIn("cuBLAS.and.cuDNN_CUDA12_win_v3.7z", notes)
         self.assertIn("本機翻譯 URL", notes)
-        self.assertIn("兩個 runtime 壓縮檔", notes)
+        self.assertIn("Release 不再散布第三方 runtime", notes)
+        self.assertIn("SBOM.cdx.json", notes)
 
     def test_quick_start_doc_exists_for_app_zip(self):
         quick_start = Path("docs/README_QUICK_START_zh-TW.txt").read_text(encoding="utf-8")
 
         self.assertIn("RealtimeAudioTranslator.exe", quick_start)
-        self.assertIn("RealtimeAudioTranslator-runtime-cuda12-core-<tag>.7z", quick_start)
-        self.assertIn("RealtimeAudioTranslator-runtime-cuda12-dlls-<tag>.zip", quick_start)
+        self.assertIn("Faster-Whisper-XXL 上游 Releases", quick_start)
         self.assertIn("%USERPROFILE%\\.realtime-audio\\runtime\\cuda12", quick_start)
         self.assertIn("%USERPROFILE%\\.realtime-audio\\models", quick_start)
         self.assertIn("場景", quick_start)
@@ -389,7 +400,6 @@ class ReleaseModelsTests(unittest.TestCase):
 
         for path in (Path("README.md"), Path("docs/RELEASE_NOTES.md")):
             text = path.read_text(encoding="utf-8")
-            self.assertIn("兩個 runtime 壓縮檔", text)
             self.assertIn("手動匯入 runtime", text)
             self.assertIn("解壓到同一個暫存資料夾", text)
             self.assertNotIn("`Device`", text)
