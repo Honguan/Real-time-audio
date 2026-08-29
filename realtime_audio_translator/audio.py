@@ -202,7 +202,7 @@ class UtteranceSegmenter:
     def flush(self) -> AudioSegment | None:
         if not self._frames:
             return None
-        if self._leading_overlap_frames >= len(self._frames):
+        if self._leading_overlap_frames + self._silence_frames >= len(self._frames):
             self._frames = []
             self._silence_frames = 0
             self._leading_overlap_frames = 0

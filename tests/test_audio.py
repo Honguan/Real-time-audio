@@ -549,6 +549,18 @@ class AudioTests(unittest.TestCase):
         self.assertEqual(len(emitted), 1)
         self.assertIsNone(segmenter.flush())
 
+    def test_stream_end_does_not_emit_overlap_with_only_new_silence(self):
+        policy = SegmentationPolicy(0.05, 0.05, 0.10, 0.10, 0.20)
+        segmenter = UtteranceSegmenter(policy, 0.01)
+        speech = AudioSegment((12000).to_bytes(2, "little", signed=True) * 800, 16000)
+        silence = AudioSegment((0).to_bytes(2, "little", signed=True) * 800, 16000)
+
+        emitted = [utterance for _ in range(4) if (utterance := segmenter.push(speech))]
+        segmenter.push(silence)
+
+        self.assertEqual(len(emitted), 1)
+        self.assertIsNone(segmenter.flush())
+
     def test_hangover_preroll_does_not_copy_previous_speech(self):
         policy = SegmentationPolicy(0.05, 0.20, 0.10, 0, 1.0)
         segmenter = UtteranceSegmenter(policy, 0.01)
