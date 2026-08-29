@@ -1,10 +1,13 @@
 import base64
+import hashlib
 import html
+import importlib.metadata
 import json
 import os
 import random
 import threading
 import time
+from collections import OrderedDict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -13,7 +16,7 @@ import requests
 from requests.adapters import HTTPAdapter
 
 from .ai_memory import cache_translation, cached_translation
-from .offline_translation import translate_offline
+from .offline_translation import translate_offline, translation_models_dir
 from .tts import speak_windows_sapi
 
 
@@ -30,6 +33,8 @@ HTTP_CONNECT_TIMEOUT_SECONDS = 2.0
 HTTP_BACKOFF_SECONDS = 0.25
 HTTP_BACKOFF_JITTER_SECONDS = 0.10
 HTTP_MAX_BACKOFF_SECONDS = 1.0
+TRANSLATION_MEMORY_CACHE_SIZE = 256
+TRANSLATION_REQUEST_VERSION = 2
 
 
 class ProviderRequestError(RuntimeError):
@@ -187,7 +192,7 @@ def google_access_token(service_account_json: str, http: HttpClient | None = Non
 @dataclass
 class Translator:
     config: dict
-    cache: dict[tuple[str, str, str, str], str] = field(default_factory=dict)
+    cache: OrderedDict[str, str] = field(default_factory=OrderedDict)
     context: list[tuple[str, str]] = field(default_factory=list)
     http: HttpClient = field(default_factory=HttpClient)
 
@@ -195,32 +200,99 @@ class Translator:
         if not text.strip():
             return TranslationResult("", 0.0)
         provider = self.config.get("provider", "google")
-        cache_key = (provider, source_language, target_language, text.strip())
-        if cache_key in self.cache and not self._unverified_local_passthrough(provider, text, self.cache[cache_key]):
-            return TranslationResult(self._apply_glossary(self.cache[cache_key]), 1.0)
+        glossary = self._glossary()
+        request_fingerprint = self._request_fingerprint(text, source_language, target_language, glossary)
+        memory_cached = self._memory_cached(request_fingerprint)
+        if memory_cached is not None and not self._unverified_local_passthrough(provider, text, memory_cached):
+            self._remember_context(text, memory_cached)
+            return TranslationResult(self._apply_glossary(memory_cached, glossary), 1.0)
         db_path = Path(self.config.get("translation_cache_path", ""))
         persistent_cache_enabled = self.config.get("translation_cache_enabled", True)
         if persistent_cache_enabled and db_path:
-            cached = cached_translation(db_path, provider, source_language, target_language, text)
+            cached = cached_translation(db_path, request_fingerprint)
             if cached is not None and not self._unverified_local_passthrough(provider, text, cached):
-                self.cache[cache_key] = cached
-                return TranslationResult(self._apply_glossary(cached), 1.0)
+                self._remember_cached(request_fingerprint, cached)
+                self._remember_context(text, cached)
+                return TranslationResult(self._apply_glossary(cached, glossary), 1.0)
         if provider == "local":
             translated = self._local_translate(text, source_language, target_language)
             confidence = 0.8 if self.config.get("local_translate_url", "").strip() or translated != text else 0.3
         elif provider == "openai":
-            translated = self._openai_translate(text, source_language, target_language)
+            translated = self._openai_translate(text, source_language, target_language, glossary)
             confidence = 0.8
         else:
             translated = self._google_translate(text, source_language, target_language)
             confidence = 0.8
         if not translated.strip():
             confidence = 0.0
-        self.cache[cache_key] = translated
+        self._remember_cached(request_fingerprint, translated)
         self._remember_context(text, translated)
         if persistent_cache_enabled and db_path and not (provider == "local" and not self.config.get("local_translate_url", "").strip() and translated == text):
-            cache_translation(db_path, provider, source_language, target_language, text, translated)
-        return TranslationResult(self._apply_glossary(translated), confidence)
+            cache_translation(db_path, request_fingerprint, provider, source_language, target_language, text, translated)
+        return TranslationResult(self._apply_glossary(translated, glossary), confidence)
+
+    def _request_fingerprint(self, text: str, source_language: str, target_language: str, glossary: dict | None = None) -> str:
+        provider = self.config.get("provider", "google")
+        request = {
+            "version": TRANSLATION_REQUEST_VERSION,
+            "provider": provider,
+            "backend": self._backend_identity(provider),
+            "source_language": source_language,
+            "target_language": target_language,
+            "source_text": text.strip(),
+            "style": self.config.get("translation_style", "plain"),
+            "glossary": glossary if glossary is not None else self._glossary(),
+            "context": self.context if provider == "openai" else [],
+        }
+        document = json.dumps(request, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        return hashlib.sha256(document.encode("utf-8")).hexdigest()
+
+    def _backend_identity(self, provider: str) -> dict:
+        revision = str(self.config.get("translation_backend_revision", "1"))
+        if provider == "openai":
+            return {"model": self.config.get("openai_model", ""), "revision": revision}
+        if provider == "google":
+            return {"api": "translate-v3", "revision": revision}
+        manifests = []
+        packages_dir = translation_models_dir(self.config) / "packages"
+        try:
+            for path in sorted(packages_dir.glob("*/install_manifest.json")):
+                manifests.append(hashlib.sha256(path.read_bytes()).hexdigest())
+        except OSError:
+            manifests = []
+        try:
+            argos_version = importlib.metadata.version("argostranslate")
+        except importlib.metadata.PackageNotFoundError:
+            argos_version = ""
+        try:
+            import argostranslate.settings as argos_settings
+
+            argos_models = sorted(
+                hashlib.sha256(metadata.read_bytes()).hexdigest()
+                for directory in argos_settings.package_dirs
+                for metadata in Path(directory).glob("*/metadata.json")
+            )
+        except Exception:
+            argos_models = []
+        return {
+            "url": self.config.get("local_translate_url", "").strip(),
+            "models": manifests,
+            "argos": argos_version,
+            "argos_models": argos_models,
+            "revision": revision,
+        }
+
+    def _memory_cached(self, request_fingerprint: str) -> str | None:
+        translated = self.cache.pop(request_fingerprint, None)
+        if translated is not None:
+            self.cache[request_fingerprint] = translated
+        return translated
+
+    def _remember_cached(self, request_fingerprint: str, translated: str) -> None:
+        self.cache.pop(request_fingerprint, None)
+        self.cache[request_fingerprint] = translated
+        if len(self.cache) > TRANSLATION_MEMORY_CACHE_SIZE:
+            self.cache.popitem(last=False)
 
     def _unverified_local_passthrough(self, provider: str, text: str, translated: str) -> bool:
         return provider == "local" and not self.config.get("local_translate_url", "").strip() and translated.strip() == text.strip()
@@ -229,8 +301,8 @@ class Translator:
         if text.strip() and translated.strip():
             self.context = (self.context + [(text.strip(), translated.strip())])[-4:]
 
-    def _apply_glossary(self, text: str) -> str:
-        glossary = self._glossary()
+    def _apply_glossary(self, text: str, glossary: dict | None = None) -> str:
+        glossary = self._glossary() if glossary is None else glossary
         if not glossary:
             return text
         for source, target in sorted(glossary.items(), key=lambda item: len(str(item[0])), reverse=True):
@@ -282,8 +354,8 @@ class Translator:
                 return ""
             return source.get_translation(target).translate(text)
 
-    def _openai_translate(self, text: str, source_language: str, target_language: str) -> str:
-        request = build_openai_translation_request(text, target_language, source_language, self.config["openai_model"], self.context, self.config.get("translation_style", "plain"), self._glossary())
+    def _openai_translate(self, text: str, source_language: str, target_language: str, glossary: dict | None = None) -> str:
+        request = build_openai_translation_request(text, target_language, source_language, self.config["openai_model"], self.context, self.config.get("translation_style", "plain"), glossary)
         api_key = os.environ.get("OPENAI_API_KEY", "")
         if not api_key:
             raise RuntimeError("未設定 OPENAI_API_KEY，請先設定環境變數或改用本機翻譯服務")

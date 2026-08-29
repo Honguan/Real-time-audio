@@ -14,6 +14,18 @@ from tests.helpers import QueuedWorker, StaticTranscriber, StoppingTranslator, w
 
 
 class EngineTests(unittest.TestCase):
+    def test_engine_updates_existing_pipeline_translation_cache_inputs(self):
+        engine = RealtimeEngine(Path("."), DEFAULT_CONFIG.copy(), lambda speaker, mine: None, lambda status: None)
+        pipeline = engine._pipeline("speaker")
+        original = pipeline.translator._request_fingerprint("hello", "en", "zh")
+        config = DEFAULT_CONFIG.copy()
+        config.update({"translation_style": "formal", "speaker_tts_volume": 65})
+
+        engine.update_config(config)
+
+        self.assertNotEqual(pipeline.translator._request_fingerprint("hello", "en", "zh"), original)
+        self.assertEqual(pipeline.config["tts_volume"], 65)
+
     def test_existing_provider_clients_follow_current_session_cancellation(self):
         engine = RealtimeEngine(Path("."), DEFAULT_CONFIG.copy(), lambda speaker, mine: None, lambda status: None)
         pipeline = engine._pipeline("me")

@@ -1,41 +1,76 @@
+import hashlib
 import json
 import sqlite3
+import threading
 from pathlib import Path
+
+
+CACHE_SCHEMA_VERSION = 2
+_CACHE_SCHEMA_LOCK = threading.Lock()
+
+
+def _create_cache(db: sqlite3.Connection) -> None:
+    db.execute(
+        """
+        CREATE TABLE translations (
+            request_fingerprint TEXT PRIMARY KEY,
+            provider TEXT NOT NULL,
+            source_language TEXT NOT NULL,
+            target_language TEXT NOT NULL,
+            source_text TEXT NOT NULL,
+            translated_text TEXT NOT NULL
+        )
+        """
+    )
 
 
 def _ensure_cache(db_path: Path) -> None:
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(db_path) as db:
-        db.execute(
-            """
-            CREATE TABLE IF NOT EXISTS translations (
-                provider TEXT NOT NULL,
-                source_language TEXT NOT NULL,
-                target_language TEXT NOT NULL,
-                source_text TEXT NOT NULL,
-                translated_text TEXT NOT NULL,
-                PRIMARY KEY (provider, source_language, target_language, source_text)
-            )
-            """
-        )
+    with _CACHE_SCHEMA_LOCK:
+        with sqlite3.connect(db_path) as db:
+            version = db.execute("PRAGMA user_version").fetchone()[0]
+            if version > CACHE_SCHEMA_VERSION:
+                raise RuntimeError(f"翻譯快取版本過新：{version}")
+            columns = {row[1] for row in db.execute("PRAGMA table_info(translations)")}
+            if not columns:
+                _create_cache(db)
+            elif "request_fingerprint" not in columns:
+                legacy_rows = db.execute(
+                    "SELECT provider, source_language, target_language, source_text, translated_text FROM translations"
+                ).fetchall()
+                db.execute("ALTER TABLE translations RENAME TO translations_v1")
+                _create_cache(db)
+                db.executemany(
+                    """
+                    INSERT INTO translations
+                        (request_fingerprint, provider, source_language, target_language, source_text, translated_text)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    [
+                        (
+                            "legacy:" + hashlib.sha256(json.dumps(row[:4], ensure_ascii=False).encode("utf-8")).hexdigest(),
+                            *row,
+                        )
+                        for row in legacy_rows
+                    ],
+                )
+                db.execute("DROP TABLE translations_v1")
+            db.execute(f"PRAGMA user_version = {CACHE_SCHEMA_VERSION}")
 
 
-def cached_translation(db_path: Path, provider: str, source_language: str, target_language: str, text: str) -> str | None:
+def cached_translation(db_path: Path, request_fingerprint: str) -> str | None:
     if not db_path.exists():
         return None
+    _ensure_cache(db_path)
     with sqlite3.connect(db_path) as db:
         row = db.execute(
-            """
-            SELECT translated_text
-            FROM translations
-            WHERE provider = ? AND source_language = ? AND target_language = ? AND source_text = ?
-            """,
-            (provider, source_language, target_language, text.strip()),
+            "SELECT translated_text FROM translations WHERE request_fingerprint = ?",
+            (request_fingerprint,),
         ).fetchone()
     return str(row[0]) if row else None
 
 
-def cache_translation(db_path: Path, provider: str, source_language: str, target_language: str, text: str, translated: str) -> None:
+def cache_translation(db_path: Path, request_fingerprint: str, provider: str, source_language: str, target_language: str, text: str, translated: str) -> None:
     if not text.strip() or not translated.strip():
         return
     _ensure_cache(db_path)
@@ -43,10 +78,10 @@ def cache_translation(db_path: Path, provider: str, source_language: str, target
         db.execute(
             """
             INSERT OR REPLACE INTO translations
-                (provider, source_language, target_language, source_text, translated_text)
-            VALUES (?, ?, ?, ?, ?)
+                (request_fingerprint, provider, source_language, target_language, source_text, translated_text)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (provider, source_language, target_language, text.strip(), translated),
+            (request_fingerprint, provider, source_language, target_language, text.strip(), translated),
         )
 
 

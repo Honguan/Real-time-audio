@@ -356,6 +356,15 @@ class RealtimeEngine:
             pipeline.tts.http.cancel_event = self._speaker_translation_cancel if direction == "speaker" else self._virtual_mic_cancel
         return pipeline
 
+    def update_config(self, config: dict) -> None:
+        with self._lifecycle_lock:
+            self.config = config
+            for direction, pipeline in self.pipelines.items():
+                values = {key: value for key, value in config.items() if key not in STATE_KEYS}
+                if direction == "speaker":
+                    values["tts_volume"] = values["speaker_tts_volume"]
+                pipeline.config.update(values)
+
     def _publish(self, session: str | None, callback: Callable, *args) -> None:
         with self._callback_lock:
             if self._session_active(session):
@@ -367,12 +376,6 @@ class RealtimeEngine:
         config = pipeline.config
         translator = pipeline.translator
         metrics = pipeline.metrics
-        source = "auto" if direction == "speaker" else config["source_language"]
-        fallback_source = safe_target_language(config["target_language"], DEFAULT_CONFIG["target_language"]) if direction == "speaker" else source
-        target = safe_target_language(
-            config["source_language"] if direction == "speaker" else config["target_language"],
-            DEFAULT_CONFIG["source_language"] if direction == "speaker" else DEFAULT_CONFIG["target_language"],
-        )
         while self.running and self._session_active(session) and not getattr(worker, "_stopped", False):
             if self.paused:
                 worker.discard_pending() if hasattr(worker, "discard_pending") else drain_queue(worker.queue)
@@ -385,6 +388,12 @@ class RealtimeEngine:
             try:
                 if not config.get("speaker_enabled" if direction == "speaker" else "microphone_enabled", True):
                     continue
+                source = "auto" if direction == "speaker" else config["source_language"]
+                fallback_source = safe_target_language(config["target_language"], DEFAULT_CONFIG["target_language"]) if direction == "speaker" else source
+                target = safe_target_language(
+                    config["source_language"] if direction == "speaker" else config["target_language"],
+                    DEFAULT_CONFIG["source_language"] if direction == "speaker" else DEFAULT_CONFIG["target_language"],
+                )
                 dequeued_perf = time.perf_counter()
                 timing = worker.take_timing(wav) if hasattr(worker, "take_timing") else {}
                 timing["dequeued_at"] = time.time()
