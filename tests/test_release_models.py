@@ -10,6 +10,7 @@ import requests
 from realtime_audio_translator.models import MODEL_INVALID, MODEL_MARKER, ModelDownloadCancelled, cuda_hardware_from_check_output, download_model, list_models, model_available, model_install_message, model_status, models_dir, recommend_model, verify_model_integrity
 from tests.helpers import write_model
 from scripts.generate_sbom import generate
+from scripts.verify_release_version import validate_release
 
 
 def git_blob_digest(data: bytes) -> str:
@@ -253,7 +254,9 @@ class ReleaseModelsTests(unittest.TestCase):
         self.assertIn("v*", workflow)
         self.assertIn("workflow_dispatch", workflow)
         self.assertIn("ref: ${{ inputs.version || github.ref }}", workflow)
+        self.assertIn("fetch-depth: 0", workflow)
         self.assertIn("python-version: \"3.10.11\"", workflow)
+        self.assertIn("python scripts/verify_release_version.py --version $env:RELEASE_VERSION --github-sha $env:SOURCE_SHA", workflow)
         self.assertIn("--require-hashes -r requirements-release.txt", workflow)
         self.assertIn("--no-deps --no-build-isolation .", workflow)
         self.assertIn(".\\scripts\\test.ps1", workflow)
@@ -279,6 +282,15 @@ class ReleaseModelsTests(unittest.TestCase):
         self.assertIn("dist-release/THIRD_PARTY_LICENSES.txt", workflow)
         self.assertIn("dist-release/RELEASE_MANIFEST.json", workflow)
         self.assertIn("dist-release/SHA256SUMS.txt", workflow)
+
+    def test_release_version_validation_rejects_mismatches(self):
+        valid = ("v0.1.35", "0.1.35", "## v0.1.35\n", "a" * 40, "a" * 40, "a" * 40)
+        validate_release(*valid)
+        for index in (1, 2, 4, 5):
+            values = list(valid)
+            values[index] = {1: "0.1.34", 2: "## v0.1.34\n", 4: "b" * 40, 5: "b" * 40}[index]
+            with self.subTest(index=index), self.assertRaises(ValueError):
+                validate_release(*values)
 
     def test_release_inputs_are_versioned_and_hash_locked(self):
         lock = json.loads(Path("release-lock.json").read_text(encoding="utf-8"))
