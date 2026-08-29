@@ -1,11 +1,77 @@
+import hashlib
+import json
 import os
 import tempfile
+import threading
 import unittest
 from pathlib import Path
-from types import SimpleNamespace
 from unittest.mock import patch
-from realtime_audio_translator.models import MODEL_INVALID, MODEL_MARKER, cuda_hardware_from_check_output, download_model, list_models, model_available, model_download_command, model_install_message, model_status, models_dir, recommend_model
+import requests
+from realtime_audio_translator.models import MODEL_INVALID, MODEL_MARKER, ModelDownloadCancelled, cuda_hardware_from_check_output, download_model, list_models, model_available, model_install_message, model_status, models_dir, recommend_model, verify_model_integrity
 from tests.helpers import write_model
+
+
+def git_blob_digest(data: bytes) -> str:
+    return hashlib.sha1(f"blob {len(data)}\0".encode() + data).hexdigest()
+
+
+class DownloadResponse:
+    def __init__(self, data=b"", status_code=200, json_data=None, fail=False):
+        self.data = data
+        self.status_code = status_code
+        self.json_data = json_data
+        self.fail = fail
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return False
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise requests.HTTPError(str(self.status_code))
+
+    def json(self):
+        return self.json_data
+
+    def iter_content(self, chunk_size):
+        if self.fail:
+            split = max(1, len(self.data) // 2)
+            yield self.data[:split]
+            raise requests.ConnectionError("interrupted")
+        yield self.data
+
+
+class DownloadSession:
+    def __init__(self, fail_once=""):
+        self.files = {
+            "config.json": json.dumps({"model_type": "whisper"}).encode(),
+            "model.bin": b"model-weights",
+            "tokenizer.json": json.dumps({"version": "1.0"}).encode(),
+            "vocabulary.txt": b"token",
+        }
+        self.fail_once = fail_once
+        self.ranges = []
+
+    def get(self, url, params=None, headers=None, stream=False, timeout=None):
+        if "/api/models/" in url:
+            siblings = []
+            for name, data in self.files.items():
+                entry = {"rfilename": name, "size": len(data), "blobId": git_blob_digest(data)}
+                if name == "model.bin":
+                    entry["lfs"] = {"size": len(data), "sha256": hashlib.sha256(data).hexdigest()}
+                siblings.append(entry)
+            return DownloadResponse(json_data={"id": "Systran/faster-whisper-medium", "sha": "a" * 40, "siblings": siblings})
+        name = url.rsplit("/", 1)[-1]
+        data = self.files[name]
+        start = int((headers or {}).get("Range", "bytes=0-")[6:-1] or 0)
+        if start:
+            self.ranges.append((name, start))
+        fail = name == self.fail_once
+        if fail:
+            self.fail_once = ""
+        return DownloadResponse(data[start:], 206 if start else 200, fail=fail)
 
 
 class ReleaseModelsTests(unittest.TestCase):
@@ -18,12 +84,6 @@ class ReleaseModelsTests(unittest.TestCase):
 
         self.assertEqual(devices, 1)
         self.assertEqual(vram_gb, 6)
-
-    def test_model_download_command_uses_app_model_dir(self):
-        command = model_download_command(Path("fw.exe"), Path("probe.wav"), "medium", Path("models"))
-        self.assertEqual(command[0], "fw.exe")
-        self.assertIn("--model_dir", command)
-        self.assertIn("models", command)
 
     def test_list_models_keeps_known_download_choices(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -73,22 +133,70 @@ class ReleaseModelsTests(unittest.TestCase):
     def test_successful_download_writes_installed_marker_and_detects_later_truncation(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            exe = root / "faster-whisper-xxl.exe"
-            exe.write_text("exe", encoding="utf-8")
             models = root / "models"
+            progress = []
 
-            def run(*_args, **_kwargs):
-                write_model(models / "faster-whisper-medium")
-                return SimpleNamespace(returncode=0)
+            installed = download_model("medium", models, progress.append, session=DownloadSession())
 
-            with patch("realtime_audio_translator.models.subprocess.run", side_effect=run):
-                self.assertEqual(download_model(exe, "medium", models), 0)
-
-            installed = models / "faster-whisper-medium"
             self.assertTrue((installed / MODEL_MARKER).is_file())
+            marker = json.loads((installed / MODEL_MARKER).read_text(encoding="utf-8"))
+            self.assertEqual((marker["model"], marker["revision"]), ("medium", "a" * 40))
+            self.assertTrue(verify_model_integrity(installed, verify_hashes=True))
+            self.assertTrue(any("100.0%" in message and "MB/s" in message for message in progress))
+            self.assertFalse((models / "probe.wav").exists())
             self.assertTrue(model_available("medium", root / "missing", models))
             (installed / "model.bin").write_bytes(b"")
             self.assertFalse(model_available("medium", root / "missing", models))
+            self.assertFalse(verify_model_integrity(installed, verify_hashes=True))
+
+    def test_model_integrity_rejects_manifest_without_required_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            model = Path(tmp)
+            (model / MODEL_MARKER).write_text(json.dumps({"version": 2, "files": []}), encoding="utf-8")
+
+            self.assertFalse(verify_model_integrity(model, verify_hashes=True))
+
+    def test_interrupted_download_resumes_partial_and_installs_atomically(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            models = Path(tmp) / "models"
+            session = DownloadSession(fail_once="model.bin")
+
+            with self.assertRaises(requests.ConnectionError):
+                download_model("medium", models, session=session)
+
+            self.assertFalse((models / "faster-whisper-medium").exists())
+            staging = models / ".faster-whisper-medium.partial"
+            self.assertTrue((staging / "model.bin.partial").exists())
+            (staging / "obsolete.partial").write_bytes(b"old revision")
+            installed = download_model("medium", models, session=session)
+
+            self.assertTrue(installed.is_dir())
+            self.assertTrue(any(name == "model.bin" and offset > 0 for name, offset in session.ranges))
+            self.assertFalse(staging.exists())
+            self.assertFalse((installed / "obsolete.partial").exists())
+
+    def test_model_download_checks_space_and_supports_cancellation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            models = Path(tmp) / "models"
+            with patch("realtime_audio_translator.models.shutil.disk_usage", return_value=type("Usage", (), {"free": 0})()):
+                with self.assertRaisesRegex(RuntimeError, "空間不足"):
+                    download_model("medium", models, session=DownloadSession())
+
+            cancel = threading.Event()
+            cancel.set()
+            with self.assertRaises(ModelDownloadCancelled):
+                download_model("medium", models, cancel_event=cancel, session=DownloadSession())
+            self.assertFalse((models / "faster-whisper-medium").exists())
+
+    def test_model_download_ui_exposes_progress_cancellation_and_no_probe_audio(self):
+        models_source = Path("realtime_audio_translator/models.py").read_text(encoding="utf-8")
+        gui_source = Path("realtime_audio_translator/gui.py").read_text(encoding="utf-8")
+
+        self.assertNotIn("probe.wav", models_source)
+        self.assertNotIn("model_download_command", models_source)
+        self.assertIn("MB/s", models_source)
+        self.assertIn('(\"取消模型下載\", self._cancel_model_download)', gui_source)
+        self.assertIn("已下載部分可供稍後續傳", gui_source)
 
     def test_model_install_message_shows_model_folder(self):
         message = model_install_message("medium", Path(r"C:\Users\me\.realtime-audio\models"))

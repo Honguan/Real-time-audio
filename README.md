@@ -38,7 +38,7 @@ RealtimeAudioTranslator-runtime-cuda12-dlls-<tag>.zip
 %USERPROFILE%\.realtime-audio\models
 ```
 
-Whisper 模型可放在 `models\whisper-small`；完整資料夾需直接包含 `config.json`、`model.bin`、`tokenizer.json` 與 `vocabulary.*`。空資料夾、巢狀解壓或 `.partial` 會由診斷標示為不完整／損毀，請重新下載。翻譯模型放在 `models\translation`；TTS 模型放在 `models\tts`。
+Whisper 模型可放在 `models\whisper-small`；完整資料夾需直接包含 `config.json`、`model.bin`、`tokenizer.json` 與 `vocabulary.*`。程式會先取得官方模型版本、大小與雜湊，顯示下載百分比／MB／速度，檢查磁碟空間，再以 `.partial` 續傳、SHA 驗證與原子安裝完成；可按「取消模型下載」，稍後重試會接續未完成部分。空資料夾、巢狀解壓或 `.partial` 不會被當成已安裝模型。翻譯模型放在 `models\translation`；TTS 模型放在 `models\tts`。
 
 ## 第一次設定
 
