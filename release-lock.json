@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "python": {
+    "version": "3.10.11",
+    "index_url": "https://pypi.org/simple",
+    "requirements": "requirements-release.txt",
+    "requirements_sha256": "d92ee5070e4e6f3197134fe6d08ba8817d1f29bdd773b1983c9890fda44f3f75"
+  },
+  "github_actions": [
+    {
+      "name": "actions/checkout",
+      "version": "v4",
+      "commit": "11d5960a326750d5838078e36cf38b85af677262",
+      "source": "https://github.com/actions/checkout"
+    },
+    {
+      "name": "actions/setup-python",
+      "version": "v5",
+      "commit": "a26af69be951a213d495a4c3e4e4022e16d87065",
+      "source": "https://github.com/actions/setup-python"
+    },
+    {
+      "name": "softprops/action-gh-release",
+      "version": "v2",
+      "commit": "3bb12739c298aeb8a4eeaf626c5b8d85266b0e65",
+      "source": "https://github.com/softprops/action-gh-release"
+    }
+  ],
+  "runtime": [
+    {
+      "kind": "core",
+      "version": "r245.4",
+      "name": "Faster-Whisper-XXL_r245.4_windows.7z",
+      "url": "https://github.com/Purfview/whisper-standalone-win/releases/download/Faster-Whisper-XXL/Faster-Whisper-XXL_r245.4_windows.7z",
+      "size": 1424256246,
+      "sha256": "237dee23939cdabfc96ef859fc5e584b842c3a5557e0d2ca744e1f87c14c5844"
+    },
+    {
+      "kind": "cuda",
+      "version": "CUDA12_v3",
+      "name": "cuBLAS.and.cuDNN_CUDA12_win_v3.7z",
+      "url": "https://github.com/Purfview/whisper-standalone-win/releases/download/libs/cuBLAS.and.cuDNN_CUDA12_win_v3.7z",
+      "size": 849141159,
+      "sha256": "ec00119dbeec2adff661302883becd004028784031a4547ea1749e7683ffb67f"
+    }
+  ],
+  "translation_models": {
+    "index_revision": "ff90de60728f7c1338ff6b75974e4c89b2442d22",
+    "index_source": "https://raw.githubusercontent.com/argosopentech/argospm-index/ff90de60728f7c1338ff6b75974e4c89b2442d22/index.json",
+    "packages": [
+      {
+        "from": "zh",
+        "to": "en",
+        "version": "1.9",
+        "name": "translate-zh_en-1_9.argosmodel",
+        "url": "https://argos-net.com/v1/translate-zh_en-1_9.argosmodel",
+        "size": 74481402,
+        "sha256": "62e7af5a3a48b530e47b7b3e5c78c2de79073ecd815750d2bf3ab35b4a67da2d"
+      },
+      {
+        "from": "en",
+        "to": "zh",
+        "version": "1.9",
+        "name": "translate-en_zh-1_9.argosmodel",
+        "url": "https://argos-net.com/v1/translate-en_zh-1_9.argosmodel",
+        "size": 70743021,
+        "sha256": "433e7c4f034d87fbe2353161e05f18646d7999452f801a4e1f0378522b9850ab"
+      },
+      {
+        "from": "ja",
+        "to": "en",
+        "version": "1.1",
+        "name": "translate-ja_en-1_1.argosmodel",
+        "url": "https://argos-net.com/v1/translate-ja_en-1_1.argosmodel",
+        "size": 117155716,
+        "sha256": "623e3477959a815eb0a5ef53e09079ae8f1f9d3bbcd230473baf28c03fb83335"
+      },
+      {
+        "from": "en",
+        "to": "ja",
+        "version": "1.1",
+        "name": "translate-en_ja-1_1.argosmodel",
+        "url": "https://argos-net.com/v1/translate-en_ja-1_1.argosmodel",
+        "size": 120470284,
+        "sha256": "16300cc4eaa85320520cabcf433b63d01be40ef6966251de72043a083408f716"
+      },
+      {
+        "from": "ko",
+        "to": "en",
+        "version": "1.1",
+        "name": "translate-ko_en-1_1.argosmodel",
+        "url": "https://argos-net.com/v1/translate-ko_en-1_1.argosmodel",
+        "size": 118852077,
+        "sha256": "6da8f3db6ca40f42b1875570a1c06856f6e17c7ef62845d85de217ba548c1471"
+      },
+      {
+        "from": "en",
+        "to": "ko",
+        "version": "1.1",
+        "name": "translate-en_ko-1_1.argosmodel",
+        "url": "https://argos-net.com/v1/translate-en_ko-1_1.argosmodel",
+        "size": 120789009,
+        "sha256": "e03d8e65e6d44525ec5808c3409fcf8728c76c2c76925372b6d3dc3278de17fc"
+      }
+    ]
+  }
+}
