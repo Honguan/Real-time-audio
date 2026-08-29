@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 from realtime_audio_translator.archive_install import write_install_manifest
-from realtime_audio_translator.audio import DeviceResolutionError, SegmentWorker, _pyaudio_output_for_device, audio_segment_active, device_identity, find_device, format_device_label, virtual_mic_recaptures_tts
+from realtime_audio_translator.audio import AudioSegment, DeviceResolutionError, SegmentWorker, _pyaudio_output_for_device, audio_segment_active, device_identity, find_device, format_device_label, virtual_mic_recaptures_tts
 from realtime_audio_translator.asr import AudioTranscriber, add_runtime_dll_directory, add_xxl_data
 from realtime_audio_translator.engine import RealtimeEngine, audio_devices_overlap, direction_label, drain_queue, overlay_text_from_config, safe_target_language
 from tests.helpers import write_wav
@@ -37,24 +37,44 @@ class AudioTests(unittest.TestCase):
         self.assertEqual(audio_module.capture_error_code(audio_module.CaptureOverflowError("overflow")), "audio_overflow")
         self.assertIs(sounddevice.ignore_errors, False)
 
+    def test_capture_audio_returns_mono_pcm_without_writing_a_file(self):
+        import numpy as np
+        import realtime_audio_translator.audio as audio_module
+
+        class SoundDevice:
+            def query_devices(self, index):
+                return {"default_samplerate": 48000, "max_input_channels": 2}
+
+            def rec(self, *args, **kwargs):
+                return np.array([[1000, 3000], [-3000, -1000]], dtype=np.int16)
+
+            def wait(self, ignore_errors):
+                return type("Status", (), {"input_overflow": False})()
+
+        with tempfile.TemporaryDirectory() as tmp, patch.object(audio_module, "_sd", return_value=SoundDevice()):
+            segment = audio_module.capture_audio(1, 0)
+
+            self.assertEqual(segment.sample_rate, 48000)
+            self.assertEqual(np.frombuffer(segment.pcm, dtype=np.int16).tolist(), [2000, -2000])
+            self.assertEqual(list(Path(tmp).iterdir()), [])
+
     def test_segment_worker_recovers_from_temporary_capture_errors(self):
         import realtime_audio_translator.audio as audio_module
 
         events = []
         attempts = 0
         with tempfile.TemporaryDirectory() as tmp:
-            worker = SegmentWorker(Path(tmp), 1, 2, False, health_callback=events.append)
+            worker = SegmentWorker(1, 2, False, health_callback=events.append)
 
-            def capture(path, *_args):
+            def capture(*_args):
                 nonlocal attempts
                 attempts += 1
                 if attempts < 3:
                     raise OSError("device busy")
-                path.write_bytes(b"wav")
                 worker._stopped = True
-                return path
+                return AudioSegment(b"\0\0", 16000)
 
-            with patch.object(audio_module, "CAPTURE_RETRY_DELAYS", (0, 0, 0)), patch.object(audio_module, "capture_wav", side_effect=capture):
+            with patch.object(audio_module, "CAPTURE_RETRY_DELAYS", (0, 0, 0)), patch.object(audio_module, "capture_audio", side_effect=capture):
                 worker.run("me")
 
         self.assertEqual(attempts, 3)
@@ -71,8 +91,8 @@ class AudioTests(unittest.TestCase):
         events = []
         error = PortAudioError("device unavailable", -9985, (1, -1, "removed"))
         with tempfile.TemporaryDirectory() as tmp:
-            worker = SegmentWorker(Path(tmp), 1, 2, False, health_callback=events.append)
-            with patch.object(audio_module, "CAPTURE_RETRY_DELAYS", (0, 0, 0)), patch.object(audio_module, "capture_wav", side_effect=error) as capture:
+            worker = SegmentWorker(1, 2, False, health_callback=events.append)
+            with patch.object(audio_module, "CAPTURE_RETRY_DELAYS", (0, 0, 0)), patch.object(audio_module, "capture_audio", side_effect=error) as capture:
                 worker.run("speaker")
 
         self.assertEqual(capture.call_count, 4)
@@ -88,31 +108,31 @@ class AudioTests(unittest.TestCase):
 
         error = RuntimeError("invalid capture configuration")
         with tempfile.TemporaryDirectory() as tmp:
-            worker = SegmentWorker(Path(tmp), 1, 2, False)
-            with patch.object(audio_module, "capture_wav", side_effect=error) as capture:
+            worker = SegmentWorker(1, 2, False)
+            with patch.object(audio_module, "capture_audio", side_effect=error) as capture:
                 worker.run("me")
 
         self.assertEqual(capture.call_count, 1)
         self.assertEqual(worker.health.state, "failed")
         self.assertEqual(worker.health.error_code, "capture_fatal")
 
-    def test_segment_worker_drops_oldest_segments_when_queue_is_full(self):
+    def test_one_hour_of_segments_keeps_only_bounded_memory_and_writes_no_wavs(self):
         import realtime_audio_translator.audio as audio_module
 
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            worker = SegmentWorker(root, 1, 2, False)
+            worker = SegmentWorker(1, 2, False)
             captured = 0
 
-            def capture(path, *_args):
+            def capture(*_args):
                 nonlocal captured
-                if captured == 1000:
+                if captured == 1800:
                     raise InterruptedError
-                path.write_bytes(b"wav")
+                segment = AudioSegment(captured.to_bytes(2, "little"), 16000)
                 captured += 1
-                return path
+                return segment
 
-            with patch.object(audio_module, "capture_wav", side_effect=capture):
+            with patch.object(audio_module, "capture_audio", side_effect=capture):
                 worker.run("me")
 
             pending = []
@@ -120,36 +140,35 @@ class AudioTests(unittest.TestCase):
                 pending.append(worker.queue.get_nowait())
 
             self.assertEqual(worker.queue.maxsize, 3)
-            self.assertEqual([path.name for path in pending], ["me-000997.wav", "me-000998.wav", "me-000999.wav"])
-            self.assertEqual(worker.dropped_segments, 997)
+            self.assertEqual([int.from_bytes(segment.pcm, "little") for segment in pending], [1797, 1798, 1799])
+            self.assertEqual(worker.dropped_segments, 1797)
             self.assertEqual(worker.max_queue_depth, 3)
-            self.assertEqual(sorted(path.name for path in root.glob("*.wav")), [path.name for path in pending])
+            self.assertEqual(list(root.glob("*.wav")), [])
 
     def test_segment_worker_keeps_capture_and_enqueue_timestamps_until_dequeue(self):
-        worker = SegmentWorker(Path("cache"), 1, 2, False)
-        captured = Path("clip.wav")
+        worker = SegmentWorker(1, 2, False)
+        captured = AudioSegment(b"\0\0", 16000)
         worker._enqueue(captured, {"capture_started_at": 10.0, "capture_completed_at": 12.0})
 
         self.assertEqual(worker.queue.get_nowait(), captured)
         timing = worker.take_timing(captured)
         self.assertEqual(timing["capture_started_at"], 10.0)
         self.assertGreaterEqual(timing["enqueued_at"], timing["capture_completed_at"])
-        self.assertEqual(worker.timings, {})
 
     def test_segment_worker_cancels_capture_without_queuing_a_file(self):
         import realtime_audio_translator.audio as audio_module
 
         entered = threading.Event()
 
-        def capture(path, device, seconds, loopback, cancel_event):
+        def capture(device, seconds, loopback, cancel_event):
             entered.set()
             cancel_event.wait()
             raise InterruptedError
 
         cancel = threading.Event()
-        worker = SegmentWorker(Path("cache"), 1, 30, False, cancel)
-        original_capture = audio_module.capture_wav
-        audio_module.capture_wav = capture
+        worker = SegmentWorker(1, 30, False, cancel)
+        original_capture = audio_module.capture_audio
+        audio_module.capture_audio = capture
         thread = threading.Thread(target=worker.run, args=("me",))
         try:
             thread.start()
@@ -157,7 +176,7 @@ class AudioTests(unittest.TestCase):
             worker.stop()
             thread.join(1)
         finally:
-            audio_module.capture_wav = original_capture
+            audio_module.capture_audio = original_capture
 
         self.assertFalse(thread.is_alive())
         self.assertTrue(worker.queue.empty())
@@ -166,14 +185,13 @@ class AudioTests(unittest.TestCase):
         import realtime_audio_translator.audio as audio_module
 
         with tempfile.TemporaryDirectory() as tmp:
-            worker = SegmentWorker(Path(tmp), 1, 2, False)
+            worker = SegmentWorker(1, 2, False)
 
-            def capture(path, *_args):
-                path.write_bytes(b"wav")
+            def capture(*_args):
                 worker.stop()
-                return path
+                return AudioSegment(b"\0\0", 16000)
 
-            with patch.object(audio_module, "capture_wav", side_effect=capture):
+            with patch.object(audio_module, "capture_audio", side_effect=capture):
                 worker.run("me")
 
             self.assertEqual(list(Path(tmp).glob("*.wav")), [])
@@ -182,46 +200,40 @@ class AudioTests(unittest.TestCase):
         import realtime_audio_translator.audio as audio_module
 
         with tempfile.TemporaryDirectory() as tmp:
-            worker = SegmentWorker(Path(tmp), 1, 2, False)
+            worker = SegmentWorker(1, 2, False)
 
-            def capture(path, *_args):
-                path.write_bytes(b"partial")
+            def capture(*_args):
                 raise InterruptedError
 
-            with patch.object(audio_module, "capture_wav", side_effect=capture):
+            with patch.object(audio_module, "capture_audio", side_effect=capture):
                 worker.run("me")
 
             self.assertEqual(list(Path(tmp).glob("*.wav")), [])
 
-    def test_segment_worker_stop_deletes_pending_segments(self):
+    def test_segment_worker_stop_discards_pending_segments(self):
         with tempfile.TemporaryDirectory() as tmp:
-            pending = Path(tmp) / "pending.wav"
-            pending.write_bytes(b"wav")
-            worker = SegmentWorker(Path(tmp), 1, 2, False)
-            worker.queue.put_nowait(pending)
+            worker = SegmentWorker(1, 2, False)
+            worker.queue.put_nowait(AudioSegment(b"\0\0", 16000))
 
             worker.stop()
 
             self.assertTrue(worker.queue.empty())
-            self.assertFalse(pending.exists())
 
-    def test_segment_worker_keeps_capturing_when_stale_file_is_locked(self):
-        worker = SegmentWorker(Path("cache"), 1, 2, False)
+    def test_segment_worker_drops_oldest_when_queue_is_full(self):
+        worker = SegmentWorker(1, 2, False)
         for index in range(worker.queue.maxsize):
-            worker.queue.put_nowait(Path(f"old-{index}.wav"))
+            worker.queue.put_nowait(AudioSegment(index.to_bytes(2, "little"), 16000))
 
-        with patch.object(Path, "unlink", side_effect=PermissionError):
-            worker._enqueue(Path("fresh.wav"))
+        worker._enqueue(AudioSegment(b"\x03\0", 16000))
 
         self.assertEqual(worker.queue.qsize(), worker.queue.maxsize)
-        self.assertEqual(worker.queue.get_nowait(), Path("old-1.wav"))
+        self.assertEqual(int.from_bytes(worker.queue.get_nowait().pcm, "little"), 1)
         self.assertEqual(worker.dropped_segments, 1)
 
     def test_segment_worker_does_not_enqueue_after_stop(self):
         with tempfile.TemporaryDirectory() as tmp:
-            fresh = Path(tmp) / "fresh.wav"
-            fresh.write_bytes(b"wav")
-            worker = SegmentWorker(Path(tmp), 1, 2, False)
+            fresh = AudioSegment(b"\0\0", 16000)
+            worker = SegmentWorker(1, 2, False)
             worker._queue_lock.acquire()
             enqueue = threading.Thread(target=worker._enqueue, args=(fresh,))
             stop = threading.Thread(target=worker.stop)
@@ -239,7 +251,6 @@ class AudioTests(unittest.TestCase):
             self.assertFalse(enqueue.is_alive())
             self.assertFalse(stop.is_alive())
             self.assertTrue(worker.queue.empty())
-            self.assertFalse(fresh.exists())
 
     @staticmethod
     def _device(index, name="USB Audio", hostapi="Windows WASAPI", samplerate=48000.0):
@@ -361,6 +372,13 @@ class AudioTests(unittest.TestCase):
             self.assertTrue(audio_segment_active(loud, 0.01))
             self.assertTrue(audio_segment_active(quiet, 0))
 
+    def test_audio_segment_active_reads_pcm_without_a_file(self):
+        quiet = AudioSegment((0).to_bytes(2, "little", signed=True) * 1600, 16000)
+        loud = AudioSegment((12000).to_bytes(2, "little", signed=True) * 1600, 16000)
+
+        self.assertFalse(audio_segment_active(quiet, 0.01))
+        self.assertTrue(audio_segment_active(loud, 0.01))
+
     def test_whisper_auto_language_omits_language_flag(self):
         import realtime_audio_translator.asr as asr_module
 
@@ -422,6 +440,45 @@ class AudioTests(unittest.TestCase):
         self.assertEqual(result.language, "en")
         self.assertEqual(result.language_probability, 0.91)
         self.assertAlmostEqual(result.confidence, (1.0 + 0.36787944117144233) / 2)
+
+    def test_whisper_model_receives_resampled_float32_pcm(self):
+        transcriber = AudioTranscriber.__new__(AudioTranscriber)
+        transcriber._inference_lock = threading.Lock()
+        received = []
+
+        class Model:
+            def transcribe(self, audio, **_kwargs):
+                received.append(audio)
+                return [], type("Info", (), {"language": "en", "language_probability": 1.0})()
+
+        transcriber.model = Model()
+        transcriber.transcribe(AudioSegment((12000).to_bytes(2, "little", signed=True) * 4800, 48000), "auto")
+
+        self.assertEqual(received[0].dtype.name, "float32")
+        self.assertEqual(len(received[0]), 1600)
+
+    def test_whisper_exe_cleans_temporary_pcm_wav(self):
+        import realtime_audio_translator.asr as asr_module
+
+        transcriber = AudioTranscriber.__new__(AudioTranscriber)
+        transcriber.exe_path = Path("fw.exe")
+        transcriber.model_name = "medium"
+        transcriber.model_dir = Path("models")
+        temp_roots = []
+
+        def fake_run(command, **_kwargs):
+            wav = Path(command[1])
+            temp_roots.append(wav.parent)
+            self.assertTrue(wav.exists())
+            output_dir = Path(command[command.index("--output_dir") + 1])
+            (output_dir / "segment.json").write_text('{"text":"hello"}', encoding="utf-8")
+            return type("Result", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+
+        with patch.object(asr_module.subprocess, "run", side_effect=fake_run):
+            result = transcriber._transcribe_with_exe(AudioSegment(b"\0\0" * 1600, 16000), "en")
+
+        self.assertEqual(result.text, "hello")
+        self.assertFalse(temp_roots[0].exists())
 
     def test_shared_whisper_model_serializes_inference_and_returns_isolated_results(self):
         transcriber = AudioTranscriber.__new__(AudioTranscriber)

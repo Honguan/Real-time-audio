@@ -42,7 +42,7 @@ class EngineTests(unittest.TestCase):
         engine._session = "health-thread"
         engine.transcriber = StaticTranscriber("hello")
 
-        with patch.object(engine_module, "find_device", return_value=1), patch.object(audio_module, "capture_wav", side_effect=RuntimeError("device removed")):
+        with patch.object(engine_module, "find_device", return_value=1), patch.object(audio_module, "capture_audio", side_effect=RuntimeError("device removed")):
             self.assertTrue(engine._start_direction("me", "Microphone", False))
             for thread in engine.threads:
                 thread.join(1)
@@ -1169,19 +1169,19 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(len(sessions), 100)
         self.assertFalse(any(thread.is_alive() for thread in created_threads))
 
-    def test_each_session_uses_its_own_audio_cache(self):
+    def test_realtime_worker_does_not_receive_an_audio_cache_path(self):
         import realtime_audio_translator.engine as engine_module
 
         config = DEFAULT_CONFIG.copy()
         config["record_logs"] = False
-        cache_dirs = []
+        worker_args = []
         engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, lambda status: None)
         engine.running = True
         engine._session = "unique"
 
         class Worker:
-            def __init__(self, cache_dir, *args):
-                cache_dirs.append(cache_dir)
+            def __init__(self, *args):
+                worker_args.append(args)
 
             def run(self, direction):
                 return None
@@ -1206,7 +1206,7 @@ class EngineTests(unittest.TestCase):
             engine_module.SegmentWorker = original_worker
             engine_module.threading.Thread = original_thread
 
-        self.assertEqual(cache_dirs[0].name, "session-unique")
+        self.assertEqual(worker_args[0][:3], (1, float(config["segment_seconds"]), True))
 
     def test_speaker_and_microphone_use_independent_pipeline_state(self):
         import realtime_audio_translator.engine as engine_module
