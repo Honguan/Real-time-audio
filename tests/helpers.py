@@ -1,3 +1,4 @@
+import json
 import queue
 import wave
 from pathlib import Path
@@ -12,6 +13,14 @@ def write_wav(path: Path, sample: int) -> None:
         handle.setsampwidth(2)
         handle.setframerate(16000)
         handle.writeframes(sample.to_bytes(2, "little", signed=True) * 1600)
+
+
+def write_model(path: Path) -> None:
+    path.mkdir(parents=True, exist_ok=True)
+    (path / "config.json").write_text(json.dumps({"model_type": "whisper"}), encoding="utf-8")
+    (path / "model.bin").write_bytes(b"model")
+    (path / "tokenizer.json").write_text(json.dumps({"version": "1.0"}), encoding="utf-8")
+    (path / "vocabulary.txt").write_text("token", encoding="utf-8")
 
 
 class QueuedWorker:
