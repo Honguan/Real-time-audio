@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 from realtime_audio_translator.config import DEFAULT_CONFIG, _has_reparse_point, clear_cache, clear_logs, ensure_app_dirs, ensure_glossary_file, load_config, log_files_to_clear, save_audio_devices, save_config
 from realtime_audio_translator.ai_orchestrator import plan_session
-from realtime_audio_translator.ai_auto_tuner import apply_tuning, recommend_tuning
+from realtime_audio_translator.ai_auto_tuner import apply_tuning, format_tuning_preview, recommend_tuning
 from realtime_audio_translator.ai_confidence import build_quality_snapshot, format_quality_status
 from realtime_audio_translator.scenarios import SCENARIO_CHOICES, apply_scenario, scenario_key, scenario_label
 
@@ -106,36 +106,37 @@ class AiTests(unittest.TestCase):
         self.assertEqual(tuned["device"], "cpu")
         self.assertEqual(tuned["model"], "small")
 
-    def test_auto_tuner_reduces_latency_settings(self):
+    def test_auto_tuner_does_not_persist_single_runtime_samples(self):
         config = DEFAULT_CONFIG.copy()
         config["performance_mode"] = "quality"
         config["segment_seconds"] = 3.0
         config["last_end_to_end_p95_seconds"] = 4.2
+        config["last_queue_wait_seconds"] = 2.0
+        config["last_speech_units_per_second"] = 3.5
+        config["last_tts_synthesis_seconds"] = 2.4
+        config["last_tts_playback_seconds"] = 2.4
+        config["tts_provider"] = "openai"
 
         recommendations = recommend_tuning(config, cuda_devices=1, vram_gb=6)
         tuned = apply_tuning(config, recommendations)
 
-        self.assertIn("reduce_latency", [item.code for item in recommendations])
-        self.assertEqual(tuned["performance_mode"], "low_latency")
-        self.assertEqual(tuned["segment_seconds"], 1.5)
-        self.assertEqual(tuned["speech_threshold"], 0.02)
+        self.assertEqual(recommendations, [])
+        self.assertEqual(tuned["performance_mode"], "quality")
+        self.assertEqual(tuned["segment_seconds"], 3.0)
+        self.assertEqual(tuned["tts_provider"], "openai")
 
-        config["model"] = "large-v3-turbo"
-        tuned = apply_tuning(config, recommend_tuning(config, cuda_devices=1, vram_gb=6))
-
-        self.assertEqual(tuned["model"], "medium")
-
-    def test_auto_tuner_shortens_segments_for_fast_speech(self):
+    def test_auto_tuning_preview_shows_before_and_after(self):
         config = DEFAULT_CONFIG.copy()
-        config["segment_seconds"] = 3.0
-        config["last_speech_units_per_second"] = 3.5
-
-        recommendations = recommend_tuning(config, cuda_devices=1, vram_gb=8)
+        config["device"] = "cuda"
+        recommendations = recommend_tuning(config, cuda_devices=0, vram_gb=0)
         tuned = apply_tuning(config, recommendations)
 
-        self.assertIn("fast_speech_segments", [item.code for item in recommendations])
-        self.assertEqual(tuned["performance_mode"], "low_latency")
-        self.assertEqual(tuned["segment_seconds"], 1.5)
+        preview = format_tuning_preview(config, tuned, recommendations)
+
+        self.assertIn("切換 CPU 模式", preview)
+        self.assertIn("device：cuda → cpu", preview)
+        self.assertIn("確認後才會儲存", preview)
+        self.assertIn("保留原設定", preview)
 
     def test_auto_tuner_recommends_medium_for_low_vram(self):
         config = DEFAULT_CONFIG.copy()
@@ -148,32 +149,6 @@ class AiTests(unittest.TestCase):
         self.assertEqual(tuned["model"], "medium")
         config["model"] = "small"
         self.assertNotIn("low_vram_medium", [item.code for item in recommend_tuning(config, cuda_devices=1, vram_gb=3)])
-
-    def test_auto_tuner_uses_local_tts_when_cloud_tts_is_slow(self):
-        config = DEFAULT_CONFIG.copy()
-        config["tts_provider"] = "openai"
-        config["tts_engine"] = "openai"
-        config["last_tts_synthesis_seconds"] = 2.4
-
-        recommendations = recommend_tuning(config, cuda_devices=1, vram_gb=8)
-        tuned = apply_tuning(config, recommendations)
-
-        self.assertIn("use_local_tts", [item.code for item in recommendations])
-        self.assertEqual(tuned["tts_provider"], "local")
-        self.assertEqual(tuned["tts_engine"], "system")
-
-    def test_auto_tuner_speeds_up_local_tts_when_playback_is_slow(self):
-        config = DEFAULT_CONFIG.copy()
-        config["tts_provider"] = "local"
-        config["tts_rate"] = 0
-        config["last_tts_playback_seconds"] = 2.4
-
-        recommendations = recommend_tuning(config, cuda_devices=1, vram_gb=8)
-        tuned = apply_tuning(config, recommendations)
-
-        self.assertIn("speed_up_local_tts", [item.code for item in recommendations])
-        self.assertIn("加快本機 TTS", [item.title for item in recommendations])
-        self.assertEqual(tuned["tts_rate"], 2)
 
     def test_auto_tuner_does_not_change_settings_from_uncalibrated_quality_heuristics(self):
         config = DEFAULT_CONFIG.copy()

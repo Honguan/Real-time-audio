@@ -251,6 +251,9 @@ class ReleaseModelsTests(unittest.TestCase):
         for text in (readme, notes):
             self.assertIn("AI 決策中樞", text)
             self.assertIn("自動優化", text)
+            self.assertIn("預覽", text)
+            self.assertIn("確認後", text)
+            self.assertIn("可持久化建議", text)
 
     def test_readme_and_release_notes_mention_all_scenarios(self):
         readme = Path("README.md").read_text(encoding="utf-8")

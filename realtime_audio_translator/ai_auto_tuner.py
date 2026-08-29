@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 
 from .config import validate_language_pair
-from .performance import END_TO_END_P95, END_TO_END_P95_BUDGET_SECONDS, QUEUE_WAIT, QUEUE_WAIT_BUDGET_SECONDS, TTS_PLAYBACK, TTS_STAGE_BUDGET_SECONDS, TTS_SYNTHESIS, metric_value
 
 
 @dataclass(frozen=True)
@@ -34,54 +33,6 @@ def recommend_tuning(config: dict, cuda_devices: int, vram_gb: int) -> list[Tuni
             f"偵測到 VRAM 約 {vram_gb} GB，較大模型可能延遲過高",
             {"model": "medium"},
         ))
-    latency_seconds = metric_value(config, END_TO_END_P95)
-    queue_wait = metric_value(config, QUEUE_WAIT)
-    if (latency_seconds is not None and latency_seconds > END_TO_END_P95_BUDGET_SECONDS) or (queue_wait is not None and queue_wait > QUEUE_WAIT_BUDGET_SECONDS):
-        changes = {"performance_mode": "low_latency", "segment_seconds": 1.5, "speech_threshold": 0.02}
-        if str(model).startswith("large"):
-            changes["model"] = "medium"
-        recommendations.append(TuningRecommendation(
-            "reduce_latency",
-            "降低字幕延遲",
-            f"端到端 p95 約 {latency_seconds or 0:.1f} 秒，佇列等待約 {queue_wait or 0:.1f} 秒",
-            changes,
-        ))
-    try:
-        speech_units = float(config.get("last_speech_units_per_second") or 0)
-    except Exception:
-        speech_units = 0
-    try:
-        segment_seconds = float(config.get("segment_seconds") or 2.0)
-    except Exception:
-        segment_seconds = 2.0
-    if speech_units > 3.0 and segment_seconds > 1.5:
-        recommendations.append(TuningRecommendation(
-            "fast_speech_segments",
-            "語速快時縮短分段",
-            f"最近語速約 {speech_units:.1f} 單位/秒，短分段可更快出字幕",
-            {"performance_mode": "low_latency", "segment_seconds": 1.5},
-        ))
-    tts_synthesis = metric_value(config, TTS_SYNTHESIS) or 0
-    tts_playback = metric_value(config, TTS_PLAYBACK) or 0
-    tts_latency = tts_synthesis + tts_playback
-    if tts_latency > TTS_STAGE_BUDGET_SECONDS and config.get("tts_provider") != "local":
-        recommendations.append(TuningRecommendation(
-            "use_local_tts",
-            "切換本機 TTS",
-            f"最近 TTS 延遲約 {tts_latency:.1f} 秒，雲端語音可能拖慢輸出",
-            {"tts_provider": "local", "tts_engine": "system"},
-        ))
-    try:
-        tts_rate = int(config.get("tts_rate", 0))
-    except Exception:
-        tts_rate = 0
-    if tts_latency > TTS_STAGE_BUDGET_SECONDS and config.get("tts_provider") == "local" and tts_rate < 2:
-        recommendations.append(TuningRecommendation(
-            "speed_up_local_tts",
-            "加快本機 TTS",
-            f"最近 TTS 延遲約 {tts_latency:.1f} 秒",
-            {"tts_rate": 2},
-        ))
     if config.get("scenario") == "game_voice" and config.get("performance_mode") != "low_latency":
         recommendations.append(TuningRecommendation(
             "game_low_latency",
@@ -98,3 +49,16 @@ def apply_tuning(config: dict, recommendations: list[TuningRecommendation]) -> d
         updated.update(recommendation.changes)
     validate_language_pair(updated)
     return updated
+
+
+def format_tuning_preview(before: dict, after: dict, recommendations: list[TuningRecommendation]) -> str:
+    lines = ["建議變更（確認後才會儲存）："]
+    lines.extend(f"- {item.title}：{item.detail}" for item in recommendations)
+    changes = [(key, before.get(key), value) for key, value in sorted(after.items()) if not key.startswith("last_") and before.get(key) != value]
+    if changes:
+        lines.append("")
+        lines.append("設定前後：")
+        lines.extend(f"- {key}：{old} → {new}" for key, old, new in changes)
+    lines.append("")
+    lines.append("選擇「否」會保留原設定。")
+    return "\n".join(lines)
