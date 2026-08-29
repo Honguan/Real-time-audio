@@ -782,12 +782,12 @@ class AudioTests(unittest.TestCase):
         self.assertIn("UPSTREAM_RUNTIME_RELEASE_URL", gui_source)
         self.assertIn('subprocess.run([str(runtime_dir(config) / "ffmpeg.exe"), "-version"]', gui_source)
         self.assertIn('config["last_ffmpeg_failed"]', gui_source)
-        self.assertIn("status = runtime_status(runtime, verify_hashes=True)", gui_source)
-        self.assertIn('if not status["ready"]:', gui_source)
-        self.assertIn('messagebox.showerror("找不到 runtime", runtime_install_message(runtime))', gui_source)
+        self.assertIn('status = runtime_status(runtime, "cuda", config.get("compute_type", "auto"), verify_hashes=True)', gui_source)
+        self.assertIn('if not status["cuda_ready"]:', gui_source)
+        self.assertIn('runtime_install_message(runtime, "cpu")', gui_source)
         self.assertIn('self.status.set("找不到 runtime：" + ", ".join(status["missing"]))', gui_source)
-        self.assertIn('subprocess.run([str(exe), "--checkcuda"], capture_output=True, text=True, timeout=5, check=False)', gui_source)
-        self.assertIn("except Exception:\n            return 0, 0", gui_source)
+        self.assertNotIn('subprocess.run([str(exe), "--checkcuda"]', gui_source)
+        self.assertIn('cuda_hardware_from_check_output(status["cuda_probe_output"])', gui_source)
 
     def test_import_runtime_refreshes_commands_json(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")

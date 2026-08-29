@@ -359,6 +359,7 @@ class DiagnosticsTests(unittest.TestCase):
             config["runtime_dir"] = str(runtime)
             config["model"] = "medium"
             config["provider"] = "local"
+            config["device"] = "cpu"
             config["local_translate_url"] = ""
             config["models_path"] = str(root / "translation-models")
             write_model(model)
@@ -371,6 +372,8 @@ class DiagnosticsTests(unittest.TestCase):
         self.assertEqual(offline_issue.action, "download_translation_models")
         self.assertNotIn("runtime_missing", [issue.code for issue in issues])
         self.assertNotIn("model_missing", [issue.code for issue in issues])
+        capability = next(issue for issue in issues if issue.code == "runtime_capabilities")
+        self.assertIn("CPU：可用；CUDA：不可用", capability.detail)
 
     def test_diagnostics_uses_configured_models_path(self):
         with tempfile.TemporaryDirectory() as tmp:

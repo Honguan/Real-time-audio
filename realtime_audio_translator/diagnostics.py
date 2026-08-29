@@ -56,26 +56,23 @@ def _model_state(config: dict, repo_root: Path) -> str:
 
 def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
     issues: list[DiagnosticIssue] = []
-    status = runtime_status(runtime_dir(config))
+    status = runtime_status(runtime_dir(config), config.get("device", "auto"), config.get("compute_type", "auto"))
     if not status["ready"]:
+        probe = f"；CUDA probe：{status['cuda_probe_output']}" if "CUDA --checkcuda probe" in status["missing"] else ""
         issues.append(DiagnosticIssue(
             "runtime_missing",
             "error",
-            "找不到語音辨識 runtime",
-            f"缺少：{', '.join(status['missing'])}",
-            "下載 RealtimeAudioTranslator-runtime-cuda12-core-<version>.7z 與 "
-            f"RealtimeAudioTranslator-runtime-cuda12-dlls-<version>.zip，兩個都解壓到 {status['path']}",
+            f"找不到可供 {status['device'].upper()} 使用的語音辨識 runtime",
+            f"缺少：{', '.join(status['missing'])}{probe}",
+            (("下載 RealtimeAudioTranslator-runtime-cuda12-core-<version>.7z 與 "
+              "RealtimeAudioTranslator-runtime-cuda12-dlls-<version>.zip，兩個都解壓到 ")
+             if status["device"] == "cuda" else "下載 RealtimeAudioTranslator-runtime-cuda12-core-<version>.7z 並解壓到 ")
+            + status["path"],
             "open_runtime",
         ))
-    if status["ready"] and status["warnings"]:
-        issues.append(DiagnosticIssue(
-            "cuda_dll_missing",
-            "warning",
-            "CUDA12 DLL 可能不完整",
-            f"建議補齊：{', '.join(status['warnings'])}",
-            f"解壓 {status['cuda_package']} 到 runtime 資料夾",
-            "open_runtime",
-        ))
+    if status["cpu_ready"]:
+        cuda_detail = "可用" if status["cuda_ready"] else f"不可用（{', '.join(status['cuda_missing'])}）"
+        issues.append(DiagnosticIssue("runtime_capabilities", "info", "runtime 執行能力", f"CPU：可用；CUDA：{cuda_detail}", "依需要選擇 ASR 裝置；CUDA 不可用時可使用 CPU", "optimize_settings"))
     model_state = _model_state(config, repo_root)
     if model_state == MODEL_MISSING:
         issues.append(DiagnosticIssue(
