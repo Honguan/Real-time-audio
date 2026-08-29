@@ -736,33 +736,248 @@ class EngineTests(unittest.TestCase):
         config = DEFAULT_CONFIG.copy()
         config["record_logs"] = False
         config["tts_provider"] = "local"
-        config["virtual_mic_enabled"] = True
         engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, lambda status: None)
 
-        class Transcriber:
-            def transcribe(self, wav, source_language):
-                return TranscriptionResult("hello", source_language)
+        class TTS:
+            def speak_local(self, text, device):
+                time.sleep(0.01)
+
+        engine._pipeline("me").tts = TTS()
+        engine._speak_translation("me", "hi", "en", "", None, {}, threading.Event())
+
+        self.assertGreaterEqual(engine.config["last_tts_latency_seconds"], 0.01)
+
+    def test_tts_playback_does_not_block_subsequent_subtitles(self):
+        config = DEFAULT_CONFIG.copy()
+        config.update({"record_logs": False, "tts_provider": "local", "speaker_tts_enabled": True})
+        second_subtitle = threading.Event()
+        tts_started = threading.Event()
+        overlays = []
+        engine = RealtimeEngine(Path("."), config, lambda speaker, mine: (overlays.append(speaker), second_subtitle.set() if len(overlays) == 2 else None), lambda status: None)
+
+        class TTS:
+            def speak_local(self, text, device, cancel_event):
+                tts_started.set()
+                cancel_event.wait(2)
+                return {}
 
         class Translator:
+            def __init__(self, worker):
+                self.worker = worker
+                self.count = 0
+
             def translate(self, text, source_language, target_language):
-                engine.running = False
-                return TranslationResult("hi", 0.8)
+                self.count += 1
+                if self.count == 2:
+                    self.worker._stopped = True
+                return TranslationResult(f"translated-{self.count}", 0.8)
 
         class Worker:
-            def __init__(self, wav):
+            def __init__(self, wavs):
                 self.queue = queue.Queue()
-                self.queue.put(wav)
+                for wav in wavs:
+                    self.queue.put(wav)
+                self._stopped = False
 
         with tempfile.TemporaryDirectory() as tmp:
-            wav = Path(tmp) / "clip.wav"
-            write_wav(wav, 12000)
+            wavs = [Path(tmp) / f"clip-{index}.wav" for index in range(2)]
+            for wav in wavs:
+                write_wav(wav, 12000)
+            worker = Worker(wavs)
             engine.running = True
-            engine.transcriber = Transcriber()
-            engine._pipeline("me").translator = Translator()
-            engine._speak_translation = lambda direction, translated, target, device, session=None, timing=None: 2.4
-            engine._process_segments("me", Worker(wav))
+            engine._session = "tts-session"
+            engine.transcriber = StaticTranscriber("hello")
+            engine._pipeline("speaker").translator = Translator(worker)
+            engine._pipeline("speaker").tts = TTS()
+            process = threading.Thread(target=engine._process_segments, args=("speaker", worker, "tts-session"))
+            process.start()
 
-        self.assertEqual(engine.config["last_tts_latency_seconds"], 2.4)
+            self.assertTrue(tts_started.wait(1))
+            self.assertTrue(second_subtitle.wait(1))
+            engine.stop()
+            process.join(1)
+
+        self.assertEqual(len(overlays), 2)
+        self.assertFalse(process.is_alive())
+
+    def test_tts_uses_independent_workers_for_different_outputs(self):
+        config = DEFAULT_CONFIG.copy()
+        config.update({"record_logs": False, "tts_provider": "local"})
+        started = {"speaker": threading.Event(), "me": threading.Event()}
+        release = threading.Event()
+        engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, lambda status: None)
+        engine.running = True
+        engine._session = "tts-session"
+
+        class TTS:
+            def __init__(self, direction):
+                self.direction = direction
+
+            def speak_local(self, text, device, cancel_event):
+                started[self.direction].set()
+                release.wait(2)
+                return {}
+
+        engine._pipeline("speaker").tts = TTS("speaker")
+        engine._pipeline("me").tts = TTS("me")
+        engine._enqueue_tts("speaker", "one", "zh", "output-a", "tts-session", {})
+        engine._enqueue_tts("me", "two", "en", "output-b", "tts-session", {})
+
+        self.assertTrue(started["speaker"].wait(1))
+        self.assertTrue(started["me"].wait(1))
+        release.set()
+        engine.stop()
+
+    def test_tts_queue_keeps_only_latest_waiting_translation(self):
+        config = DEFAULT_CONFIG.copy()
+        config.update({"record_logs": False, "tts_provider": "local"})
+        started = threading.Event()
+        release = threading.Event()
+        spoken = []
+        engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, lambda status: None)
+        engine.running = True
+        engine._session = "tts-session"
+
+        class TTS:
+            def speak_local(self, text, device, cancel_event):
+                spoken.append(text)
+                if text == "active":
+                    started.set()
+                    release.wait(2)
+                return {"last_tts_synthesis_seconds": 0.1, "last_tts_playback_seconds": 0.2}
+
+        engine._pipeline("me").tts = TTS()
+        engine._enqueue_tts("me", "active", "en", "output", "tts-session", {})
+        self.assertTrue(started.wait(1))
+        engine._enqueue_tts("me", "stale", "en", "output", "tts-session", {})
+        engine._enqueue_tts("me", "latest", "en", "output", "tts-session", {})
+        self.assertEqual(engine.config["last_tts_queue_depth"], 1)
+        release.set()
+        deadline = time.monotonic() + 1
+        while spoken != ["active", "latest"] and time.monotonic() < deadline:
+            time.sleep(0.01)
+
+        self.assertEqual(spoken, ["active", "latest"])
+        self.assertEqual(engine.config["last_tts_synthesis_seconds"], 0.1)
+        self.assertEqual(engine.config["last_tts_playback_seconds"], 0.2)
+        engine.stop()
+
+    def test_mute_cancels_active_and_queued_tts(self):
+        config = DEFAULT_CONFIG.copy()
+        config.update({"record_logs": False, "tts_provider": "local"})
+        started = threading.Event()
+        cancelled = threading.Event()
+        engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, lambda status: None)
+        engine.running = True
+        engine._session = "tts-session"
+
+        class TTS:
+            def speak_local(self, text, device, cancel_event):
+                started.set()
+                cancel_event.wait(2)
+                if cancel_event.is_set():
+                    cancelled.set()
+                return {}
+
+        engine._pipeline("me").tts = TTS()
+        engine._enqueue_tts("me", "active", "en", "output", "tts-session", {})
+        self.assertTrue(started.wait(1))
+        engine._enqueue_tts("me", "queued", "en", "output", "tts-session", {})
+
+        engine.set_muted(True)
+
+        self.assertTrue(cancelled.wait(1))
+        self.assertEqual(engine.config["last_tts_queue_depth"], 0)
+        engine.stop()
+
+    def test_repeated_unmute_keeps_active_tts_cancellable(self):
+        config = DEFAULT_CONFIG.copy()
+        config.update({"record_logs": False, "tts_provider": "local"})
+        started = threading.Event()
+        cancelled = threading.Event()
+        engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, lambda status: None)
+        engine.running = True
+        engine._session = "tts-session"
+
+        class TTS:
+            def speak_local(self, text, device, cancel_event):
+                started.set()
+                cancel_event.wait(2)
+                if cancel_event.is_set():
+                    cancelled.set()
+                return {}
+
+        engine._pipeline("me").tts = TTS()
+        engine._enqueue_tts("me", "active", "en", "output", "tts-session", {})
+        self.assertTrue(started.wait(1))
+
+        engine.set_muted(False)
+        message = engine.stop(join_timeout=1)
+
+        self.assertTrue(cancelled.wait(1))
+        self.assertEqual(message, "已停止")
+
+    def test_stop_does_not_wait_for_blocked_cloud_synthesis(self):
+        config = DEFAULT_CONFIG.copy()
+        config.update({"record_logs": False, "tts_provider": "openai"})
+        started = threading.Event()
+        release = threading.Event()
+        engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, lambda status: None)
+        engine.running = True
+        engine._session = "tts-session"
+
+        class TTS:
+            def synthesize_openai_linear16(self, text):
+                started.set()
+                release.wait(2)
+                return b"\0\0"
+
+        engine._pipeline("me").tts = TTS()
+        engine._enqueue_tts("me", "active", "en", "output", "tts-session", {})
+        self.assertTrue(started.wait(1))
+        before = time.monotonic()
+
+        message = engine.stop(join_timeout=1)
+        elapsed = time.monotonic() - before
+        release.set()
+
+        self.assertEqual(message, "已停止")
+        self.assertLess(elapsed, 0.5)
+
+    def test_cancelled_cloud_synthesis_does_not_start_request(self):
+        cancel = threading.Event()
+        cancel.set()
+        called = []
+
+        result = RealtimeEngine._cancellable_tts_synthesis(lambda: called.append(True) or b"audio", cancel)
+
+        self.assertIsNone(result)
+        self.assertEqual(called, [])
+
+    def test_tts_queue_groups_aliases_of_the_same_output_device(self):
+        import realtime_audio_translator.engine as engine_module
+
+        config = DEFAULT_CONFIG.copy()
+        config.update({"record_logs": False, "tts_provider": "local"})
+        started = threading.Event()
+        engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, lambda status: None)
+        engine.running = True
+        engine._session = "tts-session"
+
+        class TTS:
+            def speak_local(self, text, device, cancel_event):
+                started.set()
+                cancel_event.wait(2)
+                return {}
+
+        engine._pipeline("me").tts = TTS()
+        with patch.object(engine_module, "find_device", return_value=7):
+            engine._enqueue_tts("me", "default", "en", "", "tts-session", {})
+            self.assertTrue(started.wait(1))
+            engine._enqueue_tts("me", "named", "en", "saved-device", "tts-session", {})
+
+        self.assertEqual(list(engine._tts_queues), ["device:7"])
+        engine.stop()
 
     def test_engine_can_disable_tts_output(self):
         import realtime_audio_translator.engine as engine_module

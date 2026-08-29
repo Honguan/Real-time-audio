@@ -1,6 +1,6 @@
 import unittest
 
-from realtime_audio_translator.performance import END_TO_END_P50, END_TO_END_P95, END_TO_END_P99, FIRST_SUBTITLE_P50, FIRST_SUBTITLE_P95, FIRST_SUBTITLE_P95_BUDGET_SECONDS, FIRST_SUBTITLE_P99, LatencyWindow, metric_value
+from realtime_audio_translator.performance import END_TO_END_P50, END_TO_END_P95, END_TO_END_P99, FIRST_SUBTITLE_P50, FIRST_SUBTITLE_P95, FIRST_SUBTITLE_P95_BUDGET_SECONDS, FIRST_SUBTITLE_P99, TTS_QUEUE_DEPTH, LatencyWindow, metric_value
 
 
 class PerformanceTests(unittest.TestCase):
@@ -14,6 +14,7 @@ class PerformanceTests(unittest.TestCase):
 
     def test_metric_value_accepts_only_defined_numeric_metrics(self):
         self.assertEqual(metric_value({END_TO_END_P95: "2.5"}, END_TO_END_P95), 2.5)
+        self.assertEqual(metric_value({TTS_QUEUE_DEPTH: 1}, TTS_QUEUE_DEPTH), 1.0)
         self.assertIsNone(metric_value({END_TO_END_P95: "bad"}, END_TO_END_P95))
         with self.assertRaises(KeyError):
             metric_value({}, "last_ambiguous_latency")
