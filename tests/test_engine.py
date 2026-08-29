@@ -14,6 +14,19 @@ from tests.helpers import QueuedWorker, StaticTranscriber, StoppingTranslator, w
 
 
 class EngineTests(unittest.TestCase):
+    def test_existing_provider_clients_follow_current_session_cancellation(self):
+        engine = RealtimeEngine(Path("."), DEFAULT_CONFIG.copy(), lambda speaker, mine: None, lambda status: None)
+        pipeline = engine._pipeline("me")
+        current_cancel = threading.Event()
+        current_output_cancel = threading.Event()
+        engine._cancel = current_cancel
+        engine._virtual_mic_cancel = current_output_cancel
+
+        engine._pipeline("me")
+
+        self.assertIs(pipeline.translator.http.cancel_event, current_cancel)
+        self.assertIs(pipeline.tts.http.cancel_event, current_output_cancel)
+
     def test_tts_pipelines_use_independent_output_volumes(self):
         config = DEFAULT_CONFIG.copy()
         config.update({"tts_volume": 35, "speaker_tts_volume": 70})

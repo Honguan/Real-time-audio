@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 from realtime_audio_translator.config import DEFAULT_CONFIG, _has_reparse_point, clear_cache, clear_logs, ensure_app_dirs, ensure_glossary_file, load_config, log_files_to_clear, save_audio_devices, save_config
 from realtime_audio_translator.ai_memory import add_glossary_term, cache_translation, cached_translation
-from realtime_audio_translator.providers import TextToSpeech, Translator, build_google_translate_request, build_openai_translation_request, google_access_token
+from realtime_audio_translator.providers import HttpClient, TextToSpeech, Translator, build_google_translate_request, build_openai_translation_request, google_access_token
 
 
 class TranslationCacheTests(unittest.TestCase):
@@ -24,19 +24,17 @@ class TranslationCacheTests(unittest.TestCase):
                 return {"output_text": "你好"}
 
         original_key = os.environ.get("OPENAI_API_KEY")
-        original_post = providers_module.requests.post
         os.environ["OPENAI_API_KEY"] = "test-key"
-        providers_module.requests.post = lambda *args, **kwargs: calls.append((args, kwargs)) or Response()
         try:
             with tempfile.TemporaryDirectory() as tmp:
                 config = DEFAULT_CONFIG.copy()
                 config["provider"] = "openai"
                 config["translation_cache_path"] = str(Path(tmp) / "translation_cache.db")
                 translator = Translator(config)
+                translator.http.session.post = lambda *args, **kwargs: calls.append((args, kwargs)) or Response()
                 self.assertEqual(translator.translate("hello", "en", "zh-TW").text, "你好")
                 self.assertEqual(translator.translate("hello", "en", "zh-TW").text, "你好")
         finally:
-            providers_module.requests.post = original_post
             if original_key is None:
                 os.environ.pop("OPENAI_API_KEY", None)
             else:
@@ -61,19 +59,17 @@ class TranslationCacheTests(unittest.TestCase):
                 return {"output_text": self.text}
 
         original_key = os.environ.get("OPENAI_API_KEY")
-        original_post = providers_module.requests.post
         responses = [Response("你好"), Response("它")]
-        providers_module.requests.post = lambda *args, **kwargs: calls.append((args, kwargs)) or responses.pop(0)
         os.environ["OPENAI_API_KEY"] = "test-key"
         try:
             config = DEFAULT_CONFIG.copy()
             config["provider"] = "openai"
             config["translation_cache_enabled"] = False
             translator = Translator(config)
+            translator.http.session.post = lambda *args, **kwargs: calls.append((args, kwargs)) or responses.pop(0)
             translator.translate("hello", "en", "zh-TW")
             translator.translate("it", "en", "zh-TW")
         finally:
-            providers_module.requests.post = original_post
             if original_key is None:
                 os.environ.pop("OPENAI_API_KEY", None)
             else:
@@ -107,8 +103,6 @@ class TranslationCacheTests(unittest.TestCase):
                 return {"output_text": "push lane"}
 
         original_key = os.environ.get("OPENAI_API_KEY")
-        original_post = providers_module.requests.post
-        providers_module.requests.post = lambda *args, **kwargs: calls.append((args, kwargs)) or Response()
         os.environ["OPENAI_API_KEY"] = "test-key"
         try:
             with tempfile.TemporaryDirectory() as tmp:
@@ -119,9 +113,10 @@ class TranslationCacheTests(unittest.TestCase):
                 config["translation_cache_enabled"] = False
                 config["glossary_path"] = str(glossary)
 
-                Translator(config).translate("push", "en", "zh-TW")
+                translator = Translator(config)
+                translator.http.session.post = lambda *args, **kwargs: calls.append((args, kwargs)) or Response()
+                translator.translate("push", "en", "zh-TW")
         finally:
-            providers_module.requests.post = original_post
             if original_key is None:
                 os.environ.pop("OPENAI_API_KEY", None)
             else:
@@ -152,18 +147,17 @@ class TranslationCacheTests(unittest.TestCase):
                 return {"output_text": "你好"}
 
         original_key = os.environ.get("OPENAI_API_KEY")
-        original_post = providers_module.requests.post
         os.environ["OPENAI_API_KEY"] = "test-key"
-        providers_module.requests.post = lambda *args, **kwargs: calls.append((args, kwargs)) or Response()
         try:
             with tempfile.TemporaryDirectory() as tmp:
                 config = DEFAULT_CONFIG.copy()
                 config["provider"] = "openai"
                 config["translation_cache_path"] = str(Path(tmp) / "translation_cache.db")
-                self.assertEqual(Translator(config).translate("hello", "en", "zh-TW").text, "你好")
-                self.assertEqual(Translator(config).translate("hello", "en", "zh-TW").text, "你好")
+                http = HttpClient()
+                http.session.post = lambda *args, **kwargs: calls.append((args, kwargs)) or Response()
+                self.assertEqual(Translator(config, http=http).translate("hello", "en", "zh-TW").text, "你好")
+                self.assertEqual(Translator(config, http=http).translate("hello", "en", "zh-TW").text, "你好")
         finally:
-            providers_module.requests.post = original_post
             if original_key is None:
                 os.environ.pop("OPENAI_API_KEY", None)
             else:

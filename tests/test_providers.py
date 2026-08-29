@@ -5,17 +5,152 @@ import tempfile
 import threading
 import unittest
 import zipfile
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
+
+import requests
 from realtime_audio_translator.archive_install import verify_install_manifest, write_install_manifest
 from realtime_audio_translator.audio import device_identity
 from realtime_audio_translator.config import DEFAULT_CONFIG, _has_reparse_point, clear_cache, clear_logs, ensure_app_dirs, ensure_glossary_file, load_config, log_files_to_clear, save_audio_devices, save_config
 from realtime_audio_translator.ai_memory import add_glossary_term, cache_translation, cached_translation
 from realtime_audio_translator.offline_translation import download_translation_models, install_translation_models, normalize_translation_text, translation_model_available, translation_model_pairs, translation_models_dir
-from realtime_audio_translator.providers import TextToSpeech, Translator, build_google_translate_request, build_openai_translation_request, google_access_token
+from realtime_audio_translator.providers import HttpClient, ProviderRequestError, TextToSpeech, Translator, build_google_translate_request, build_openai_translation_request, google_access_token
 
 
 class ProvidersTests(unittest.TestCase):
+    def test_http_client_reuses_session_connections(self):
+        calls = []
+
+        class Response:
+            status_code = 200
+
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return {"output_text": "translated"}
+
+        config = DEFAULT_CONFIG.copy()
+        config.update({"provider": "openai", "translation_cache_enabled": False})
+        translator = Translator(config)
+        session = translator.http.session
+        session.post = lambda *args, **kwargs: calls.append((args, kwargs)) or Response()
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}):
+            translator.translate("one", "en", "zh")
+            translator.translate("two", "en", "zh")
+
+        self.assertIs(translator.http.session, session)
+        self.assertEqual(len(calls), 2)
+        self.assertTrue(all(isinstance(call[1]["timeout"], tuple) for call in calls))
+
+    def test_http_client_retries_429_and_5xx_with_defined_backoff(self):
+        class Response:
+            def __init__(self, status_code, headers=None):
+                self.status_code = status_code
+                self.headers = headers or {}
+
+        client = HttpClient()
+        responses = [Response(429, {"Retry-After": "0.75"}), Response(507), Response(200)]
+        calls = []
+        client.session.post = lambda *args, **kwargs: calls.append(kwargs) or responses.pop(0)
+        delays = []
+        with patch("realtime_audio_translator.providers.random.uniform", return_value=0.05), patch("realtime_audio_translator.providers.time.sleep", delays.append):
+            response = client.post("https://example.invalid")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(calls), 3)
+        self.assertEqual(delays, [0.75, 0.55])
+
+    def test_http_client_caps_network_retries_and_returns_structured_error(self):
+        client = HttpClient()
+        calls = []
+
+        def fail(*args, **kwargs):
+            calls.append(kwargs)
+            raise requests.ConnectTimeout("offline")
+
+        client.session.post = fail
+        with patch("realtime_audio_translator.providers.random.uniform", return_value=0), patch("realtime_audio_translator.providers.time.sleep"):
+            with self.assertRaises(ProviderRequestError) as raised:
+                client.post("https://example.invalid")
+
+        self.assertEqual((raised.exception.kind, raised.exception.attempts), ("connect_timeout", 3))
+        self.assertEqual(len(calls), 3)
+
+    def test_http_client_cancellation_and_budget_prevent_new_attempts(self):
+        for cancelled, budget, expected_kind in ((True, 8.0, "cancelled"), (False, 0.0, "timeout")):
+            with self.subTest(expected_kind=expected_kind):
+                cancel = threading.Event()
+                if cancelled:
+                    cancel.set()
+                client = HttpClient(cancel_event=cancel)
+                calls = []
+                client.session.post = lambda *args, **kwargs: calls.append(True)
+                with patch("realtime_audio_translator.providers.HTTP_BUDGET_SECONDS", budget):
+                    with self.assertRaises(ProviderRequestError) as raised:
+                        client.post("https://example.invalid")
+                self.assertEqual(raised.exception.kind, expected_kind)
+                self.assertEqual(calls, [])
+
+        cancel = threading.Event()
+        client = HttpClient(cancel_event=cancel)
+        client.session.post = lambda *args, **kwargs: cancel.set() or type("Response", (), {"status_code": 200})()
+        with self.assertRaises(ProviderRequestError) as raised:
+            client.post("https://example.invalid")
+        self.assertEqual(raised.exception.kind, "cancelled")
+
+    def test_google_access_token_reuses_credentials_until_near_expiry(self):
+        import realtime_audio_translator.providers as providers_module
+
+        created = []
+        refreshed = []
+
+        class Credentials:
+            token = None
+            expiry = None
+
+            @classmethod
+            def from_service_account_file(cls, path, scopes):
+                created.append((path, scopes))
+                return cls()
+
+            def refresh(self, request):
+                refreshed.append(request)
+                assert request("https://oauth2.googleapis.com/token", method="POST").status == 200
+                self.token = f"token-{len(refreshed)}"
+                self.expiry = datetime.now(timezone.utc) + timedelta(hours=1)
+
+        service_account_module = type(sys)("google.oauth2.service_account")
+        service_account_module.Credentials = Credentials
+        http = HttpClient()
+
+        class Response:
+            status_code = 200
+            headers = {}
+            content = b"{}"
+
+        auth_requests = []
+        http.session.post = lambda *args, **kwargs: auth_requests.append((args, kwargs)) or Response()
+        with tempfile.TemporaryDirectory() as tmp:
+            key = Path(tmp) / "service-account.json"
+            key.write_text("{}", encoding="utf-8")
+            providers_module._GOOGLE_CREDENTIALS.clear()
+            with patch.dict(sys.modules, {
+                "google.oauth2.service_account": service_account_module,
+            }):
+                tokens = [google_access_token(str(key), http) for _ in range(100)]
+                credentials = next(iter(providers_module._GOOGLE_CREDENTIALS.values()))
+                credentials.expiry = datetime.now(timezone.utc) + timedelta(minutes=4)
+                refreshed_token = google_access_token(str(key), http)
+
+        self.assertEqual(len(created), 1)
+        self.assertEqual(len(refreshed), 2)
+        self.assertEqual(len(auth_requests), 2)
+        self.assertEqual(set(tokens), {"token-1"})
+        self.assertEqual(refreshed_token, "token-2")
+        providers_module._GOOGLE_CREDENTIALS.clear()
+
     def test_provider_request_builders_do_not_embed_secrets(self):
         openai = build_openai_translation_request("hello", "zh-TW", "en")
         self.assertEqual(openai["headers"]["Authorization"], "Bearer ${OPENAI_API_KEY}")
@@ -387,19 +522,15 @@ class ProvidersTests(unittest.TestCase):
             def json(self):
                 return {"translatedText": "你好"}
 
-        original_post = providers_module.requests.post
-        providers_module.requests.post = lambda *args, **kwargs: calls.append((args, kwargs)) or Response()
-        try:
-            with tempfile.TemporaryDirectory() as tmp:
-                config = DEFAULT_CONFIG.copy()
-                config["provider"] = "local"
-                config["local_translate_url"] = "http://127.0.0.1:5000/translate"
-                config["translation_cache_path"] = str(Path(tmp) / "translation_cache.db")
-                translator = Translator(config)
+        with tempfile.TemporaryDirectory() as tmp:
+            config = DEFAULT_CONFIG.copy()
+            config["provider"] = "local"
+            config["local_translate_url"] = "http://127.0.0.1:5000/translate"
+            config["translation_cache_path"] = str(Path(tmp) / "translation_cache.db")
+            translator = Translator(config)
+            translator.http.session.post = lambda *args, **kwargs: calls.append((args, kwargs)) or Response()
 
-                self.assertEqual(translator.translate("hello", "en", "zh-TW").text, "你好")
-        finally:
-            providers_module.requests.post = original_post
+            self.assertEqual(translator.translate("hello", "en", "zh-TW").text, "你好")
 
         self.assertEqual(calls[0][0][0], "http://127.0.0.1:5000/translate")
         self.assertEqual(calls[0][1]["json"]["q"], "hello")
@@ -419,13 +550,12 @@ class ProvidersTests(unittest.TestCase):
                 return None
 
         original_key = os.environ.get("OPENAI_API_KEY")
-        original_post = providers_module.requests.post
         os.environ["OPENAI_API_KEY"] = "test-key"
-        providers_module.requests.post = lambda *args, **kwargs: calls.append((args, kwargs)) or Response()
+        tts = TextToSpeech(DEFAULT_CONFIG.copy())
+        tts.http.session.post = lambda *args, **kwargs: calls.append((args, kwargs)) or Response()
         try:
-            audio = TextToSpeech(DEFAULT_CONFIG.copy()).synthesize_openai_linear16("hello")
+            audio = tts.synthesize_openai_linear16("hello")
         finally:
-            providers_module.requests.post = original_post
             if original_key is None:
                 os.environ.pop("OPENAI_API_KEY", None)
             else:
@@ -456,16 +586,15 @@ class ProvidersTests(unittest.TestCase):
             def json(self):
                 return {"audioContent": "cGNt"}
 
-        original_post = providers_module.requests.post
         original_token = providers_module.google_access_token
-        providers_module.google_access_token = lambda path: "test-token"
-        providers_module.requests.post = lambda *args, **kwargs: calls.append((args, kwargs)) or Response()
+        providers_module.google_access_token = lambda path, http=None: "test-token"
         try:
             config = DEFAULT_CONFIG.copy()
             config["google_tts_voice"] = "en-US-Neural2-A"
-            audio = TextToSpeech(config).synthesize_google_linear16("hello", "en-US")
+            tts = TextToSpeech(config)
+            tts.http.session.post = lambda *args, **kwargs: calls.append((args, kwargs)) or Response()
+            audio = tts.synthesize_google_linear16("hello", "en-US")
         finally:
-            providers_module.requests.post = original_post
             providers_module.google_access_token = original_token
 
         self.assertEqual(audio, b"pcm")
