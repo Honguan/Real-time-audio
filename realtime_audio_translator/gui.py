@@ -19,7 +19,7 @@ from .config import APP_DIR, clear_cache, clear_logs, ensure_glossary_file, load
 from .diagnostics import collect_diagnostics
 from .engine import RealtimeEngine
 from .logbook import conversation_log_usage
-from .models import cuda_hardware_from_check_output, download_model, list_models, model_available, model_install_message, models_dir, recommend_model
+from .models import MODEL_INVALID, MODEL_READY, cuda_hardware_from_check_output, download_model, list_models, model_available, model_install_message, model_status, models_dir, recommend_model
 from .offline_translation import download_translation_models as download_offline_translation_models
 from .paths import resource_root
 from .providers import TextToSpeech, Translator, google_access_token
@@ -107,6 +107,7 @@ BASIC_BUTTON_TEXTS = {
 FIRST_RUN_ISSUE_CODES = {
     "runtime_missing",
     "model_missing",
+    "model_corrupt",
     "offline_translation_model_missing",
     "speaker_device_missing",
     "microphone_device_missing",
@@ -1378,10 +1379,13 @@ class TranslatorApp(tk.Tk):
             self.status.set(error)
             return
         app_models = models_dir(self.config)
-        if not model_available(self.config["model"], self.repo_root / "_models", app_models):
-            append_app_log(APP_DIR, "model_missing", model=self.config["model"])
-            messagebox.showerror("找不到模型", model_install_message(self.config["model"], app_models))
-            error = f"找不到模型：{self.config['model']}"
+        current_model_status = model_status(self.config["model"], self.repo_root / "_models", app_models)
+        if current_model_status != MODEL_READY:
+            corrupt = current_model_status == MODEL_INVALID
+            title = "模型不完整或損毀" if corrupt else "找不到模型"
+            append_app_log(APP_DIR, "model_corrupt" if corrupt else "model_missing", model=self.config["model"])
+            messagebox.showerror(title, model_install_message(self.config["model"], app_models))
+            error = f"{title}：{self.config['model']}"
             self._set_last_error(error)
             self.status.set(error)
             return

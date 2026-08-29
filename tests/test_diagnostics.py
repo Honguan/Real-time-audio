@@ -8,6 +8,7 @@ from realtime_audio_translator.config import DEFAULT_CONFIG, _has_reparse_point,
 from realtime_audio_translator.diagnostics import DiagnosticIssue, collect_diagnostics
 from realtime_audio_translator.gui import LANGUAGE_CHOICES, PERFORMANCE_CHOICES, PROVIDER_CHOICES, TARGET_LANGUAGE_CHOICES, TTS_PROVIDER_CHOICES, TranslatorApp, diagnostic_action_label, diagnostic_actions, first_diagnostic_action, first_run_setup_action, first_run_wizard_needed, format_overlay_line, language_lock_value, latency_seconds_value, main_status_summary, mode_notice, overlay_clipboard_text, overlay_font_size_value, overlay_hold_seconds_value, overlay_opacity_value, overlay_visibility_action, performance_segment_seconds, setup_guide_actions, status_message_is_error, subtitle_updates_allowed, swap_language_values, troubleshooting_action, visible_button_texts, visible_setting_keys
 from realtime_audio_translator.models import cuda_hardware_from_check_output, list_models, model_available, model_download_command, model_install_message, models_dir, recommend_model
+from tests.helpers import write_model
 
 
 class DiagnosticsTests(unittest.TestCase):
@@ -143,8 +144,7 @@ class DiagnosticsTests(unittest.TestCase):
             runtime = root / "runtime"
             model = root / "models" / "medium"
             runtime.mkdir()
-            model.mkdir(parents=True)
-            (model / "model.bin").write_text("model", encoding="utf-8")
+            write_model(model)
             (runtime / "faster-whisper-xxl.exe").write_text("exe", encoding="utf-8")
             (runtime / "ffmpeg.exe").write_text("ff", encoding="utf-8")
             (runtime / "_xxl_data").mkdir()
@@ -191,8 +191,7 @@ class DiagnosticsTests(unittest.TestCase):
             runtime = root / "runtime"
             model = root / "models" / "medium"
             runtime.mkdir()
-            model.mkdir(parents=True)
-            (model / "model.bin").write_text("model", encoding="utf-8")
+            write_model(model)
             (runtime / "faster-whisper-xxl.exe").write_text("exe", encoding="utf-8")
             (runtime / "ffmpeg.exe").write_text("ff", encoding="utf-8")
             (runtime / "_xxl_data").mkdir()
@@ -245,8 +244,7 @@ class DiagnosticsTests(unittest.TestCase):
             runtime = root / "runtime"
             model = root / "models" / "medium"
             runtime.mkdir()
-            model.mkdir(parents=True)
-            (model / "model.bin").write_text("model", encoding="utf-8")
+            write_model(model)
             (runtime / "faster-whisper-xxl.exe").write_text("exe", encoding="utf-8")
             (runtime / "ffmpeg.exe").write_text("ff", encoding="utf-8")
             (runtime / "_xxl_data").mkdir()
@@ -363,7 +361,7 @@ class DiagnosticsTests(unittest.TestCase):
             config["provider"] = "local"
             config["local_translate_url"] = ""
             config["models_path"] = str(root / "translation-models")
-            (model / "model.bin").write_text("model", encoding="utf-8")
+            write_model(model)
 
             issues = collect_diagnostics(config, root)
 
@@ -381,8 +379,7 @@ class DiagnosticsTests(unittest.TestCase):
             configured_models = root / "custom-models"
             model = configured_models / "medium"
             runtime.mkdir()
-            model.mkdir(parents=True)
-            (model / "model.bin").write_text("model", encoding="utf-8")
+            write_model(model)
             (runtime / "faster-whisper-xxl.exe").write_text("exe", encoding="utf-8")
             (runtime / "ffmpeg.exe").write_text("ff", encoding="utf-8")
             (runtime / "_xxl_data").mkdir()
@@ -396,6 +393,25 @@ class DiagnosticsTests(unittest.TestCase):
 
         self.assertEqual(models_dir(config), configured_models)
         self.assertNotIn("model_missing", [issue.code for issue in issues])
+        self.assertNotIn("model_corrupt", [issue.code for issue in issues])
+
+    def test_diagnostics_distinguish_incomplete_model_from_missing_model(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            models = root / "custom-models"
+            partial = models / "faster-whisper-custom"
+            partial.mkdir(parents=True)
+            (partial / "model.bin.partial").write_text("partial", encoding="utf-8")
+            config = DEFAULT_CONFIG | {"model": "custom", "models_path": str(models), "runtime_dir": str(root / "runtime")}
+
+            issues = collect_diagnostics(config, root)
+            codes = [issue.code for issue in issues]
+
+        self.assertIn("model_corrupt", codes)
+        self.assertNotIn("model_missing", codes)
+        issue = next(issue for issue in issues if issue.code == "model_corrupt")
+        self.assertEqual(issue.action, "download_model")
+        self.assertIn("重新下載", issue.fix)
 
     def test_models_dir_expands_windows_environment_variables(self):
         self.assertEqual(models_dir({"models_path": r"%USERPROFILE%\models"}), Path(os.environ["USERPROFILE"]) / "models")

@@ -80,7 +80,7 @@ RealtimeAudioTranslator-runtime-cuda12-dlls-<tag>.zip
 %USERPROFILE%\.realtime-audio\models
 ```
 
-主程式不需要安裝 Python。
+主程式不需要安裝 Python。Whisper 模型資料夾會快速驗證 `config.json`、`model.bin`、`tokenizer.json` 與 `vocabulary.*`；診斷會區分模型缺失與不完整／損毀，並提示重新下載。
 
 若 Release 沒有 runtime 檔案，可到 https://github.com/Purfview/whisper-standalone-win/releases 下載 Faster-Whisper-XXL Windows runtime 和 `cuBLAS.and.cuDNN_CUDA12_win_v3.7z`。
 

@@ -5,7 +5,7 @@ from pathlib import Path
 from .ai_auto_tuner import recommend_tuning
 from .audio import find_device, same_device_identity, virtual_mic_recaptures_tts
 from .config import APP_DIR
-from .models import model_available, models_dir
+from .models import MODEL_INVALID, MODEL_MISSING, MODEL_READY, model_status, models_dir
 from .offline_translation import translation_model_available, translation_models_dir
 from .performance import ASR_BUDGET_SECONDS, ASR_LATENCY, END_TO_END_P95, END_TO_END_P95_BUDGET_SECONDS, QUEUE_WAIT, QUEUE_WAIT_BUDGET_SECONDS, TRANSLATION_BUDGET_SECONDS, TRANSLATION_LATENCY, TTS_PLAYBACK, TTS_STAGE_BUDGET_SECONDS, TTS_SYNTHESIS, metric_value
 from .runtime import runtime_dir, runtime_status
@@ -47,10 +47,11 @@ def _find_device_safe(name_part: str, want_output: bool) -> int | None:
         return None
 
 
-def _model_exists(config: dict, repo_root: Path) -> bool:
+def _model_state(config: dict, repo_root: Path) -> str:
     model = config.get("model", "")
     app_models = models_dir(config)
-    return model_available(model, repo_root / "_models", app_models) or model_available(model, repo_root / "models", app_models)
+    states = (model_status(model, repo_root / "_models", app_models), model_status(model, repo_root / "models", app_models))
+    return MODEL_READY if MODEL_READY in states else MODEL_INVALID if MODEL_INVALID in states else MODEL_MISSING
 
 
 def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
@@ -75,13 +76,23 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
             f"解壓 {status['cuda_package']} 到 runtime 資料夾",
             "open_runtime",
         ))
-    if not _model_exists(config, repo_root):
+    model_state = _model_state(config, repo_root)
+    if model_state == MODEL_MISSING:
         issues.append(DiagnosticIssue(
             "model_missing",
             "error",
             "找不到語音辨識模型",
             f"目前模型：{config.get('model', '')}",
             "按「下載模型」，或把模型 zip 解壓到 models 資料夾",
+            "download_model",
+        ))
+    elif model_state == MODEL_INVALID:
+        issues.append(DiagnosticIssue(
+            "model_corrupt",
+            "error",
+            "語音辨識模型不完整或損毀",
+            f"目前模型：{config.get('model', '')}",
+            "刪除不完整模型後按「下載模型」重新下載，或重新解壓完整模型",
             "download_model",
         ))
     tts_overlaps_speaker = _devices_overlap(config.get("speaker_device", ""), config.get("tts_output_device", ""))

@@ -2,8 +2,10 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
-from realtime_audio_translator.models import cuda_hardware_from_check_output, list_models, model_available, model_download_command, model_install_message, models_dir, recommend_model
+from realtime_audio_translator.models import MODEL_INVALID, MODEL_MARKER, cuda_hardware_from_check_output, download_model, list_models, model_available, model_download_command, model_install_message, model_status, models_dir, recommend_model
+from tests.helpers import write_model
 
 
 class ReleaseModelsTests(unittest.TestCase):
@@ -38,10 +40,8 @@ class ReleaseModelsTests(unittest.TestCase):
     def test_model_available_accepts_downloaded_model_folder(self):
         with tempfile.TemporaryDirectory() as tmp:
             app_models = Path(tmp) / "models"
-            (app_models / "faster-whisper-medium").mkdir(parents=True)
-            (app_models / "whisper-small").mkdir(parents=True)
-            (app_models / "faster-whisper-medium" / "model.bin").write_text("model", encoding="utf-8")
-            (app_models / "whisper-small" / "model.bin").write_text("model", encoding="utf-8")
+            write_model(app_models / "faster-whisper-medium")
+            write_model(app_models / "whisper-small")
             (app_models / "whisper-empty").mkdir()
 
             self.assertTrue(model_available("medium", Path(tmp) / "missing", app_models))
@@ -53,10 +53,42 @@ class ReleaseModelsTests(unittest.TestCase):
     def test_model_available_expands_environment_model_path(self):
         with tempfile.TemporaryDirectory() as tmp:
             model = Path(tmp) / "whisper-small"
-            model.mkdir()
-            (model / "model.bin").write_text("model", encoding="utf-8")
+            write_model(model)
             with patch.dict(os.environ, {"RTA_TEST_MODEL": str(model)}):
                 self.assertTrue(model_available(r"%RTA_TEST_MODEL%", Path(tmp) / "missing", Path(tmp) / "models"))
+
+    def test_model_validation_rejects_arbitrary_partial_and_nested_content(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            app_models = Path(tmp) / "models"
+            for name, filename in (("empty", None), ("arbitrary", "notes.txt"), ("partial", "model.bin.partial")):
+                folder = app_models / name
+                folder.mkdir(parents=True)
+                if filename:
+                    (folder / filename).write_text("partial", encoding="utf-8")
+                self.assertEqual(model_status(name, Path(tmp) / "missing", app_models), MODEL_INVALID)
+            nested = app_models / "nested"
+            write_model(nested / "faster-whisper-nested")
+            self.assertEqual(model_status("nested", Path(tmp) / "missing", app_models), MODEL_INVALID)
+
+    def test_successful_download_writes_installed_marker_and_detects_later_truncation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            exe = root / "faster-whisper-xxl.exe"
+            exe.write_text("exe", encoding="utf-8")
+            models = root / "models"
+
+            def run(*_args, **_kwargs):
+                write_model(models / "faster-whisper-medium")
+                return SimpleNamespace(returncode=0)
+
+            with patch("realtime_audio_translator.models.subprocess.run", side_effect=run):
+                self.assertEqual(download_model(exe, "medium", models), 0)
+
+            installed = models / "faster-whisper-medium"
+            self.assertTrue((installed / MODEL_MARKER).is_file())
+            self.assertTrue(model_available("medium", root / "missing", models))
+            (installed / "model.bin").write_bytes(b"")
+            self.assertFalse(model_available("medium", root / "missing", models))
 
     def test_model_install_message_shows_model_folder(self):
         message = model_install_message("medium", Path(r"C:\Users\me\.realtime-audio\models"))
@@ -74,8 +106,9 @@ class ReleaseModelsTests(unittest.TestCase):
         self.assertIn('messagebox.showerror("找不到 runtime", runtime_install_message(runtime_dir(self.config)))', gui_source)
         self.assertIn('self._set_last_error(error)', gui_source)
         self.assertIn("app_models = models_dir(self.config)", gui_source)
-        self.assertIn('if not model_available(self.config["model"], self.repo_root / "_models", app_models):', gui_source)
-        self.assertIn('messagebox.showerror("找不到模型", model_install_message(self.config["model"], app_models))', gui_source)
+        self.assertIn('current_model_status = model_status(self.config["model"], self.repo_root / "_models", app_models)', gui_source)
+        self.assertIn("if current_model_status != MODEL_READY:", gui_source)
+        self.assertIn('messagebox.showerror(title, model_install_message(self.config["model"], app_models))', gui_source)
         self.assertIn('self._set_last_error("")', gui_source)
         self.assertIn('self._post_ui("overlay", speaker, mine, engine=engine)', gui_source)
         self.assertIn('self._post_ui("status", message, engine=engine)', gui_source)
