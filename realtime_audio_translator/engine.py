@@ -13,7 +13,7 @@ from .config import APP_DIR, DEFAULT_CONFIG, STATE_KEYS, TARGET_LANGUAGE_CHOICES
 from .logbook import ConversationLog
 from .models import models_dir
 from .performance import FIRST_SUBTITLE_P50, FIRST_SUBTITLE_P95, FIRST_SUBTITLE_P99, LatencyWindow
-from .providers import TextToSpeech, Translator
+from .providers import HttpClient, TextToSpeech, Translator
 from .tts import play_linear16
 
 
@@ -344,8 +344,17 @@ class RealtimeEngine:
             config = {key: value for key, value in self.config.items() if key not in STATE_KEYS}
             if direction == "speaker":
                 config["tts_volume"] = config["speaker_tts_volume"]
-            self.pipelines[direction] = PipelineContext(config, Translator(config), TextToSpeech(config))
-        return self.pipelines[direction]
+            self.pipelines[direction] = PipelineContext(
+                config,
+                Translator(config, http=HttpClient(cancel_event=self._cancel)),
+                TextToSpeech(config, http=HttpClient(cancel_event=self._cancel)),
+            )
+        pipeline = self.pipelines[direction]
+        if hasattr(pipeline.translator, "http"):
+            pipeline.translator.http.cancel_event = self._cancel
+        if hasattr(pipeline.tts, "http"):
+            pipeline.tts.http.cancel_event = self._speaker_translation_cancel if direction == "speaker" else self._virtual_mic_cancel
+        return pipeline
 
     def _publish(self, session: str | None, callback: Callable, *args) -> None:
         with self._callback_lock:
@@ -627,6 +636,8 @@ class RealtimeEngine:
         pipeline = self._pipeline(direction)
         config = pipeline.config
         tts = pipeline.tts
+        if hasattr(tts, "http"):
+            tts.http.cancel_event = cancel_event
         try:
             if config.get("tts_provider") == "local":
                 local_started = time.perf_counter()
