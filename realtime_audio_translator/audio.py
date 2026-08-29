@@ -4,6 +4,7 @@ import queue
 import threading
 import time
 import wave
+from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -119,6 +120,114 @@ class AudioSegment:
     sample_rate: int
     timing: dict[str, float] = field(default_factory=dict)
 
+    @property
+    def duration_seconds(self) -> float:
+        return len(self.pcm) / (2 * self.sample_rate) if self.sample_rate > 0 else 0.0
+
+
+@dataclass(frozen=True)
+class SegmentationPolicy:
+    frame_seconds: float
+    pre_roll_seconds: float
+    hangover_seconds: float
+    overlap_seconds: float
+    max_utterance_seconds: float
+
+
+SEGMENTATION_POLICIES = {
+    "low_latency": SegmentationPolicy(0.04, 0.12, 0.16, 0.08, 1.5),
+    "balanced": SegmentationPolicy(0.05, 0.20, 0.30, 0.10, 2.0),
+    "quality": SegmentationPolicy(0.08, 0.32, 0.48, 0.16, 3.0),
+    "offline_light": SegmentationPolicy(0.10, 0.20, 0.40, 0.10, 2.5),
+}
+
+
+def segmentation_policy(mode: str, max_utterance_seconds=None) -> SegmentationPolicy:
+    policy = SEGMENTATION_POLICIES.get(str(mode), SEGMENTATION_POLICIES["balanced"])
+    try:
+        maximum = min(3.0, max(policy.frame_seconds, float(max_utterance_seconds)))
+    except (TypeError, ValueError):
+        return policy
+    return SegmentationPolicy(policy.frame_seconds, policy.pre_roll_seconds, policy.hangover_seconds, policy.overlap_seconds, maximum)
+
+
+class UtteranceSegmenter:
+    def __init__(self, policy: SegmentationPolicy, threshold: float):
+        self.policy = policy
+        self.threshold = threshold
+        self._pre_roll = deque(maxlen=max(1, round(policy.pre_roll_seconds / policy.frame_seconds)))
+        self._hangover_frames = max(1, round(policy.hangover_seconds / policy.frame_seconds))
+        self._overlap_frames = max(0, round(policy.overlap_seconds / policy.frame_seconds))
+        self._max_frames = max(1, round(policy.max_utterance_seconds / policy.frame_seconds))
+        self._frames: list[AudioSegment] = []
+        self._silence_frames = 0
+        self._leading_overlap_frames = 0
+
+    def push(self, frame: AudioSegment) -> AudioSegment | None:
+        vad_started = time.perf_counter()
+        speech = audio_segment_active(frame, self.threshold)
+        frame.timing["_vad_seconds"] = time.perf_counter() - vad_started
+        if not self._frames:
+            if not speech:
+                self._pre_roll.append(frame)
+                return None
+            self._frames = [*self._pre_roll, frame]
+            self._pre_roll.clear()
+        else:
+            self._frames.append(frame)
+        self._silence_frames = 0 if speech else self._silence_frames + 1
+        if len(self._frames) >= self._max_frames:
+            utterance = self._utterance()
+            retained = self._frames[-self._overlap_frames:] if self._overlap_frames else []
+            if retained and self._silence_frames < len(retained):
+                self._frames = list(retained)
+                self._silence_frames = min(self._silence_frames, len(retained))
+                self._leading_overlap_frames = len(retained)
+            else:
+                self._pre_roll.extend(retained)
+                self._frames = []
+                self._silence_frames = 0
+                self._leading_overlap_frames = 0
+            return utterance
+        if self._silence_frames >= self._hangover_frames:
+            utterance = self._utterance()
+            silence_tail = min(self._silence_frames, self._pre_roll.maxlen)
+            self._pre_roll.extend(self._frames[-silence_tail:])
+            self._frames = []
+            self._silence_frames = 0
+            self._leading_overlap_frames = 0
+            return utterance
+        return None
+
+    def flush(self) -> AudioSegment | None:
+        if not self._frames:
+            return None
+        if self._leading_overlap_frames >= len(self._frames):
+            self._frames = []
+            self._silence_frames = 0
+            self._leading_overlap_frames = 0
+            return None
+        utterance = self._utterance()
+        self._frames = []
+        self._silence_frames = 0
+        self._leading_overlap_frames = 0
+        return utterance
+
+    def _utterance(self) -> AudioSegment:
+        utterance = self._join(self._frames)
+        if self._leading_overlap_frames:
+            utterance.timing["overlap_seconds"] = self._leading_overlap_frames * self.policy.frame_seconds
+        return utterance
+
+    @staticmethod
+    def _join(frames: list[AudioSegment]) -> AudioSegment:
+        timing = dict(frames[0].timing)
+        timing.update({key: value for key, value in frames[-1].timing.items() if "completed" in key})
+        timing["_vad_seconds"] = sum(frame.timing.get("_vad_seconds", 0.0) for frame in frames)
+        timing["vad_started_at"] = timing.get("capture_started_at", time.time())
+        timing["vad_completed_at"] = timing.get("capture_completed_at", time.time())
+        return AudioSegment(b"".join(frame.pcm for frame in frames), frames[0].sample_rate, timing)
+
 
 def audio_segment_active(segment: AudioSegment | Path, threshold: float) -> bool:
     threshold = min(1.0, max(0.0, float(threshold)))
@@ -147,9 +256,79 @@ def write_audio_segment(path: Path, segment: AudioSegment) -> Path:
     return path
 
 
-def capture_audio(device_index: int, seconds: float, loopback: bool = False, cancel_event=None) -> AudioSegment:
+def _mono_segment(data, sample_rate: int, channels: int, timing: dict[str, float] | None = None) -> AudioSegment:
     import numpy as np
 
+    samples = np.frombuffer(data, dtype=np.int16) if isinstance(data, bytes) else np.asarray(data, dtype=np.int16).reshape(-1)
+    if channels > 1:
+        samples = samples.reshape(-1, channels).mean(axis=1).astype(np.int16)
+    return AudioSegment(samples.tobytes(), sample_rate, dict(timing or {}))
+
+
+def audio_frame_stream(device_index: int, loopback: bool, cancel_event, frame_seconds: float):
+    if loopback:
+        output = next((candidate for candidate in list_audio_devices() if candidate["index"] == device_index), None)
+        if output is None:
+            raise DeviceResolutionError("已選擇的輸出裝置已不可用")
+        yield from _loopback_frame_stream(output, cancel_event, frame_seconds)
+        return
+    sd = _sd()
+    device = sd.query_devices(device_index)
+    sample_rate = int(device.get("default_samplerate") or 48000)
+    channels = max(1, min(int(device["max_input_channels"]), 2))
+    frame_count = max(1, round(sample_rate * frame_seconds))
+    with sd.InputStream(samplerate=sample_rate, blocksize=frame_count, channels=channels, dtype="int16", device=device_index) as stream:
+        while not cancel_event.is_set():
+            started_at = time.time()
+            started_perf = time.perf_counter()
+            data, overflowed = stream.read(frame_count)
+            if overflowed:
+                raise CaptureOverflowError("PortAudio input overflow")
+            yield _mono_segment(data, sample_rate, channels, {
+                "capture_started_at": started_at,
+                "_capture_started_perf": started_perf,
+                "capture_completed_at": time.time(),
+                "_capture_completed_perf": time.perf_counter(),
+            })
+
+
+def _loopback_frame_stream(output_device: dict, cancel_event, frame_seconds: float):
+    import pyaudiowpatch as pyaudio
+
+    with pyaudio.PyAudio() as audio:
+        output = _pyaudio_output_for_device(audio, output_device)
+        loopback = audio.get_wasapi_loopback_analogue_by_dict(output)
+        if loopback is None:
+            raise DeviceResolutionError(f"找不到輸出裝置「{output_device['name']}」的 WASAPI loopback")
+        sample_rate = int(loopback["defaultSampleRate"])
+        channels = max(1, int(loopback["maxInputChannels"]))
+        frame_count = max(1, round(sample_rate * frame_seconds))
+        with audio.open(
+            format=pyaudio.paInt16,
+            channels=channels,
+            rate=sample_rate,
+            input=True,
+            input_device_index=loopback["index"],
+            frames_per_buffer=frame_count,
+        ) as stream:
+            while not cancel_event.is_set():
+                started_at = time.time()
+                started_perf = time.perf_counter()
+                try:
+                    data = stream.read(frame_count, exception_on_overflow=True)
+                except OSError as exc:
+                    if -9981 in exc.args or "overflow" in str(exc).lower():
+                        raise CaptureOverflowError("PortAudio input overflow") from exc
+                    raise
+                yield _mono_segment(data, sample_rate, channels, {
+                    "capture_started_at": started_at,
+                    "_capture_started_perf": started_perf,
+                    "capture_completed_at": time.time(),
+                    "_capture_completed_perf": time.perf_counter(),
+                })
+
+
+def capture_audio(device_index: int, seconds: float, loopback: bool = False, cancel_event=None) -> AudioSegment:
     sd = _sd()
     device = sd.query_devices(device_index)
     if loopback:
@@ -169,9 +348,7 @@ def capture_audio(device_index: int, seconds: float, loopback: bool = False, can
         raise CaptureOverflowError("PortAudio input overflow")
     if cancel_event is not None and cancel_event.is_set():
         raise InterruptedError
-    if channels > 1:
-        data = data.mean(axis=1).astype(np.int16)
-    return AudioSegment(data.tobytes(), samplerate)
+    return _mono_segment(data, samplerate, channels)
 
 
 def capture_wav(path: Path, device_index: int, seconds: float, loopback: bool = False, cancel_event=None) -> Path:
@@ -199,7 +376,6 @@ def _pyaudio_output_for_device(audio, output_device: dict) -> dict:
 
 
 def _capture_loopback_audio(output_device: dict, seconds: float, cancel_event=None) -> AudioSegment:
-    import numpy as np
     import pyaudiowpatch as pyaudio
 
     with pyaudio.PyAudio() as audio:
@@ -225,13 +401,9 @@ def _capture_loopback_audio(output_device: dict, seconds: float, cancel_event=No
                 count = min(1024, frames)
                 chunks.append(stream.read(count, exception_on_overflow=True))
                 frames -= count
-    data = np.frombuffer(b"".join(chunks), dtype=np.int16)
     if cancel_event is not None and cancel_event.is_set():
         raise InterruptedError
-    if channels > 1:
-        data = data.reshape(-1, channels).mean(axis=1).astype(np.int16)
-        channels = 1
-    return AudioSegment(data.tobytes(), samplerate)
+    return _mono_segment(b"".join(chunks), samplerate, channels)
 
 
 MAX_PENDING_SEGMENTS = 3
@@ -275,10 +447,11 @@ def discard_audio_segment(segment: AudioSegment | Path) -> bool:
 
 
 class SegmentWorker:
-    def __init__(self, device_index: int, seconds: float, loopback: bool, cancel_event=None, health_callback=None):
+    def __init__(self, device_index: int, loopback: bool, threshold: float, policy: SegmentationPolicy, cancel_event=None, health_callback=None):
         self.device_index = device_index
-        self.seconds = seconds
         self.loopback = loopback
+        self.threshold = threshold
+        self.policy = policy
         self._cancel = cancel_event or threading.Event()
         self._stopped = False
         self._health_callback = health_callback
@@ -353,20 +526,19 @@ class SegmentWorker:
         failures = 0
         self._emit_health(prefix, "capturing")
         while not self._stopped:
+            segmenter = UtteranceSegmenter(self.policy, self.threshold)
             try:
-                capture_started_perf = time.perf_counter()
-                timing = {"capture_started_at": time.time(), "_capture_started_perf": capture_started_perf}
-                captured = capture_audio(self.device_index, self.seconds, self.loopback, self._cancel)
-                timing["capture_completed_at"] = time.time()
-                timing["_capture_completed_perf"] = time.perf_counter()
-                if self._cancel.is_set():
-                    discard_audio_segment(captured)
-                    return
-                self._enqueue(captured, timing)
-                if failures:
-                    self._emit_health(prefix, "capturing")
-                    failures = 0
-            except InterruptedError:
+                for frame in audio_frame_stream(self.device_index, self.loopback, self._cancel, self.policy.frame_seconds):
+                    utterance = segmenter.push(frame)
+                    if utterance is not None:
+                        self._enqueue(utterance, utterance.timing)
+                    if failures:
+                        self._emit_health(prefix, "capturing")
+                        failures = 0
+                if not self._stopped and not self._cancel.is_set():
+                    trailing = segmenter.flush()
+                    if trailing is not None:
+                        self._enqueue(trailing, trailing.timing)
                 return
             except Exception as exc:
                 failures += 1

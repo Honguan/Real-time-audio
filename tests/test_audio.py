@@ -1,3 +1,4 @@
+import json
 import sys
 import tempfile
 import threading
@@ -6,7 +7,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 from realtime_audio_translator.archive_install import write_install_manifest
-from realtime_audio_translator.audio import AudioSegment, DeviceResolutionError, SegmentWorker, _pyaudio_output_for_device, audio_segment_active, device_identity, find_device, format_device_label, virtual_mic_recaptures_tts
+from realtime_audio_translator.audio import AudioSegment, DeviceResolutionError, SegmentationPolicy, SegmentWorker, UtteranceSegmenter, _pyaudio_output_for_device, audio_segment_active, device_identity, find_device, format_device_label, segmentation_policy, virtual_mic_recaptures_tts
 from realtime_audio_translator.asr import AudioTranscriber, add_runtime_dll_directory, add_xxl_data
 from realtime_audio_translator.engine import RealtimeEngine, audio_devices_overlap, direction_label, drain_queue, overlay_text_from_config, safe_target_language
 from tests.helpers import write_wav
@@ -58,13 +59,93 @@ class AudioTests(unittest.TestCase):
             self.assertEqual(np.frombuffer(segment.pcm, dtype=np.int16).tolist(), [2000, -2000])
             self.assertEqual(list(Path(tmp).iterdir()), [])
 
+    def test_sounddevice_frame_stream_keeps_one_open_stream(self):
+        import numpy as np
+        import realtime_audio_translator.audio as audio_module
+
+        reads = 0
+        opened = []
+
+        class Stream:
+            def __init__(self, **kwargs):
+                opened.append(kwargs)
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return None
+
+            def read(self, frames):
+                nonlocal reads
+                reads += 1
+                return np.full((frames, 2), reads * 1000, dtype=np.int16), False
+
+        sounddevice = type("SoundDevice", (), {
+            "query_devices": staticmethod(lambda index: {"default_samplerate": 48000, "max_input_channels": 2}),
+            "InputStream": Stream,
+        })()
+        cancel = threading.Event()
+        with patch.object(audio_module, "_sd", return_value=sounddevice):
+            stream = audio_module.audio_frame_stream(1, False, cancel, 0.05)
+            first = next(stream)
+            second = next(stream)
+            cancel.set()
+            self.assertEqual(list(stream), [])
+
+        self.assertEqual(len(opened), 1)
+        self.assertEqual(opened[0]["blocksize"], 2400)
+        self.assertEqual(first.duration_seconds, 0.05)
+        self.assertNotEqual(first.pcm, second.pcm)
+
+    def test_loopback_frame_stream_reports_input_overflow(self):
+        import realtime_audio_translator.audio as audio_module
+
+        class Stream:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return None
+
+            def read(self, *_args, **_kwargs):
+                raise OSError(-9981, "Input overflowed")
+
+        class Audio:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return None
+
+            def get_device_count(self):
+                return 1
+
+            def get_device_info_by_index(self, index):
+                return {"name": "Speakers", "hostApi": 0, "maxOutputChannels": 2, "defaultSampleRate": 48000.0}
+
+            def get_host_api_info_by_index(self, index):
+                return {"name": "Windows WASAPI"}
+
+            def get_wasapi_loopback_analogue_by_dict(self, output):
+                return {"index": 2, "defaultSampleRate": 48000.0, "maxInputChannels": 2}
+
+            def open(self, **_kwargs):
+                return Stream()
+
+        pyaudio = type("PyAudioModule", (), {"PyAudio": Audio, "paInt16": 8})()
+        output = {"name": "Speakers", "hostapi": "Windows WASAPI", "output_channels": 2, "default_samplerate": 48000.0}
+        with patch.dict(sys.modules, {"pyaudiowpatch": pyaudio}):
+            with self.assertRaises(audio_module.CaptureOverflowError):
+                next(audio_module._loopback_frame_stream(output, threading.Event(), 0.05))
+
     def test_segment_worker_recovers_from_temporary_capture_errors(self):
         import realtime_audio_translator.audio as audio_module
 
         events = []
         attempts = 0
         with tempfile.TemporaryDirectory() as tmp:
-            worker = SegmentWorker(1, 2, False, health_callback=events.append)
+            worker = SegmentWorker(1, False, 0.01, segmentation_policy("balanced"), health_callback=events.append)
 
             def capture(*_args):
                 nonlocal attempts
@@ -72,9 +153,9 @@ class AudioTests(unittest.TestCase):
                 if attempts < 3:
                     raise OSError("device busy")
                 worker._stopped = True
-                return AudioSegment(b"\0\0", 16000)
+                return [AudioSegment(b"\0\0", 16000)]
 
-            with patch.object(audio_module, "CAPTURE_RETRY_DELAYS", (0, 0, 0)), patch.object(audio_module, "capture_audio", side_effect=capture):
+            with patch.object(audio_module, "CAPTURE_RETRY_DELAYS", (0, 0, 0)), patch.object(audio_module, "audio_frame_stream", side_effect=capture):
                 worker.run("me")
 
         self.assertEqual(attempts, 3)
@@ -91,8 +172,8 @@ class AudioTests(unittest.TestCase):
         events = []
         error = PortAudioError("device unavailable", -9985, (1, -1, "removed"))
         with tempfile.TemporaryDirectory() as tmp:
-            worker = SegmentWorker(1, 2, False, health_callback=events.append)
-            with patch.object(audio_module, "CAPTURE_RETRY_DELAYS", (0, 0, 0)), patch.object(audio_module, "capture_audio", side_effect=error) as capture:
+            worker = SegmentWorker(1, False, 0.01, segmentation_policy("balanced"), health_callback=events.append)
+            with patch.object(audio_module, "CAPTURE_RETRY_DELAYS", (0, 0, 0)), patch.object(audio_module, "audio_frame_stream", side_effect=error) as capture:
                 worker.run("speaker")
 
         self.assertEqual(capture.call_count, 4)
@@ -108,8 +189,8 @@ class AudioTests(unittest.TestCase):
 
         error = RuntimeError("invalid capture configuration")
         with tempfile.TemporaryDirectory() as tmp:
-            worker = SegmentWorker(1, 2, False)
-            with patch.object(audio_module, "capture_audio", side_effect=error) as capture:
+            worker = SegmentWorker(1, False, 0.01, segmentation_policy("balanced"))
+            with patch.object(audio_module, "audio_frame_stream", side_effect=error) as capture:
                 worker.run("me")
 
         self.assertEqual(capture.call_count, 1)
@@ -121,18 +202,14 @@ class AudioTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            worker = SegmentWorker(1, 2, False)
-            captured = 0
+            policy = SegmentationPolicy(0.05, 0.05, 0.05, 0, 0.20)
+            worker = SegmentWorker(1, False, 0.01, policy)
+            frame = AudioSegment((12000).to_bytes(2, "little", signed=True) * 800, 16000)
 
             def capture(*_args):
-                nonlocal captured
-                if captured == 1800:
-                    raise InterruptedError
-                segment = AudioSegment(captured.to_bytes(2, "little"), 16000)
-                captured += 1
-                return segment
+                yield from (frame for _ in range(72000))
 
-            with patch.object(audio_module, "capture_audio", side_effect=capture):
+            with patch.object(audio_module, "audio_frame_stream", side_effect=capture):
                 worker.run("me")
 
             pending = []
@@ -140,13 +217,13 @@ class AudioTests(unittest.TestCase):
                 pending.append(worker.queue.get_nowait())
 
             self.assertEqual(worker.queue.maxsize, 3)
-            self.assertEqual([int.from_bytes(segment.pcm, "little") for segment in pending], [1797, 1798, 1799])
-            self.assertEqual(worker.dropped_segments, 1797)
+            self.assertEqual(len(pending), 3)
+            self.assertGreater(worker.dropped_segments, 10000)
             self.assertEqual(worker.max_queue_depth, 3)
             self.assertEqual(list(root.glob("*.wav")), [])
 
     def test_segment_worker_keeps_capture_and_enqueue_timestamps_until_dequeue(self):
-        worker = SegmentWorker(1, 2, False)
+        worker = SegmentWorker(1, False, 0.01, segmentation_policy("balanced"))
         captured = AudioSegment(b"\0\0", 16000)
         worker._enqueue(captured, {"capture_started_at": 10.0, "capture_completed_at": 12.0})
 
@@ -155,20 +232,30 @@ class AudioTests(unittest.TestCase):
         self.assertEqual(timing["capture_started_at"], 10.0)
         self.assertGreaterEqual(timing["enqueued_at"], timing["capture_completed_at"])
 
+    def test_segment_worker_flushes_active_utterance_at_stream_end(self):
+        import realtime_audio_translator.audio as audio_module
+
+        worker = SegmentWorker(1, False, 0.01, segmentation_policy("balanced"))
+        frame = AudioSegment((12000).to_bytes(2, "little", signed=True) * 800, 16000)
+        with patch.object(audio_module, "audio_frame_stream", return_value=iter([frame])):
+            worker.run("me")
+
+        self.assertEqual(worker.queue.qsize(), 1)
+
     def test_segment_worker_cancels_capture_without_queuing_a_file(self):
         import realtime_audio_translator.audio as audio_module
 
         entered = threading.Event()
 
-        def capture(device, seconds, loopback, cancel_event):
+        def capture(device, loopback, cancel_event, frame_seconds):
             entered.set()
             cancel_event.wait()
             raise InterruptedError
 
         cancel = threading.Event()
-        worker = SegmentWorker(1, 30, False, cancel)
-        original_capture = audio_module.capture_audio
-        audio_module.capture_audio = capture
+        worker = SegmentWorker(1, False, 0.01, segmentation_policy("balanced"), cancel)
+        original_capture = audio_module.audio_frame_stream
+        audio_module.audio_frame_stream = capture
         thread = threading.Thread(target=worker.run, args=("me",))
         try:
             thread.start()
@@ -176,7 +263,7 @@ class AudioTests(unittest.TestCase):
             worker.stop()
             thread.join(1)
         finally:
-            audio_module.capture_audio = original_capture
+            audio_module.audio_frame_stream = original_capture
 
         self.assertFalse(thread.is_alive())
         self.assertTrue(worker.queue.empty())
@@ -185,13 +272,13 @@ class AudioTests(unittest.TestCase):
         import realtime_audio_translator.audio as audio_module
 
         with tempfile.TemporaryDirectory() as tmp:
-            worker = SegmentWorker(1, 2, False)
+            worker = SegmentWorker(1, False, 0.01, segmentation_policy("balanced"))
 
             def capture(*_args):
                 worker.stop()
-                return AudioSegment(b"\0\0", 16000)
+                return [AudioSegment(b"\0\0", 16000)]
 
-            with patch.object(audio_module, "capture_audio", side_effect=capture):
+            with patch.object(audio_module, "audio_frame_stream", side_effect=capture):
                 worker.run("me")
 
             self.assertEqual(list(Path(tmp).glob("*.wav")), [])
@@ -200,19 +287,19 @@ class AudioTests(unittest.TestCase):
         import realtime_audio_translator.audio as audio_module
 
         with tempfile.TemporaryDirectory() as tmp:
-            worker = SegmentWorker(1, 2, False)
+            worker = SegmentWorker(1, False, 0.01, segmentation_policy("balanced"))
 
             def capture(*_args):
                 raise InterruptedError
 
-            with patch.object(audio_module, "capture_audio", side_effect=capture):
+            with patch.object(audio_module, "audio_frame_stream", side_effect=capture):
                 worker.run("me")
 
             self.assertEqual(list(Path(tmp).glob("*.wav")), [])
 
     def test_segment_worker_stop_discards_pending_segments(self):
         with tempfile.TemporaryDirectory() as tmp:
-            worker = SegmentWorker(1, 2, False)
+            worker = SegmentWorker(1, False, 0.01, segmentation_policy("balanced"))
             worker.queue.put_nowait(AudioSegment(b"\0\0", 16000))
 
             worker.stop()
@@ -220,7 +307,7 @@ class AudioTests(unittest.TestCase):
             self.assertTrue(worker.queue.empty())
 
     def test_segment_worker_drops_oldest_when_queue_is_full(self):
-        worker = SegmentWorker(1, 2, False)
+        worker = SegmentWorker(1, False, 0.01, segmentation_policy("balanced"))
         for index in range(worker.queue.maxsize):
             worker.queue.put_nowait(AudioSegment(index.to_bytes(2, "little"), 16000))
 
@@ -233,7 +320,7 @@ class AudioTests(unittest.TestCase):
     def test_segment_worker_does_not_enqueue_after_stop(self):
         with tempfile.TemporaryDirectory() as tmp:
             fresh = AudioSegment(b"\0\0", 16000)
-            worker = SegmentWorker(1, 2, False)
+            worker = SegmentWorker(1, False, 0.01, segmentation_policy("balanced"))
             worker._queue_lock.acquire()
             enqueue = threading.Thread(target=worker._enqueue, args=(fresh,))
             stop = threading.Thread(target=worker.stop)
@@ -378,6 +465,91 @@ class AudioTests(unittest.TestCase):
 
         self.assertFalse(audio_segment_active(quiet, 0.01))
         self.assertTrue(audio_segment_active(loud, 0.01))
+
+    def test_streaming_corpus_avoids_fixed_boundary_word_loss_and_duplicates(self):
+        corpus = json.loads((Path(__file__).parent / "fixtures" / "utterance_boundaries.json").read_text(encoding="utf-8"))
+        policy = SegmentationPolicy(0.05, 0.10, 0.15, 0.10, 2.0)
+        frame_samples = 800
+
+        for case in corpus:
+            fixed = case["fixed_window_frames"]
+            baseline_dropped = {
+                case["frames"][index]
+                for index in range(fixed, len(case["frames"]), fixed)
+                if case["frames"][index] and case["frames"][index] == case["frames"][index - 1]
+            }
+            segmenter = UtteranceSegmenter(policy, 0.01)
+            utterances = []
+            for index, word in enumerate(case["frames"]):
+                sample = word * 2000
+                frame = AudioSegment(sample.to_bytes(2, "little", signed=True) * frame_samples, 16000, {
+                    "capture_started_at": index * policy.frame_seconds,
+                    "capture_completed_at": (index + 1) * policy.frame_seconds,
+                })
+                utterance = segmenter.push(frame)
+                if utterance:
+                    utterances.append(utterance)
+            trailing = segmenter.flush()
+            if trailing:
+                utterances.append(trailing)
+
+            observed = []
+            for utterance in utterances:
+                utterance_words = []
+                for offset in range(0, len(utterance.pcm), frame_samples * 2):
+                    word = int.from_bytes(utterance.pcm[offset:offset + 2], "little", signed=True) // 2000
+                    if word and (not utterance_words or utterance_words[-1] != word):
+                        utterance_words.append(word)
+                observed.extend(utterance_words)
+
+            baseline_words = [word for word in case["expected_words"] if word not in baseline_dropped]
+            baseline_word_errors = len(case["expected_words"]) - len(baseline_words)
+            dropped_words = sum(max(0, case["expected_words"].count(word) - observed.count(word)) for word in set(case["expected_words"]))
+            duplicated_words = sum(max(0, observed.count(word) - case["expected_words"].count(word)) for word in set(observed))
+            streaming_word_errors = dropped_words + duplicated_words
+
+            self.assertEqual(len(case["reference_words"]), len(case["expected_words"]), case["name"])
+            self.assertGreater(baseline_word_errors, streaming_word_errors, case["name"])
+            self.assertEqual(observed, case["expected_words"], case["name"])
+            self.assertEqual((streaming_word_errors, dropped_words, duplicated_words), (0, 0, 0), case["name"])
+            self.assertLessEqual(utterances[0].duration_seconds, 3.0)
+
+    def test_forced_utterance_split_marks_only_the_overlapped_followup(self):
+        policy = SegmentationPolicy(0.05, 0.05, 0.10, 0.10, 0.20)
+        segmenter = UtteranceSegmenter(policy, 0.01)
+        frame = AudioSegment((12000).to_bytes(2, "little", signed=True) * 800, 16000)
+
+        utterances = [utterance for _ in range(6) if (utterance := segmenter.push(frame))]
+
+        self.assertEqual(len(utterances), 2)
+        self.assertNotIn("overlap_seconds", utterances[0].timing)
+        self.assertEqual(utterances[1].timing["overlap_seconds"], 0.10)
+
+    def test_stream_end_does_not_emit_overlap_only_tail(self):
+        policy = SegmentationPolicy(0.05, 0.05, 0.10, 0.10, 0.20)
+        segmenter = UtteranceSegmenter(policy, 0.01)
+        frame = AudioSegment((12000).to_bytes(2, "little", signed=True) * 800, 16000)
+
+        emitted = [utterance for _ in range(4) if (utterance := segmenter.push(frame))]
+
+        self.assertEqual(len(emitted), 1)
+        self.assertIsNone(segmenter.flush())
+
+    def test_hangover_preroll_does_not_copy_previous_speech(self):
+        policy = SegmentationPolicy(0.05, 0.20, 0.10, 0, 1.0)
+        segmenter = UtteranceSegmenter(policy, 0.01)
+
+        def frame(sample):
+            return AudioSegment(sample.to_bytes(2, "little", signed=True) * 800, 16000)
+
+        utterances = []
+        for sample in (4000, 4000, 0, 0, 8000, 8000, 0, 0):
+            if utterance := segmenter.push(frame(sample)):
+                utterances.append(utterance)
+
+        second_samples = {int.from_bytes(utterances[1].pcm[offset:offset + 2], "little", signed=True) for offset in range(0, len(utterances[1].pcm), 1600)}
+        self.assertNotIn(4000, second_samples)
+        self.assertIn(8000, second_samples)
 
     def test_whisper_auto_language_omits_language_flag(self):
         import realtime_audio_translator.asr as asr_module
