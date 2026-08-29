@@ -2,7 +2,8 @@ import queue
 import threading
 import unittest
 from pathlib import Path
-from unittest.mock import Mock
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 from realtime_audio_translator.config import DEFAULT_CONFIG, _has_reparse_point, clear_cache, clear_logs, ensure_app_dirs, ensure_glossary_file, load_config, log_files_to_clear, save_audio_devices, save_config
 from realtime_audio_translator.diagnostics import DiagnosticIssue, collect_diagnostics
 from realtime_audio_translator.engine import RealtimeEngine, audio_devices_overlap, direction_label, drain_queue, overlay_text_from_config, safe_target_language
@@ -430,7 +431,7 @@ class GuiLogicTests(unittest.TestCase):
         self.assertIn('text="一鍵安裝 runtime", command=self._download_runtime', gui_source)
         self.assertIn("download_runtime", gui_source)
 
-    def test_auto_optimize_before_start_applies_recommended_config_only_when_enabled(self):
+    def test_auto_optimize_before_start_only_reports_recommendations(self):
         app = TranslatorApp.__new__(TranslatorApp)
         app.config = {"ai_auto_optimize": True}
         config = {
@@ -445,24 +446,66 @@ class GuiLogicTests(unittest.TestCase):
             "segment_seconds": 3.0,
         }
         calls = []
+        app.status = type("Status", (), {"set": lambda _self, value: calls.append(("status", value))})()
         app._config_from_vars = lambda: config
-        app._cuda_hardware = lambda current: (1, 6)
+        app._cuda_hardware = lambda current: (0, 0)
         app._load_config_into_widgets = lambda config: calls.append(("load", config))
         app._save = lambda: calls.append(("save", None))
 
         app._auto_optimize_before_start()
 
-        self.assertEqual(calls[0][0], "load")
-        self.assertEqual(calls[0][1]["performance_mode"], "low_latency")
-        self.assertEqual(calls[0][1]["segment_seconds"], 1.5)
-        self.assertFalse(calls[0][1]["virtual_mic_enabled"])
-        self.assertEqual(calls[1], ("save", None))
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0][0], "status")
+        self.assertIn("預覽並確認", calls[0][1])
+        self.assertNotIn("load", [call[0] for call in calls])
+        self.assertNotIn("save", [call[0] for call in calls])
         calls.clear()
         app.config = {"ai_auto_optimize": False}
 
         app._auto_optimize_before_start()
 
         self.assertEqual(calls, [])
+
+    @patch("realtime_audio_translator.gui.messagebox.askyesno", return_value=False)
+    def test_optimize_settings_keeps_preferences_when_preview_is_rejected(self, askyesno):
+        app = TranslatorApp.__new__(TranslatorApp)
+        before = DEFAULT_CONFIG.copy()
+        before["performance_mode"] = "quality"
+        after = before.copy()
+        after["performance_mode"] = "low_latency"
+        recommendation = SimpleNamespace(code="reduce_latency", title="降低字幕延遲", detail="延遲偏高", changes={"performance_mode": "low_latency"})
+        calls = []
+        app.status = type("Status", (), {"set": lambda _self, value: calls.append(("status", value))})()
+        app._config_from_vars = lambda: before
+        app._planned_session = lambda: SimpleNamespace(config=after, issues=[], recommendations=[recommendation], summary="建議 1 項")
+        app._load_config_into_widgets = lambda config: calls.append(("load", config))
+        app._save = lambda: calls.append(("save", None))
+
+        app._optimize_settings()
+
+        askyesno.assert_called_once()
+        self.assertNotIn("load", [call[0] for call in calls])
+        self.assertNotIn("save", [call[0] for call in calls])
+        self.assertIn(("status", "已保留原設定"), calls)
+
+    @patch("realtime_audio_translator.gui.messagebox.askyesno", return_value=True)
+    def test_optimize_settings_persists_only_after_preview_is_accepted(self, askyesno):
+        app = TranslatorApp.__new__(TranslatorApp)
+        before = DEFAULT_CONFIG.copy()
+        after = before | {"performance_mode": "low_latency"}
+        recommendation = SimpleNamespace(title="降低字幕延遲", detail="延遲偏高")
+        calls = []
+        app.status = type("Status", (), {"set": lambda _self, value: calls.append(("status", value))})()
+        app._config_from_vars = lambda: before
+        app._planned_session = lambda: SimpleNamespace(config=after, recommendations=[recommendation], summary="建議 1 項")
+        app._load_config_into_widgets = lambda config: calls.append(("load", config))
+        app._save = lambda: calls.append(("save", None))
+
+        app._optimize_settings()
+
+        askyesno.assert_called_once()
+        self.assertEqual(calls[0], ("load", after))
+        self.assertEqual(calls[1], ("save", None))
 
     def test_latency_seconds_value_accepts_bad_values(self):
         self.assertEqual(latency_seconds_value("4.2"), 4.2)

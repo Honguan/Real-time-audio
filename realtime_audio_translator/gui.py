@@ -10,7 +10,7 @@ from tkinter import filedialog, messagebox, simpledialog, ttk
 from typing import Literal
 
 from .audio import DeviceResolutionError, audio_segment_active, capture_wav, device_descriptor, device_identity, find_device, format_device_label, list_audio_devices
-from .ai_auto_tuner import apply_tuning, recommend_tuning
+from .ai_auto_tuner import format_tuning_preview, recommend_tuning
 from .ai_memory import add_glossary_term
 from .ai_orchestrator import plan_session
 from .app_log import append_app_log
@@ -1103,6 +1103,7 @@ class TranslatorApp(tk.Tk):
         self.record_logs.set(bool(updated.get("record_logs", self.record_logs.get())))
 
     def _optimize_settings(self) -> None:
+        before = self._config_from_vars()
         try:
             decision = self._planned_session()
         except ValueError as exc:
@@ -1110,6 +1111,9 @@ class TranslatorApp(tk.Tk):
             return
         if not decision.recommendations:
             self.status.set("設定已是建議值")
+            return
+        if not messagebox.askyesno("預覽自動優化", format_tuning_preview(before, decision.config, decision.recommendations)):
+            self.status.set("已保留原設定")
             return
         self._load_config_into_widgets(decision.config)
         self._save()
@@ -1147,8 +1151,7 @@ class TranslatorApp(tk.Tk):
         save_config_state(APP_DIR, config, {"last_cuda_devices", "last_vram_gb"})
         recommendations = recommend_tuning(config, devices, vram_gb)
         if recommendations:
-            self._load_config_into_widgets(apply_tuning(config, recommendations))
-            self._save()
+            self.status.set(f"自動優化有 {len(recommendations)} 項建議；請按「自動優化」預覽並確認")
 
     def _download_model(self) -> None:
         self._save()
