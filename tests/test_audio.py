@@ -4,6 +4,7 @@ import tempfile
 import threading
 import time
 import unittest
+from collections import Counter
 from pathlib import Path
 from unittest.mock import patch
 from realtime_audio_translator.archive_install import write_install_manifest
@@ -471,6 +472,15 @@ class AudioTests(unittest.TestCase):
         policy = SegmentationPolicy(0.05, 0.10, 0.15, 0.10, 2.0)
         frame_samples = 800
 
+        def word_errors(reference, hypothesis):
+            row = list(range(len(hypothesis) + 1))
+            for left_index, left in enumerate(reference, 1):
+                next_row = [left_index]
+                for right_index, right in enumerate(hypothesis, 1):
+                    next_row.append(min(next_row[-1] + 1, row[right_index] + 1, row[right_index - 1] + (left != right)))
+                row = next_row
+            return row[-1]
+
         for case in corpus:
             fixed = case["fixed_window_frames"]
             baseline_dropped = {
@@ -502,11 +512,15 @@ class AudioTests(unittest.TestCase):
                         utterance_words.append(word)
                 observed.extend(utterance_words)
 
-            baseline_words = [word for word in case["expected_words"] if word not in baseline_dropped]
-            baseline_word_errors = len(case["expected_words"]) - len(baseline_words)
-            dropped_words = sum(max(0, case["expected_words"].count(word) - observed.count(word)) for word in set(case["expected_words"]))
-            duplicated_words = sum(max(0, observed.count(word) - case["expected_words"].count(word)) for word in set(observed))
-            streaming_word_errors = dropped_words + duplicated_words
+            reference = case["reference_words"]
+            baseline_words = [reference[word - 1] for word in case["expected_words"] if word not in baseline_dropped]
+            streaming_words = [reference[word - 1] for word in observed]
+            reference_counts = Counter(reference)
+            streaming_counts = Counter(streaming_words)
+            dropped_words = sum(max(0, count - streaming_counts[word]) for word, count in reference_counts.items())
+            duplicated_words = sum(max(0, count - reference_counts[word]) for word, count in streaming_counts.items())
+            baseline_word_errors = word_errors(reference, baseline_words)
+            streaming_word_errors = word_errors(reference, streaming_words)
 
             self.assertEqual(len(case["reference_words"]), len(case["expected_words"]), case["name"])
             self.assertGreater(baseline_word_errors, streaming_word_errors, case["name"])

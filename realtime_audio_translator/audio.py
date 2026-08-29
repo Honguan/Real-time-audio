@@ -158,7 +158,7 @@ class UtteranceSegmenter:
         self._pre_roll = deque(maxlen=max(1, round(policy.pre_roll_seconds / policy.frame_seconds)))
         self._hangover_frames = max(1, round(policy.hangover_seconds / policy.frame_seconds))
         self._overlap_frames = max(0, round(policy.overlap_seconds / policy.frame_seconds))
-        self._max_frames = max(1, round(policy.max_utterance_seconds / policy.frame_seconds))
+        self._max_frames = max(1, int(policy.max_utterance_seconds / policy.frame_seconds))
         self._frames: list[AudioSegment] = []
         self._silence_frames = 0
         self._leading_overlap_frames = 0

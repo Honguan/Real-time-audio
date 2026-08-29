@@ -12,5 +12,12 @@
     "frames": [0, 1, 1, 2, 2, 0, 0, 3, 3, 4, 4, 0, 0, 0],
     "expected_words": [1, 2, 3, 4],
     "reference_words": ["keep", "short", "pauses", "together"]
+  },
+  {
+    "name": "repeated-word-crosses-fixed-boundary",
+    "fixed_window_frames": 4,
+    "frames": [0, 1, 1, 2, 2, 3, 3, 0, 0, 0],
+    "expected_words": [1, 2, 3],
+    "reference_words": ["go", "go", "now"]
   }
 ]
