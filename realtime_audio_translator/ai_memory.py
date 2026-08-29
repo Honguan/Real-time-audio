@@ -2,6 +2,7 @@ import hashlib
 import json
 import sqlite3
 import threading
+from contextlib import closing
 from pathlib import Path
 
 
@@ -27,7 +28,7 @@ def _create_cache(db: sqlite3.Connection) -> None:
 def _ensure_cache(db_path: Path) -> None:
     db_path.parent.mkdir(parents=True, exist_ok=True)
     with _CACHE_SCHEMA_LOCK:
-        with sqlite3.connect(db_path) as db:
+        with closing(sqlite3.connect(db_path)) as db, db:
             version = db.execute("PRAGMA user_version").fetchone()[0]
             if version > CACHE_SCHEMA_VERSION:
                 raise RuntimeError(f"翻譯快取版本過新：{version}")
@@ -62,7 +63,7 @@ def cached_translation(db_path: Path, request_fingerprint: str) -> str | None:
     if not db_path.exists():
         return None
     _ensure_cache(db_path)
-    with sqlite3.connect(db_path) as db:
+    with closing(sqlite3.connect(db_path)) as db:
         row = db.execute(
             "SELECT translated_text FROM translations WHERE request_fingerprint = ?",
             (request_fingerprint,),
@@ -74,7 +75,7 @@ def cache_translation(db_path: Path, request_fingerprint: str, provider: str, so
     if not text.strip() or not translated.strip():
         return
     _ensure_cache(db_path)
-    with sqlite3.connect(db_path) as db:
+    with closing(sqlite3.connect(db_path)) as db, db:
         db.execute(
             """
             INSERT OR REPLACE INTO translations

@@ -94,13 +94,14 @@ class AudioTranscriber:
 
     @staticmethod
     def _model_audio(audio: AudioSegment):
-        import audioop
         import numpy as np
 
-        pcm = audio.pcm
-        if audio.sample_rate != 16000:
-            pcm, _ = audioop.ratecv(pcm, 2, 1, audio.sample_rate, 16000, None)
-        return np.frombuffer(pcm, dtype=np.int16).astype(np.float32) / 32768.0
+        samples = np.frombuffer(audio.pcm, dtype="<i2").astype(np.float32)
+        if audio.sample_rate != 16000 and samples.size:
+            output_size = max(1, (samples.size - 1) * 16000 // audio.sample_rate + 1)
+            positions = np.arange(output_size, dtype=np.float64) * audio.sample_rate / 16000
+            samples = np.interp(positions, np.arange(samples.size), samples).astype(np.float32)
+        return samples / 32768.0
 
     def _transcribe_with_exe(self, audio: AudioSegment | Path, language: str | None = None) -> TranscriptionResult:
         if language == "auto":

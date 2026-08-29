@@ -124,3 +124,15 @@ http://127.0.0.1:5000/translate
 - 目前只支援 Windows x64。
 - 接近即時通常約 1.5 到 3 秒延遲，取決於模型、GPU、API 與網路。
 - OpenAI / Google 功能需要網路與有效憑證，API key 不會寫入程式碼。
+
+## 開發
+
+支援 Python 3.10 至 3.13；正式版目前使用 Python 3.10 建置，CI 同時驗證 3.10 與下一個建置版本 3.13。
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -e ".[build]"
+python -m realtime_audio_translator
+.\scripts\test.ps1
+```

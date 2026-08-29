@@ -2,9 +2,9 @@ $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
 Set-Location $Root
 
-py -3.10 -m pip install -r requirements.txt
-py -3.10 -m realtime_audio_translator.tools.generate_assets
-py -3.10 -m PyInstaller `
+python -m pip install -e ".[build]"
+python -m realtime_audio_translator.tools.generate_assets
+python -m PyInstaller `
   --noconfirm `
   --clean `
   --onedir `
