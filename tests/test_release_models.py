@@ -289,7 +289,8 @@ class ReleaseModelsTests(unittest.TestCase):
 
         self.assertEqual(lock["python"]["version"], "3.10.11")
         self.assertEqual(lock["python"]["index_url"], "https://pypi.org/simple")
-        self.assertEqual(hashlib.sha256(requirements.read_bytes()).hexdigest(), lock["python"]["requirements_sha256"])
+        requirements_bytes = requirements.read_bytes().replace(b"\r\n", b"\n")
+        self.assertEqual(hashlib.sha256(requirements_bytes).hexdigest(), lock["python"]["requirements_sha256"])
         self.assertEqual(len(lock["runtime"]), 2)
         self.assertEqual(len(lock["translation_models"]["packages"]), 6)
         self.assertRegex(lock["translation_models"]["index_revision"], r"^[0-9a-f]{40}$")

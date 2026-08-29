@@ -4,7 +4,7 @@
     "version": "3.10.11",
     "index_url": "https://pypi.org/simple",
     "requirements": "requirements-release.txt",
-    "requirements_sha256": "d92ee5070e4e6f3197134fe6d08ba8817d1f29bdd773b1983c9890fda44f3f75"
+    "requirements_sha256": "ee80d6e13f4a30f48bd94b291efcec87fef3de5af39e6c8e428c5389228e593f"
   },
   "github_actions": [
     {
