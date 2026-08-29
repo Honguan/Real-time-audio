@@ -661,6 +661,8 @@ class RealtimeEngine:
 
     @staticmethod
     def _cancellable_tts_synthesis(synthesize: Callable[[], bytes], cancel_event: threading.Event) -> bytes | None:
+        if cancel_event.is_set():
+            return None
         result = queue.Queue(maxsize=1)
 
         def run() -> None:

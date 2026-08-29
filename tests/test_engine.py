@@ -944,6 +944,16 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(message, "已停止")
         self.assertLess(elapsed, 0.5)
 
+    def test_cancelled_cloud_synthesis_does_not_start_request(self):
+        cancel = threading.Event()
+        cancel.set()
+        called = []
+
+        result = RealtimeEngine._cancellable_tts_synthesis(lambda: called.append(True) or b"audio", cancel)
+
+        self.assertIsNone(result)
+        self.assertEqual(called, [])
+
     def test_tts_queue_groups_aliases_of_the_same_output_device(self):
         import realtime_audio_translator.engine as engine_module
 
