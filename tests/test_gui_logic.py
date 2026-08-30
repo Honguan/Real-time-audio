@@ -12,6 +12,17 @@ from realtime_audio_translator.gui import LANGUAGE_CHOICES, PERFORMANCE_CHOICES,
 
 
 class GuiLogicTests(unittest.TestCase):
+    def test_async_audio_result_does_not_restore_stale_settings(self):
+        app = TranslatorApp.__new__(TranslatorApp)
+        app.config = {"provider": "openai"}
+        app.status = Mock()
+
+        with patch("realtime_audio_translator.gui.save_config_state"):
+            app._microphone_tested({"provider": "local", "speech_threshold": "0.1"}, 0.2)
+
+        self.assertEqual(app.config["provider"], "openai")
+        self.assertFalse(app.config["last_mic_quiet"])
+
     def test_background_ui_events_run_only_when_main_thread_drains_them(self):
         app = TranslatorApp.__new__(TranslatorApp)
         app._engine_events = queue.Queue()
@@ -213,37 +224,40 @@ class GuiLogicTests(unittest.TestCase):
 
     def test_mic_test_button_reports_input_level(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
+        service_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "app_services.py").read_text(encoding="utf-8")
 
         self.assertIn('("測試麥克風", self._test_mic)', gui_source)
         self.assertIn('def _test_mic(self) -> None:', gui_source)
         self.assertIn('self.status.set(f"麥克風音量 {level:.4f}")', gui_source)
-        self.assertIn('config["last_mic_quiet"] = level < float(self.vars["speech_threshold"].get())', gui_source)
+        self.assertIn('config["last_mic_quiet"] = level < float(config["speech_threshold"])', gui_source)
+        self.assertIn("def test_microphone(self, config: dict) -> float:", service_source)
 
     def test_speaker_test_button_uses_loopback_capture(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
+        service_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "app_services.py").read_text(encoding="utf-8")
 
         self.assertIn('("測試喇叭", self._test_speaker)', gui_source)
         self.assertIn('def _test_speaker(self) -> None:', gui_source)
-        self.assertIn('capture_wav(path, device, 0.5, loopback=True)', gui_source)
+        self.assertIn('capture_wav(path, device, 0.5, loopback=True)', service_source)
         self.assertIn('self.status.set("喇叭已偵測到聲音" if active else "喇叭目前沒有偵測到聲音")', gui_source)
         self.assertIn('config["last_speaker_quiet"] = not active', gui_source)
 
     def test_tts_test_button_uses_configured_output(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
+        service_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "app_services.py").read_text(encoding="utf-8")
 
         self.assertIn('("測試 TTS", self._test_tts)', gui_source)
         self.assertIn('("測試虛擬麥克風", self._test_virtual_mic)', gui_source)
         self.assertIn('def _test_tts(self) -> None:', gui_source)
         self.assertIn('def _test_virtual_mic(self) -> None:', gui_source)
         self.assertIn('config["last_virtual_mic_failed"] = not active', gui_source)
-        self.assertIn('config["last_virtual_mic_failed"] = True', gui_source)
-        self.assertIn('provider = config.get("tts_provider", "local")', gui_source)
-        self.assertIn('tts.speak_local("翻譯語音輸出測試", device)', gui_source)
-        self.assertIn('audio = tts.synthesize_openai_linear16("翻譯語音輸出測試")', gui_source)
-        self.assertIn('audio = tts.synthesize_google_linear16("翻譯語音輸出測試", config["target_language"])', gui_source)
-        self.assertIn('virtual_input = find_device(config["virtual_mic_input_device"], want_output=False)', gui_source)
-        self.assertIn('target=capture_wav, args=(path, virtual_input, 2.0)', gui_source)
-        self.assertIn('active = audio_segment_active(path, float(config["speech_threshold"]))', gui_source)
+        self.assertIn('provider = config.get("tts_provider", "local")', service_source)
+        self.assertIn('tts.speak_local("翻譯語音輸出測試", device)', service_source)
+        self.assertIn('tts.synthesize_openai_linear16("翻譯語音輸出測試")', service_source)
+        self.assertIn('tts.synthesize_google_linear16("翻譯語音輸出測試", config["target_language"])', service_source)
+        self.assertIn('device = find_device(config["virtual_mic_input_device"], want_output=False)', service_source)
+        self.assertIn('target=capture_wav, args=(path, device, 2.0)', service_source)
+        self.assertIn('return audio_segment_active(path, float(config["speech_threshold"]))', service_source)
 
     def test_setup_guide_button_shows_first_run_steps(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
@@ -365,9 +379,18 @@ class GuiLogicTests(unittest.TestCase):
                 calls.append("stop")
                 return "已停止"
 
-        app.engine = Engine()
+        class Controller:
+            engine = Engine()
+
+            def stop_engine(self, done):
+                value = self.engine.stop()
+                self.engine = None
+                done(SimpleNamespace(value=value, error=None))
+
+        app.controller = Controller()
         app._engine_events = queue.Queue()
         app.destroy = lambda: calls.append("destroy")
+        app.after = lambda _delay, callback: callback()
 
         app._quit()
 
@@ -375,20 +398,28 @@ class GuiLogicTests(unittest.TestCase):
 
     def test_stop_discards_queued_engine_callbacks(self):
         app = TranslatorApp.__new__(TranslatorApp)
-        app.engine = type("Engine", (), {"stop": lambda self: "已停止"})()
+        engine = type("Engine", (), {"stop": lambda self: "已停止"})()
+        app.controller = SimpleNamespace(
+            engine=engine,
+            stop_engine=lambda done: done(SimpleNamespace(value=engine.stop(), error=None)),
+        )
         app._engine_events = queue.Queue()
         app._post_ui("overlay", "stale", "", engine=app.engine)
         app._closing = False
         statuses = []
         app._engine_status = statuses.append
+        app.after = lambda *_args: None
 
         app._stop()
+        app.controller.engine = None
+        app._drain_ui_events()
 
         self.assertTrue(app._engine_events.empty())
         self.assertEqual(statuses, ["已停止"])
 
     def test_gui_exposes_scenarios_and_diagnostics(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
+        service_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "app_services.py").read_text(encoding="utf-8")
 
         self.assertIn('("場景", "scenario")', gui_source)
         self.assertIn("SCENARIO_CHOICES", gui_source)
@@ -410,7 +441,7 @@ class GuiLogicTests(unittest.TestCase):
         self.assertIn('text="關閉"', gui_source)
         self.assertIn("def _run_diagnostic_action", gui_source)
         self.assertIn("webbrowser.open(UPSTREAM_RUNTIME_RELEASE_URL)", gui_source)
-        self.assertIn("collect_diagnostics", gui_source)
+        self.assertIn("collect_diagnostics", service_source)
 
         self.assertIn("問題名稱", gui_source)
         self.assertIn("可能原因", gui_source)
@@ -424,53 +455,25 @@ class GuiLogicTests(unittest.TestCase):
         self.assertIn("plan_session", gui_source)
         self.assertIn('config["last_cuda_devices"] = devices', gui_source)
         self.assertIn('config["last_vram_gb"] = vram_gb', gui_source)
-        self.assertIn("def _auto_optimize_before_start", gui_source)
-        self.assertIn("self._auto_optimize_before_start()", gui_source)
+        self.assertIn("def _start_checked", gui_source)
         self.assertIn('("檢查更新", self._check_updates)', gui_source)
-        self.assertIn("latest_release_tag", gui_source)
+        self.assertIn("latest_release_tag", service_source)
 
     def test_gui_links_to_upstream_runtime_and_can_import_it(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
+        service_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "app_services.py").read_text(encoding="utf-8")
 
         self.assertIn('text="下載上游 runtime"', gui_source)
         self.assertIn("UPSTREAM_RUNTIME_RELEASE_URL", gui_source)
-        self.assertIn("install_runtime_from", gui_source)
+        self.assertIn("install_runtime_from", service_source)
         self.assertNotIn("download_runtime", gui_source)
 
     def test_auto_optimize_before_start_only_reports_recommendations(self):
-        app = TranslatorApp.__new__(TranslatorApp)
-        app.config = {"ai_auto_optimize": True}
-        config = {
-            "ai_auto_optimize": True,
-            "device": "cuda",
-            "model": "large-v3-turbo",
-            "source_language": "zh",
-            "target_language": "en",
-            "virtual_mic_enabled": False,
-            "last_end_to_end_p95_seconds": "4.2",
-            "performance_mode": "quality",
-            "segment_seconds": 3.0,
-        }
-        calls = []
-        app.status = type("Status", (), {"set": lambda _self, value: calls.append(("status", value))})()
-        app._config_from_vars = lambda: config
-        app._cuda_hardware = lambda current: (0, 0)
-        app._load_config_into_widgets = lambda config: calls.append(("load", config))
-        app._save = lambda: calls.append(("save", None))
+        gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
+        start_source = gui_source[gui_source.index("    def _start(self)"):gui_source.index("    def _start_checked")]
 
-        app._auto_optimize_before_start()
-
-        self.assertEqual(len(calls), 1)
-        self.assertEqual(calls[0][0], "status")
-        self.assertIn("預覽並確認", calls[0][1])
-        self.assertNotIn("load", [call[0] for call in calls])
-        self.assertNotIn("save", [call[0] for call in calls])
-        calls.clear()
-        app.config = {"ai_auto_optimize": False}
-
-        app._auto_optimize_before_start()
-
-        self.assertEqual(calls, [])
+        self.assertIn("self._submit(", start_source)
+        self.assertNotIn("runtime_status(", start_source)
 
     @patch("realtime_audio_translator.gui.messagebox.askyesno", return_value=False)
     def test_optimize_settings_keeps_preferences_when_preview_is_rejected(self, askyesno):
@@ -482,12 +485,13 @@ class GuiLogicTests(unittest.TestCase):
         recommendation = SimpleNamespace(code="reduce_latency", title="降低字幕延遲", detail="延遲偏高", changes={"performance_mode": "low_latency"})
         calls = []
         app.status = type("Status", (), {"set": lambda _self, value: calls.append(("status", value))})()
-        app._config_from_vars = lambda: before
-        app._planned_session = lambda: SimpleNamespace(config=after, issues=[], recommendations=[recommendation], summary="建議 1 項")
+        app.config = before.copy()
         app._load_config_into_widgets = lambda config: calls.append(("load", config))
         app._save = lambda: calls.append(("save", None))
 
-        app._optimize_settings()
+        decision = SimpleNamespace(config=after, issues=[], recommendations=[recommendation], summary="建議 1 項")
+        with patch("realtime_audio_translator.gui.save_config_state"):
+            app._optimization_ready(before, (decision, 0, 0))
 
         askyesno.assert_called_once()
         self.assertNotIn("load", [call[0] for call in calls])
@@ -502,12 +506,13 @@ class GuiLogicTests(unittest.TestCase):
         recommendation = SimpleNamespace(title="降低字幕延遲", detail="延遲偏高")
         calls = []
         app.status = type("Status", (), {"set": lambda _self, value: calls.append(("status", value))})()
-        app._config_from_vars = lambda: before
-        app._planned_session = lambda: SimpleNamespace(config=after, recommendations=[recommendation], summary="建議 1 項")
+        app.config = before.copy()
         app._load_config_into_widgets = lambda config: calls.append(("load", config))
         app._save = lambda: calls.append(("save", None))
 
-        app._optimize_settings()
+        decision = SimpleNamespace(config=after, recommendations=[recommendation], summary="建議 1 項")
+        with patch("realtime_audio_translator.gui.save_config_state"):
+            app._optimization_ready(before, (decision, 0, 0))
 
         askyesno.assert_called_once()
         self.assertEqual(calls[0], ("load", after))

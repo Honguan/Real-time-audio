@@ -1,7 +1,6 @@
 import queue
 import subprocess
 import threading
-import time
 import tkinter as tk
 import webbrowser
 from dataclasses import dataclass
@@ -9,25 +8,23 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, simpledialog, ttk
 from typing import Literal
 
-from .audio import DeviceResolutionError, audio_segment_active, capture_wav, device_descriptor, device_identity, find_device, format_device_label, list_audio_devices
+from .app_controller import AppController, TaskResult
+from .app_services import AudioDiagnosticsService, ModelService, RuntimeCheckResult, RuntimeImportResult, RuntimeService, UpdateService
+from .audio import DeviceResolutionError, device_descriptor, device_identity, find_device, format_device_label, list_audio_devices
 from .ai_auto_tuner import format_tuning_preview, recommend_tuning
 from .ai_memory import add_glossary_term
 from .ai_orchestrator import plan_session
 from .app_log import append_app_log
-from .commands import command_choices, refresh_commands
+from .commands import command_choices
 from .config import APP_DIR, clear_cache, clear_logs, ensure_glossary_file, load_config, log_files_to_clear, save_audio_devices, save_config, save_config_state, validate_language_pair
-from .diagnostics import collect_diagnostics
 from .engine import RealtimeEngine
 from .logbook import conversation_log_usage
-from .models import MODEL_INVALID, MODEL_READY, ModelDownloadCancelled, cuda_hardware_from_check_output, download_model, list_models, model_available, model_install_message, model_status, models_dir, recommend_model
-from .offline_translation import download_translation_models as download_offline_translation_models
+from .models import MODEL_INVALID, MODEL_READY, cuda_hardware_from_check_output, list_models, model_available, model_install_message, models_dir, recommend_model
 from .paths import resource_root
-from .providers import TextToSpeech, Translator, google_access_token
-from .release_updater import RELEASES_URL, current_version, latest_release_tag, release_update_message
-from .runtime import DEFAULT_RUNTIME_DIR, UPSTREAM_RUNTIME_RELEASE_URL, install_runtime_from, runtime_dir, runtime_install_message, runtime_status, whisper_exe
+from .runtime import DEFAULT_RUNTIME_DIR, UPSTREAM_RUNTIME_RELEASE_URL, runtime_dir, runtime_install_message, runtime_status
 from .scenarios import SCENARIO_CHOICES, apply_scenario, scenario_key, scenario_label
 from .subtitle_export import export_jsonl_to_srt, export_jsonl_to_txt
-from .tts import list_windows_sapi_voices, play_linear16
+from .tts import list_windows_sapi_voices
 
 
 LANGUAGE_CHOICES = ("auto", "zh", "en", "ja", "ko")
@@ -373,10 +370,16 @@ class TranslatorApp(tk.Tk):
         self.config = load_config(APP_DIR)
         self._log_consent_granted = False
         self._model_download_cancel: threading.Event | None = None
-        self.engine: RealtimeEngine | None = None
         self._device_id_by_label: dict[str, str] = {"系統預設": ""}
         self._device_label_by_id: dict[str, str] = {"": "系統預設"}
         self._engine_events = queue.Queue()
+        self.controller = AppController(self._post_ui)
+        self.runtime_service = RuntimeService(APP_DIR / "commands.json")
+        self.model_service = ModelService()
+        self.audio_diagnostics = AudioDiagnosticsService(APP_DIR / "cache" / "audio")
+        self.update_service = UpdateService()
+        self._list_generation = 0
+        self._runtime_check_generation = 0
         self._closing = False
         self.title("Realtime Audio Translator")
         self.geometry("900x680")
@@ -398,6 +401,19 @@ class TranslatorApp(tk.Tk):
         self.after(50, self._drain_ui_events)
         if self.config.get("ai_self_diagnosis", True):
             self.after(250, self._show_first_run_wizard)
+
+    @property
+    def engine(self) -> RealtimeEngine | None:
+        controller = self.__dict__.get("controller")
+        return controller.engine if controller is not None else self.__dict__.get("_engine")
+
+    @engine.setter
+    def engine(self, value: RealtimeEngine | None) -> None:
+        controller = self.__dict__.get("controller")
+        if controller is not None:
+            controller.engine = value
+        else:
+            self.__dict__["_engine"] = value
 
     def _build(self) -> None:
         frame = ttk.Frame(self, padding=12)
@@ -571,8 +587,28 @@ class TranslatorApp(tk.Tk):
         self._apply_mode(save=False)
 
     def _refresh_lists(self) -> None:
-        raw_devices = list_audio_devices()
-        save_audio_devices(APP_DIR, raw_devices)
+        config = self._config_from_vars()
+        self._list_generation += 1
+        generation = self._list_generation
+
+        def work():
+            raw_devices = list_audio_devices()
+            save_audio_devices(APP_DIR, raw_devices)
+            commands = APP_DIR / "commands.json"
+            models = sorted(set(list_models(self.repo_root / "_models", models_dir(config))) | set(command_choices(commands, "model")))
+            asr_devices = command_choices(commands, "device") or ["cuda", "cpu"]
+            compute_types = command_choices(commands, "compute_type") or ["auto", "int8", "float16", "float32"]
+            return raw_devices, models, asr_devices, compute_types
+
+        self.controller.submit(work, lambda result: self._lists_ready(generation, result))
+
+    def _lists_ready(self, generation: int, result: TaskResult) -> None:
+        if generation != self._list_generation:
+            return
+        if result.error is not None:
+            self.status.set(f"無法重新整理裝置與模型：{result.error}")
+            return
+        raw_devices, models, asr_devices, compute_types = result.value
         config_changed = False
         self._device_id_by_label = {"系統預設": ""}
         self._device_label_by_id = {"": "系統預設"}
@@ -604,10 +640,6 @@ class TranslatorApp(tk.Tk):
         if config_changed:
             save_config(APP_DIR, self.config)
         devices = list(self._device_id_by_label)
-        commands = APP_DIR / "commands.json"
-        models = sorted(set(list_models(self.repo_root / "_models", models_dir(self._config_from_vars()))) | set(command_choices(commands, "model")))
-        asr_devices = command_choices(commands, "device") or ["cuda", "cpu"]
-        compute_types = command_choices(commands, "compute_type") or ["auto", "int8", "float16", "float32"]
         for key, widget in self.comboboxes.items():
             if key == "model":
                 widget.configure(values=models)
@@ -620,11 +652,9 @@ class TranslatorApp(tk.Tk):
         self._refresh_runtime_status()
 
     def _list_tts_voices(self) -> None:
-        try:
-            voices = list_windows_sapi_voices()
-        except Exception as exc:
-            self.status.set(f"無法列出 Windows TTS 聲音：{exc}")
-            return
+        self._submit("正在列出 Windows TTS 聲音", list_windows_sapi_voices, self._tts_voices_ready, "無法列出 Windows TTS 聲音")
+
+    def _tts_voices_ready(self, voices: list[str]) -> None:
         self.comboboxes["tts_voice_name"].configure(values=voices)
         self.status.set("; ".join(voices) if voices else "找不到 Windows TTS 聲音")
 
@@ -755,6 +785,17 @@ class TranslatorApp(tk.Tk):
         if not self._closing:
             self.after(50, self._drain_ui_events)
 
+    def _submit(self, status: str, work, done, error_title: str) -> None:
+        self.status.set(status)
+
+        def finish(result: TaskResult) -> None:
+            if result.error is not None:
+                messagebox.showerror(error_title, str(result.error))
+            else:
+                done(result.value)
+
+        self.controller.submit(work, finish)
+
     def _mode_text(self) -> str:
         return f"{mode_notice(self.config['provider'], self.config['tts_provider'], bool(self.config['record_logs']), self.config.get('local_translate_url', ''))}\n{conversation_log_notice(self.config)}\n{main_status_summary(self.config)}"
 
@@ -868,38 +909,45 @@ class TranslatorApp(tk.Tk):
         source = filedialog.askdirectory(title="選擇已解壓的 Faster-Whisper-XXL 資料夾")
         if not source:
             return
-        try:
-            target = install_runtime_from(Path(source), DEFAULT_RUNTIME_DIR)
-        except Exception as exc:
-            messagebox.showerror("runtime 匯入失敗", str(exc))
-            return
-        self.vars["runtime_dir"].set(str(target))
-        self._save()
-        self._refresh_runtime_status()
         config = self._config_from_vars()
-        status = runtime_status(target, config.get("device", "auto"), config.get("compute_type", "auto"))
-        if not status["ready"]:
-            messagebox.showerror("runtime 不完整", "缺少：" + ", ".join(status["missing"]))
-            return
-        try:
-            refresh_commands(whisper_exe(target), APP_DIR / "commands.json")
-        except Exception as exc:
-            self.status.set(f"runtime 已匯入；commands.json 更新失敗：{exc}")
+        self._submit(
+            "正在匯入 runtime",
+            lambda: self.runtime_service.import_runtime(Path(source), DEFAULT_RUNTIME_DIR, config.get("device", "auto"), config.get("compute_type", "auto")),
+            self._runtime_imported,
+            "runtime 匯入失敗",
+        )
+
+    def _runtime_imported(self, result: RuntimeImportResult) -> None:
+        self.vars["runtime_dir"].set(str(result.target))
+        self._save()
+        if not result.status["ready"]:
+            messagebox.showerror("runtime 不完整", "缺少：" + ", ".join(result.status["missing"]))
             return
         self._refresh_lists()
         self.status.set("runtime 已匯入；commands.json 已更新")
 
     def _refresh_runtime_status(self) -> None:
         config = self._config_from_vars()
-        status = runtime_status(runtime_dir(config), config.get("device", "auto"), config.get("compute_type", "auto"))
+        target = runtime_dir(config)
+        self._runtime_check_generation += 1
+        generation = self._runtime_check_generation
+        self.controller.submit(
+            lambda: self.runtime_service.check(target, config.get("device", "auto"), config.get("compute_type", "auto")),
+            lambda result: self._runtime_status_ready(config, generation, result),
+        )
+
+    def _runtime_status_ready(self, config: dict, generation: int, result: TaskResult[RuntimeCheckResult]) -> None:
+        if generation != self._runtime_check_generation:
+            return
+        if result.error is not None:
+            self.runtime_text.set(f"runtime 檢查失敗：{result.error}")
+            return
+        check = result.value
+        assert check is not None
+        status = check.status
         if status["ready"]:
-            try:
-                result = subprocess.run([str(runtime_dir(config) / "ffmpeg.exe"), "-version"], capture_output=True, text=True, timeout=2, check=False)
-                config["last_ffmpeg_failed"] = result.returncode != 0
-            except Exception:
-                config["last_ffmpeg_failed"] = True
-            self.vars["last_ffmpeg_failed"].set(str(config["last_ffmpeg_failed"]))
-            self.config = config
+            self.config["last_ffmpeg_failed"] = check.ffmpeg_failed
+            self.vars["last_ffmpeg_failed"].set(str(check.ffmpeg_failed))
             save_config_state(APP_DIR, self.config, {"last_ffmpeg_failed"})
             note = f"runtime 已就緒；CPU：{'可用' if status['cpu_ready'] else '不可用'}；CUDA：{'可用' if status['cuda_ready'] else '不可用'}"
             if not model_available(config["model"], self.repo_root / "_models", models_dir(config)):
@@ -908,10 +956,8 @@ class TranslatorApp(tk.Tk):
         else:
             self.runtime_text.set(runtime_install_message(runtime_dir(config), config.get("device", "auto")))
 
-    def _diagnostic_message(self, issues=None) -> str:
+    def _diagnostic_message(self, issues) -> str:
         config = self._config_from_vars()
-        if issues is None:
-            issues = collect_diagnostics(config, self.repo_root)
         if not issues:
             return "目前沒有發現需要處理的設定問題。"
         log_path = Path(config.get("log_dir") or APP_DIR / "logs") / "app.log"
@@ -929,7 +975,17 @@ class TranslatorApp(tk.Tk):
         return "\n\n".join(lines)
 
     def _show_first_run_wizard(self) -> None:
-        issues = collect_diagnostics(self._config_from_vars(), self.repo_root)
+        config = self._config_from_vars()
+        self.controller.submit(
+            lambda: self.audio_diagnostics.collect(config, self.repo_root),
+            self._first_run_diagnostics_ready,
+        )
+
+    def _first_run_diagnostics_ready(self, result: TaskResult) -> None:
+        if result.error is not None:
+            self.status.set(f"首次診斷失敗：{result.error}")
+            return
+        issues = result.value
         action = first_run_setup_action(issues, bool(self.config.get("setup_guide_shown", False)))
         if action == "diagnostics":
             self._show_diagnostics("首次設定", issues)
@@ -942,7 +998,13 @@ class TranslatorApp(tk.Tk):
             save_config(APP_DIR, self.config)
 
     def _run_diagnostics(self) -> None:
-        self._show_diagnostics("診斷結果", collect_diagnostics(self._config_from_vars(), self.repo_root))
+        config = self._config_from_vars()
+        self._submit(
+            "正在執行診斷",
+            lambda: self.audio_diagnostics.collect(config, self.repo_root),
+            lambda issues: self._show_diagnostics("診斷結果", issues),
+            "診斷失敗",
+        )
 
     def _show_diagnostics(self, title: str, issues) -> None:
         message = self._diagnostic_message(issues)
@@ -1019,17 +1081,12 @@ class TranslatorApp(tk.Tk):
         self.status.set(f"來源語言已鎖定：{locked}")
 
     def _check_updates(self) -> None:
-        self.status.set("正在檢查更新")
-
-        def run() -> None:
-            try:
-                latest = latest_release_tag()
-                message = release_update_message(current_version(self.repo_root), latest)
-            except Exception as exc:
-                message = f"更新檢查失敗：{exc}；{RELEASES_URL}"
-            self._post_ui("status", message)
-
-        threading.Thread(target=run, daemon=True).start()
+        self._submit(
+            "正在檢查更新",
+            lambda: self.update_service.check(self.repo_root),
+            self.status.set,
+            "更新檢查失敗",
+        )
 
     def _show_setup_guide(self) -> None:
         action_map = {
@@ -1046,8 +1103,16 @@ class TranslatorApp(tk.Tk):
 
     def _recommend(self) -> None:
         config = self._config_from_vars()
-        runtime = runtime_dir(config)
-        status = runtime_status(runtime, "auto", config.get("compute_type", "auto"), verify_hashes=True)
+        target = runtime_dir(config)
+        self._submit(
+            "正在偵測硬體",
+            lambda: self.runtime_service.check(target, "auto", config.get("compute_type", "auto"), verify_hashes=True),
+            lambda result: self._recommend_ready(config, result),
+            "硬體偵測失敗",
+        )
+
+    def _recommend_ready(self, config: dict, result: RuntimeCheckResult) -> None:
+        status = result.status
         if not status["ready"]:
             self.status.set("找不到 runtime：" + ", ".join(status["missing"]))
             self.vars["model"].set("medium")
@@ -1094,11 +1159,20 @@ class TranslatorApp(tk.Tk):
 
     def _optimize_settings(self) -> None:
         before = self._config_from_vars()
-        try:
-            decision = self._planned_session()
-        except ValueError as exc:
-            self.status.set(str(exc))
-            return
+        target = runtime_dir(before)
+
+        def work():
+            check = self.runtime_service.check(target, "cuda", before.get("compute_type", "auto"), verify_hashes=True)
+            devices, vram_gb = cuda_hardware_from_check_output(check.status["cuda_probe_output"]) if check.status["cuda_ready"] else (0, 0)
+            return plan_session(before, self.repo_root, devices, vram_gb), devices, vram_gb
+
+        self._submit("正在分析設定", work, lambda result: self._optimization_ready(before, result), "自動優化失敗")
+
+    def _optimization_ready(self, before: dict, result) -> None:
+        decision, devices, vram_gb = result
+        before.update({"last_cuda_devices": devices, "last_vram_gb": vram_gb})
+        self.config.update({"last_cuda_devices": devices, "last_vram_gb": vram_gb})
+        save_config_state(APP_DIR, before, {"last_cuda_devices", "last_vram_gb"})
         if not decision.recommendations:
             self.status.set("設定已是建議值")
             return
@@ -1108,35 +1182,6 @@ class TranslatorApp(tk.Tk):
         self._load_config_into_widgets(decision.config)
         self._save()
         self.status.set(decision.summary)
-
-    def _planned_session(self):
-        config = self._config_from_vars()
-        devices, vram_gb = self._cuda_hardware(config)
-        config["last_cuda_devices"] = devices
-        config["last_vram_gb"] = vram_gb
-        self.config.update({"last_cuda_devices": devices, "last_vram_gb": vram_gb})
-        save_config_state(APP_DIR, config, {"last_cuda_devices", "last_vram_gb"})
-        return plan_session(config, self.repo_root, devices, vram_gb)
-
-    def _cuda_hardware(self, config: dict) -> tuple[int, int]:
-        runtime = runtime_dir(config)
-        status = runtime_status(runtime, "cuda", config.get("compute_type", "auto"), verify_hashes=True)
-        if not status["cuda_ready"]:
-            return 0, 0
-        return cuda_hardware_from_check_output(status["cuda_probe_output"])
-
-    def _auto_optimize_before_start(self) -> None:
-        if not self.config.get("ai_auto_optimize", True):
-            return
-        config = self._config_from_vars()
-        devices, vram_gb = self._cuda_hardware(config)
-        config["last_cuda_devices"] = devices
-        config["last_vram_gb"] = vram_gb
-        self.config.update({"last_cuda_devices": devices, "last_vram_gb": vram_gb})
-        save_config_state(APP_DIR, config, {"last_cuda_devices", "last_vram_gb"})
-        recommendations = recommend_tuning(config, devices, vram_gb)
-        if recommendations:
-            self.status.set(f"自動優化有 {len(recommendations)} 項建議；請按「自動優化」預覽並確認")
 
     def _download_model(self) -> None:
         if self.__dict__.get("_model_download_cancel") is not None:
@@ -1149,20 +1194,18 @@ class TranslatorApp(tk.Tk):
         self._model_download_cancel = cancel
         self.status.set(f"正在下載模型 {model}")
 
-        def run() -> None:
-            try:
-                installed = download_model(model, app_models, lambda message: self._post_ui("status", message), cancel)
-                message = f"模型下載完成：{installed.name}；版本與 SHA 完整性已驗證"
-            except ModelDownloadCancelled as exc:
-                message = str(exc)
-            except Exception as exc:
-                message = f"模型下載失敗：{exc}"
-            finally:
-                self._model_download_cancel = None
-            self._post_ui("status", message)
-            self._post_ui("callback", self._refresh_lists)
+        self.controller.submit(
+            lambda: self.model_service.download(model, app_models, lambda message: self._post_ui("status", message), cancel),
+            self._model_downloaded,
+        )
 
-        threading.Thread(target=run, daemon=True).start()
+    def _model_downloaded(self, result: TaskResult[Path]) -> None:
+        self._model_download_cancel = None
+        if result.error is not None:
+            self.status.set(str(result.error))
+        else:
+            self.status.set(f"模型下載完成：{result.value.name}；版本與 SHA 完整性已驗證")
+        self._refresh_lists()
 
     def _cancel_model_download(self) -> None:
         cancel = self.__dict__.get("_model_download_cancel")
@@ -1187,134 +1230,84 @@ class TranslatorApp(tk.Tk):
             return
         self.status.set("正在下載離線翻譯模型")
 
-        def run() -> None:
-            try:
-                registry = self.engine.offline_translation_registry if self.engine else None
-                downloaded = download_offline_translation_models(self.config, source_language, target_language, registry)
-                message = f"離線翻譯模型下載完成：{len(downloaded)} 個"
-            except Exception as exc:
-                message = f"離線翻譯模型下載失敗：{exc}"
-            self._post_ui("status", message)
-
-        threading.Thread(target=run, daemon=True).start()
+        config = self.config.copy()
+        registry = self.engine.offline_translation_registry if self.engine else None
+        self._submit(
+            "正在下載離線翻譯模型",
+            lambda: self.model_service.download_translation(config, source_language, target_language, registry),
+            lambda downloaded: self.status.set(f"離線翻譯模型下載完成：{len(downloaded)} 個"),
+            "離線翻譯模型下載失敗",
+        )
 
     def _refresh_commands(self) -> None:
         runtime = runtime_dir(self._config_from_vars())
-        status = runtime_status(runtime, "cpu", verify_hashes=True)
-        if not status["ready"]:
-            messagebox.showerror("找不到 runtime", runtime_install_message(runtime, "cpu"))
-            return
-        exe = whisper_exe(runtime)
-        try:
-            refresh_commands(exe, APP_DIR / "commands.json")
-        except Exception as exc:
-            messagebox.showerror("commands.json 更新失敗", str(exc))
-            return
-        self._refresh_lists()
-        self.status.set("commands.json 已更新")
+        self._submit(
+            "正在更新 commands.json",
+            lambda: self.runtime_service.refresh_commands(runtime),
+            lambda _value: (self._refresh_lists(), self.status.set("commands.json 已更新")),
+            "commands.json 更新失敗",
+        )
 
     def _test_api(self) -> None:
         self._save()
-        try:
-            if self.config["provider"] == "google":
-                google_access_token(self.config["google_service_account_json"])
-                self.status.set("Google 驗證成功")
-            else:
-                translated = Translator(self.config).translate("hello", "en", "zh")
-                self.status.set(translated.text[:80])
-        except Exception as exc:
-            messagebox.showerror("API 測試失敗", str(exc))
+        config = self.config.copy()
+        self._submit("正在測試 API", lambda: self.audio_diagnostics.test_api(config), self.status.set, "API 測試失敗")
 
     def _test_tone(self) -> None:
-        import math
-        import numpy as np
-        import sounddevice as sd
-
-        device = find_device(self._config_from_vars()["tts_output_device"], want_output=True)
-        samplerate = 24000
-        data = np.array([math.sin(2 * math.pi * 440 * i / samplerate) * 0.2 for i in range(samplerate // 4)], dtype="float32")
-        sd.play(data, samplerate=samplerate, device=device, blocking=True)
+        config = self._config_from_vars()
+        self._submit("正在測試裝置音", lambda: self.audio_diagnostics.test_tone(config), lambda _value: self.status.set("裝置音測試完成"), "裝置音測試失敗")
 
     def _test_tts(self) -> None:
         config = self._config_from_vars()
-        try:
-            self._play_tts_test(config)
-            config["last_tts_failed"] = False
-            self.config = config
-            save_config_state(APP_DIR, self.config, {"last_tts_failed"})
+        self.controller.submit(lambda: self.audio_diagnostics.test_tts(config), lambda result: self._tts_tested(config, result))
+
+    def _tts_tested(self, config: dict, result: TaskResult) -> None:
+        self.config["last_tts_failed"] = result.error is not None
+        save_config_state(APP_DIR, self.config, {"last_tts_failed"})
+        if result.error is not None:
+            messagebox.showerror("TTS 測試失敗", str(result.error))
+        else:
             self.status.set("TTS 輸出測試完成")
-        except Exception as exc:
-            config["last_tts_failed"] = True
-            self.config = config
-            save_config_state(APP_DIR, self.config, {"last_tts_failed"})
-            messagebox.showerror("TTS 測試失敗", str(exc))
 
     def _test_virtual_mic(self) -> None:
         config = self._config_from_vars()
-        try:
-            if not config["virtual_mic_input_device"]:
-                raise DeviceResolutionError("請先選擇虛擬麥克風檢查輸入")
-            virtual_input = find_device(config["virtual_mic_input_device"], want_output=False)
-            path = APP_DIR / "cache" / "audio" / "virtual-mic-test.wav"
-            capture = threading.Thread(target=capture_wav, args=(path, virtual_input, 2.0))
-            capture.start()
-            time.sleep(0.15)
-            self._play_tts_test(config)
-            capture.join()
-            active = audio_segment_active(path, float(config["speech_threshold"]))
-            config["last_virtual_mic_failed"] = not active
-            self.config = config
-            save_config_state(APP_DIR, self.config, {"last_virtual_mic_failed"})
-            self.status.set("虛擬麥克風已偵測到聲音" if active else "虛擬麥克風沒有偵測到聲音")
-        except Exception as exc:
-            config["last_virtual_mic_failed"] = True
-            self.config = config
-            save_config_state(APP_DIR, self.config, {"last_virtual_mic_failed"})
-            messagebox.showerror("虛擬麥克風測試失敗", str(exc))
+        self.controller.submit(lambda: self.audio_diagnostics.test_virtual_microphone(config), lambda result: self._virtual_mic_tested(config, result))
 
-    def _play_tts_test(self, config: dict) -> None:
-        provider = config.get("tts_provider", "local")
-        device = config["tts_output_device"]
-        tts = TextToSpeech(config)
-        if provider == "local":
-            tts.speak_local("翻譯語音輸出測試", device)
-        elif provider == "openai":
-            audio = tts.synthesize_openai_linear16("翻譯語音輸出測試")
-            play_linear16(audio, device)
+    def _virtual_mic_tested(self, config: dict, result: TaskResult[bool]) -> None:
+        active = bool(result.value) if result.error is None else False
+        self.config["last_virtual_mic_failed"] = not active
+        save_config_state(APP_DIR, self.config, {"last_virtual_mic_failed"})
+        if result.error is not None:
+            messagebox.showerror("虛擬麥克風測試失敗", str(result.error))
         else:
-            audio = tts.synthesize_google_linear16("翻譯語音輸出測試", config["target_language"])
-            play_linear16(audio, device)
+            self.status.set("虛擬麥克風已偵測到聲音" if active else "虛擬麥克風沒有偵測到聲音")
 
     def _test_speaker(self) -> None:
-        try:
-            config = self._config_from_vars()
-            device = find_device(config["speaker_device"], want_output=True)
-            path = APP_DIR / "cache" / "audio" / "speaker-test.wav"
-            capture_wav(path, device, 0.5, loopback=True)
-            active = audio_segment_active(path, float(config["speech_threshold"]))
-            config["last_speaker_quiet"] = not active
-            self.config = config
-            save_config_state(APP_DIR, self.config, {"last_speaker_quiet"})
-            self.status.set("喇叭已偵測到聲音" if active else "喇叭目前沒有偵測到聲音")
-        except Exception as exc:
-            messagebox.showerror("喇叭測試失敗", str(exc))
+        config = self._config_from_vars()
+        self.controller.submit(lambda: self.audio_diagnostics.test_speaker(config), lambda result: self._speaker_tested(config, result))
+
+    def _speaker_tested(self, config: dict, result: TaskResult[bool]) -> None:
+        if result.error is not None:
+            messagebox.showerror("喇叭測試失敗", str(result.error))
+            return
+        active = bool(result.value)
+        self.config["last_speaker_quiet"] = not active
+        save_config_state(APP_DIR, self.config, {"last_speaker_quiet"})
+        self.status.set("喇叭已偵測到聲音" if active else "喇叭目前沒有偵測到聲音")
 
     def _test_mic(self) -> None:
-        import numpy as np
-        import sounddevice as sd
+        config = self._config_from_vars()
+        self._submit(
+            "正在測試麥克風",
+            lambda: self.audio_diagnostics.test_microphone(config),
+            lambda level: self._microphone_tested(config, level),
+            "麥克風測試失敗",
+        )
 
-        try:
-            config = self._config_from_vars()
-            device = find_device(config["microphone_device"], want_output=False)
-            data = sd.rec(int(0.5 * 16000), samplerate=16000, channels=1, dtype="float32", device=device)
-            sd.wait()
-            level = float(np.sqrt(np.mean(np.square(data))))
-            config["last_mic_quiet"] = level < float(self.vars["speech_threshold"].get())
-            self.config = config
-            save_config_state(APP_DIR, self.config, {"last_mic_quiet"})
-            self.status.set(f"麥克風音量 {level:.4f}")
-        except Exception as exc:
-            messagebox.showerror("麥克風測試失敗", str(exc))
+    def _microphone_tested(self, config: dict, level: float) -> None:
+        self.config["last_mic_quiet"] = level < float(config["speech_threshold"])
+        save_config_state(APP_DIR, self.config, {"last_mic_quiet"})
+        self.status.set(f"麥克風音量 {level:.4f}")
 
     def _test_subtitles(self) -> None:
         self.overlay_visible.set(True)
@@ -1338,8 +1331,25 @@ class TranslatorApp(tk.Tk):
     def _start(self) -> None:
         if not self._save():
             return
-        self._auto_optimize_before_start()
-        status = runtime_status(runtime_dir(self.config), self.config.get("device", "auto"), self.config.get("compute_type", "auto"), verify_hashes=True)
+        config = self.config.copy()
+        target = runtime_dir(config)
+        app_models = models_dir(config)
+        self._submit(
+            "正在檢查啟動需求",
+            lambda: (
+                self.runtime_service.check(target, config.get("device", "auto"), config.get("compute_type", "auto"), verify_hashes=True),
+                self.model_service.status(config["model"], self.repo_root / "_models", app_models),
+            ),
+            lambda result: self._start_checked(config, app_models, result),
+            "啟動檢查失敗",
+        )
+
+    def _start_checked(self, config: dict, app_models: Path, result: tuple[RuntimeCheckResult, str]) -> None:
+        if self._config_from_vars() != config:
+            self.status.set("設定已在啟動檢查期間變更；請重新按開始")
+            return
+        runtime_check, current_model_status = result
+        status = runtime_check.status
         if not status["ready"]:
             append_app_log(APP_DIR, "runtime_missing", missing=status["missing"])
             error = "找不到 runtime：" + ", ".join(status["missing"])
@@ -1349,40 +1359,42 @@ class TranslatorApp(tk.Tk):
             self._set_last_error(error)
             self.status.set(error)
             return
-        app_models = models_dir(self.config)
-        current_model_status = model_status(self.config["model"], self.repo_root / "_models", app_models)
         if current_model_status != MODEL_READY:
             corrupt = current_model_status == MODEL_INVALID
             title = "模型不完整或損毀" if corrupt else "找不到模型"
-            append_app_log(APP_DIR, "model_corrupt" if corrupt else "model_missing", model=self.config["model"])
-            messagebox.showerror(title, model_install_message(self.config["model"], app_models))
-            error = f"{title}：{self.config['model']}"
+            append_app_log(APP_DIR, "model_corrupt" if corrupt else "model_missing", model=config["model"])
+            messagebox.showerror(title, model_install_message(config["model"], app_models))
+            error = f"{title}：{config['model']}"
             self._set_last_error(error)
             self.status.set(error)
             return
+        devices, vram_gb = cuda_hardware_from_check_output(status["cuda_probe_output"]) if status["cuda_ready"] else (0, 0)
+        config.update({"last_cuda_devices": devices, "last_vram_gb": vram_gb})
+        self.config.update({"last_cuda_devices": devices, "last_vram_gb": vram_gb})
+        save_config_state(APP_DIR, config, {"last_cuda_devices", "last_vram_gb"})
+        recommendations = recommend_tuning(config, devices, vram_gb) if config.get("ai_auto_optimize", True) else []
+        if recommendations:
+            self.status.set(f"自動優化有 {len(recommendations)} 項建議；請按「自動優化」預覽並確認")
         self._set_last_error("")
-        append_app_log(APP_DIR, "start", model=self.config["model"], provider=self.config["provider"])
+        append_app_log(APP_DIR, "start", model=config["model"], provider=config["provider"])
         engine = RealtimeEngine(
             self.repo_root,
-            self.config,
+            config,
             lambda speaker, mine: self._post_ui("overlay", speaker, mine, engine=engine),
             lambda message: self._post_ui("status", message, engine=engine),
             APP_DIR,
         )
-        self.engine = engine
-        threading.Thread(target=engine.start, daemon=True).start()
+        self.controller.start_engine(engine)
 
     def _stop(self) -> None:
-        if self.engine:
-            message = self.engine.stop()
-            while True:
-                try:
-                    self._engine_events.get_nowait()
-                except queue.Empty:
-                    break
-            if not self._closing:
-                self._engine_status(message)
-            append_app_log(APP_DIR, "stop")
+        self.controller.stop_engine(self._engine_stopped)
+
+    def _engine_stopped(self, result: TaskResult[str]) -> None:
+        if result.error is not None:
+            self._engine_status(f"停止失敗：{result.error}")
+        elif not self._closing and result.value:
+            self._engine_status(result.value)
+        append_app_log(APP_DIR, "stop")
 
     def _quit(self) -> None:
         self._closing = True
@@ -1390,7 +1402,13 @@ class TranslatorApp(tk.Tk):
         if cancel is not None:
             cancel.set()
         self._stop()
-        self.destroy()
+        self.after(50, self._destroy_when_stopped)
+
+    def _destroy_when_stopped(self) -> None:
+        if self.engine is None:
+            self.destroy()
+        else:
+            self.after(50, self._destroy_when_stopped)
 
     def _toggle_pause(self) -> None:
         if self.engine:
