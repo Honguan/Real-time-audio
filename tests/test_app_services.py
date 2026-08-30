@@ -10,6 +10,39 @@ from realtime_audio_translator.app_services import AudioDiagnosticsService, Runt
 
 
 class AppControllerTests(unittest.TestCase):
+    def test_start_engine_rejects_duplicate_initialization(self):
+        release = threading.Event()
+        controller = AppController(lambda _kind, callback, value: callback(value))
+        engine = Mock(running=True)
+        engine.start.side_effect = lambda: release.wait(1)
+
+        self.assertTrue(controller.start_engine(engine))
+        self.assertFalse(controller.start_engine(Mock()))
+        release.set()
+
+    def test_named_task_rejects_duplicates_and_cancel_ignores_late_result(self):
+        release = threading.Event()
+        done = Mock()
+        states = []
+
+        def post(_kind, callback, value):
+            callback(value)
+
+        controller = AppController(post, states.append)
+        self.assertTrue(controller.submit(lambda: release.wait(1), done, name="api"))
+        self.assertFalse(controller.submit(lambda: None, done, name="api"))
+
+        started = time.perf_counter()
+        self.assertEqual(controller.cancel("api"), 1)
+        self.assertLess(time.perf_counter() - started, 0.2)
+        self.assertFalse(controller.submit(lambda: None, done, name="api"))
+        release.set()
+        time.sleep(0.05)
+
+        done.assert_not_called()
+        self.assertEqual([state.status for state in states], ["started", "cancelled"])
+        self.assertFalse(controller.busy)
+
     def test_submit_returns_typed_result_through_ui_dispatcher(self):
         posted = threading.Event()
         event = {}

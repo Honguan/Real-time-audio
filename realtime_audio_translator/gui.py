@@ -8,7 +8,7 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, simpledialog, ttk
 from typing import Literal
 
-from .app_controller import AppController, TaskResult
+from .app_controller import AppController, TaskResult, TaskState
 from .app_services import AudioDiagnosticsService, ModelService, RuntimeCheckResult, RuntimeImportResult, RuntimeService, UpdateService
 from .audio import DeviceResolutionError, device_descriptor, device_identity, find_device, format_device_label, list_audio_devices
 from .ai_auto_tuner import format_tuning_preview, recommend_tuning
@@ -100,6 +100,7 @@ BASIC_BUTTON_TEXTS = {
     "停止",
     "測試麥克風",
     "測試虛擬麥克風",
+    "取消背景工作",
 }
 FIRST_RUN_ISSUE_CODES = {
     "runtime_missing",
@@ -373,7 +374,7 @@ class TranslatorApp(tk.Tk):
         self._device_id_by_label: dict[str, str] = {"系統預設": ""}
         self._device_label_by_id: dict[str, str] = {"": "系統預設"}
         self._engine_events = queue.Queue()
-        self.controller = AppController(self._post_ui)
+        self.controller = AppController(self._post_ui, self._task_state_changed)
         self.runtime_service = RuntimeService(APP_DIR / "commands.json")
         self.model_service = ModelService()
         self.audio_diagnostics = AudioDiagnosticsService(APP_DIR / "cache" / "audio")
@@ -553,6 +554,7 @@ class TranslatorApp(tk.Tk):
             ("測試虛擬麥克風", self._test_virtual_mic),
             ("測試喇叭", self._test_speaker),
             ("測試麥克風", self._test_mic),
+            ("取消背景工作", self._cancel_background_tasks),
             ("測試字幕", self._test_subtitles),
             ("開始", self._start),
             ("停止", self._stop),
@@ -587,9 +589,9 @@ class TranslatorApp(tk.Tk):
         self._apply_mode(save=False)
 
     def _refresh_lists(self) -> None:
+        self.status.set("正在重新整理裝置與模型")
         config = self._config_from_vars()
-        self._list_generation += 1
-        generation = self._list_generation
+        generation = self._list_generation + 1
 
         def work():
             raw_devices = list_audio_devices()
@@ -600,7 +602,10 @@ class TranslatorApp(tk.Tk):
             compute_types = command_choices(commands, "compute_type") or ["auto", "int8", "float16", "float32"]
             return raw_devices, models, asr_devices, compute_types
 
-        self.controller.submit(work, lambda result: self._lists_ready(generation, result))
+        if self.controller.submit(work, lambda result: self._lists_ready(generation, result), name="refresh_lists"):
+            self._list_generation = generation
+        else:
+            self.status.set("裝置與模型重新整理已在進行")
 
     def _lists_ready(self, generation: int, result: TaskResult) -> None:
         if generation != self._list_generation:
@@ -649,6 +654,7 @@ class TranslatorApp(tk.Tk):
                 widget.configure(values=compute_types)
             elif key != "tts_voice_name":
                 widget.configure(values=devices)
+        self.status.set("裝置與模型已更新")
         self._refresh_runtime_status()
 
     def _list_tts_voices(self) -> None:
@@ -785,16 +791,31 @@ class TranslatorApp(tk.Tk):
         if not self._closing:
             self.after(50, self._drain_ui_events)
 
-    def _submit(self, status: str, work, done, error_title: str) -> None:
+    def _submit(self, status: str, work, done, error_title: str, task_name: str | None = None) -> None:
         self.status.set(status)
 
         def finish(result: TaskResult) -> None:
             if result.error is not None:
+                self.status.set(f"{error_title}：{result.error}")
                 messagebox.showerror(error_title, str(result.error))
             else:
                 done(result.value)
 
-        self.controller.submit(work, finish)
+        if not self.controller.submit(work, finish, name=task_name or error_title):
+            self.status.set(f"{status}；相同工作已在進行")
+
+    def _task_state_changed(self, _state: TaskState) -> None:
+        disabled = self.controller.busy
+        for text, button in getattr(self, "button_widgets", []):
+            button.configure(state="normal" if not disabled or text in {"停止", "離開", "取消背景工作", "取消模型下載"} else "disabled")
+
+    def _cancel_background_tasks(self) -> None:
+        model_cancel = self.__dict__.get("_model_download_cancel")
+        if model_cancel is not None:
+            model_cancel.set()
+            self._model_download_cancel = None
+        count = self.controller.cancel()
+        self.status.set(f"已取消 {count} 個背景工作" if count else "目前沒有可取消的背景工作")
 
     def _mode_text(self) -> str:
         return f"{mode_notice(self.config['provider'], self.config['tts_provider'], bool(self.config['record_logs']), self.config.get('local_translate_url', ''))}\n{conversation_log_notice(self.config)}\n{main_status_summary(self.config)}"
@@ -929,12 +950,14 @@ class TranslatorApp(tk.Tk):
     def _refresh_runtime_status(self) -> None:
         config = self._config_from_vars()
         target = runtime_dir(config)
-        self._runtime_check_generation += 1
-        generation = self._runtime_check_generation
-        self.controller.submit(
+        self.runtime_text.set("正在檢查 runtime")
+        generation = self._runtime_check_generation + 1
+        if self.controller.submit(
             lambda: self.runtime_service.check(target, config.get("device", "auto"), config.get("compute_type", "auto")),
             lambda result: self._runtime_status_ready(config, generation, result),
-        )
+            name="runtime_status",
+        ):
+            self._runtime_check_generation = generation
 
     def _runtime_status_ready(self, config: dict, generation: int, result: TaskResult[RuntimeCheckResult]) -> None:
         if generation != self._runtime_check_generation:
@@ -979,6 +1002,7 @@ class TranslatorApp(tk.Tk):
         self.controller.submit(
             lambda: self.audio_diagnostics.collect(config, self.repo_root),
             self._first_run_diagnostics_ready,
+            name="first_run_diagnostics",
         )
 
     def _first_run_diagnostics_ready(self, result: TaskResult) -> None:
@@ -1194,10 +1218,13 @@ class TranslatorApp(tk.Tk):
         self._model_download_cancel = cancel
         self.status.set(f"正在下載模型 {model}")
 
-        self.controller.submit(
+        if not self.controller.submit(
             lambda: self.model_service.download(model, app_models, lambda message: self._post_ui("status", message), cancel),
             self._model_downloaded,
-        )
+            name="model_download",
+        ):
+            self._model_download_cancel = None
+            self.status.set("前一個模型下載仍在結束中")
 
     def _model_downloaded(self, result: TaskResult[Path]) -> None:
         self._model_download_cancel = None
@@ -1259,7 +1286,9 @@ class TranslatorApp(tk.Tk):
 
     def _test_tts(self) -> None:
         config = self._config_from_vars()
-        self.controller.submit(lambda: self.audio_diagnostics.test_tts(config), lambda result: self._tts_tested(config, result))
+        self.status.set("正在測試 TTS")
+        if not self.controller.submit(lambda: self.audio_diagnostics.test_tts(config), lambda result: self._tts_tested(config, result), name="tts_test"):
+            self.status.set("TTS 測試已在進行")
 
     def _tts_tested(self, config: dict, result: TaskResult) -> None:
         self.config["last_tts_failed"] = result.error is not None
@@ -1271,7 +1300,9 @@ class TranslatorApp(tk.Tk):
 
     def _test_virtual_mic(self) -> None:
         config = self._config_from_vars()
-        self.controller.submit(lambda: self.audio_diagnostics.test_virtual_microphone(config), lambda result: self._virtual_mic_tested(config, result))
+        self.status.set("正在測試虛擬麥克風")
+        if not self.controller.submit(lambda: self.audio_diagnostics.test_virtual_microphone(config), lambda result: self._virtual_mic_tested(config, result), name="virtual_mic_test"):
+            self.status.set("虛擬麥克風測試已在進行")
 
     def _virtual_mic_tested(self, config: dict, result: TaskResult[bool]) -> None:
         active = bool(result.value) if result.error is None else False
@@ -1284,7 +1315,9 @@ class TranslatorApp(tk.Tk):
 
     def _test_speaker(self) -> None:
         config = self._config_from_vars()
-        self.controller.submit(lambda: self.audio_diagnostics.test_speaker(config), lambda result: self._speaker_tested(config, result))
+        self.status.set("正在測試喇叭")
+        if not self.controller.submit(lambda: self.audio_diagnostics.test_speaker(config), lambda result: self._speaker_tested(config, result), name="speaker_test"):
+            self.status.set("喇叭測試已在進行")
 
     def _speaker_tested(self, config: dict, result: TaskResult[bool]) -> None:
         if result.error is not None:
@@ -1384,10 +1417,16 @@ class TranslatorApp(tk.Tk):
             lambda message: self._post_ui("status", message, engine=engine),
             APP_DIR,
         )
-        self.controller.start_engine(engine)
+        if not self.controller.start_engine(engine, self._engine_started):
+            self.status.set("啟動工作已在進行")
+
+    def _engine_started(self, result: TaskResult) -> None:
+        if result.error is not None:
+            self._engine_status(f"啟動失敗：{result.error}")
 
     def _stop(self) -> None:
-        self.controller.stop_engine(self._engine_stopped)
+        if self.controller.stop_engine(self._engine_stopped) is False:
+            self.status.set("停止工作已在進行")
 
     def _engine_stopped(self, result: TaskResult[str]) -> None:
         if result.error is not None:
@@ -1398,6 +1437,7 @@ class TranslatorApp(tk.Tk):
 
     def _quit(self) -> None:
         self._closing = True
+        self.controller.cancel()
         cancel = self.__dict__.get("_model_download_cancel")
         if cancel is not None:
             cancel.set()
