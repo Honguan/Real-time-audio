@@ -67,7 +67,8 @@ jobs:
           & ./scripts/build.ps1 -SkipInstall
           & ./scripts/package_app_zip.ps1 -Version $version -SkipBuild
           $iscc = & ./scripts/install_inno_setup.ps1 -InstallDir (Join-Path $env:RUNNER_TEMP "inno-setup")
-          $installer = & ./scripts/build_installer.ps1 -Version $version -IsccPath $iscc
+          & ./scripts/build_installer.ps1 -Version $version -IsccPath $iscc
+          $installer = Join-Path $PWD "dist-release\RealtimeAudioTranslator-$version-setup.exe"
 
           $testRoot = Join-Path $env:RUNNER_TEMP ("installer-test-" + [guid]::NewGuid())
           $installRoot = Join-Path $testRoot "app"

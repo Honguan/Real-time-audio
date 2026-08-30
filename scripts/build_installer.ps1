@@ -51,4 +51,3 @@ $Installer = Join-Path $OutputDir "RealtimeAudioTranslator-$Version-setup.exe"
 if (-not (Test-Path -LiteralPath $Installer)) {
   throw "Installer output not found: $Installer"
 }
-$Installer

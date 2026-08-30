@@ -80,7 +80,8 @@ jobs:
             & ./scripts/package_app_zip.ps1 -Version $version -SkipBuild
             Copy-Item release-lock.json dist-release\RELEASE_MANIFEST.json
             $iscc = & ./scripts/install_inno_setup.ps1 -InstallDir (Join-Path $env:RUNNER_TEMP "inno-setup")
-            $installer = & ./scripts/build_installer.ps1 -Version $version -IsccPath $iscc
+            & ./scripts/build_installer.ps1 -Version $version -IsccPath $iscc
+            $installer = Join-Path $PWD "dist-release\RealtimeAudioTranslator-$version-setup.exe"
             & ./scripts/sign_windows.ps1 `
               -Files $installer `
               -CertificatePath $certificate `
