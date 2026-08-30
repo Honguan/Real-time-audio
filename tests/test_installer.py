@@ -98,6 +98,7 @@ class InstallerTests(unittest.TestCase):
         self.assertIn("{param:TYPE|}", installer)
         self.assertIn("https://vb-audio.com/Cable/", installer)
         self.assertIn("MB_DEFBUTTON2", installer)
+        self.assertIn("SuppressibleMsgBox", installer)
         self.assertNotIn("DelTree(UserRoot,", installer)
         for secret in ("WINDOWS_SIGNING_CERTIFICATE_BASE64", "WINDOWS_SIGNING_CERTIFICATE_PASSWORD"):
             self.assertIn(f"secrets.{secret}", release)

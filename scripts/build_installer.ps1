@@ -43,7 +43,7 @@ $Arguments = @(
 )
 $CompilerOutput = & $IsccPath @Arguments
 $CompilerExitCode = $LASTEXITCODE
-$CompilerOutput | ForEach-Object { Write-Host $_ }
+$CompilerOutput | ForEach-Object { [Console]::Error.WriteLine($_) }
 if ($CompilerExitCode -ne 0) {
   throw "Inno Setup compilation failed: $CompilerExitCode"
 }

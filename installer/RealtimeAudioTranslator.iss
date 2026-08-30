@@ -177,7 +177,7 @@ end;
 
 function AskRemove(const Description: String): Boolean;
 begin
-  Result := MsgBox(Description + #13#10 + '選擇「否」會保留資料。', mbConfirmation,
+  Result := SuppressibleMsgBox(Description + #13#10 + '選擇「否」會保留資料。', mbConfirmation,
     MB_YESNO or MB_DEFBUTTON2) = IDYES;
 end;
 
