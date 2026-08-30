@@ -382,6 +382,9 @@ class GuiLogicTests(unittest.TestCase):
         class Controller:
             engine = Engine()
 
+            def cancel(self):
+                return 0
+
             def stop_engine(self, done):
                 value = self.engine.stop()
                 self.engine = None
