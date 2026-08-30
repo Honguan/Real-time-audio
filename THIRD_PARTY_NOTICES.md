@@ -35,6 +35,11 @@ notice is reproduced here:
 > OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 > SOFTWARE.
 
+The Windows setup executable is built with Inno Setup 7.1.0 under the
+[Inno Setup License](https://github.com/jrsoftware/issrc/blob/is-7_1_0/LICENSE.txt).
+The compiler version, source, and download hash are locked in
+`release-lock.json`.
+
 ## Offline translation models
 
 Official releases do not redistribute Argos model packages. The Chinese and
@@ -50,7 +55,9 @@ Official releases do not redistribute Faster-Whisper-XXL, CUDA, cuBLAS, or
 cuDNN files. The Faster-Whisper-XXL repository does not publish a repository
 license, and NVIDIA permits redistribution only under its applicable SDK terms.
 Users obtain these components directly from their publishers and remain subject
-to the publishers' terms:
+to the publishers' terms. When selected, the Windows installer downloads the
+locked archives from the publisher URLs below and verifies their SHA-256; the
+archives are not hosted inside this project's release assets:
 
 - Faster-Whisper-XXL: https://github.com/Purfview/whisper-standalone-win/releases
 - NVIDIA SDK license: https://docs.nvidia.com/cuda/eula/index.html

@@ -54,6 +54,32 @@
       "source": "https://github.com/softprops/action-gh-release"
     }
   ],
+  "installer": {
+    "builder": {
+      "name": "Inno Setup",
+      "version": "7.1.0",
+      "url": "https://github.com/jrsoftware/issrc/releases/download/is-7_1_0/innosetup-7.1.0-x64.exe",
+      "size": 14304168,
+      "sha256": "0362a383ed217d4c4239b5933866dd96d3eb2102737da92f80f6057a4b40df2f",
+      "source": "https://github.com/jrsoftware/issrc",
+      "license": "Inno Setup License"
+    },
+    "external_runtime": {
+      "core": {
+        "version": "r245.4",
+        "url": "https://github.com/Purfview/whisper-standalone-win/releases/download/Faster-Whisper-XXL/Faster-Whisper-XXL_r245.4_windows.7z",
+        "size": 1424256246,
+        "sha256": "237dee23939cdabfc96ef859fc5e584b842c3a5557e0d2ca744e1f87c14c5844"
+      },
+      "cuda": {
+        "version": "CUDA12_v3",
+        "url": "https://github.com/Purfview/whisper-standalone-win/releases/download/libs/cuBLAS.and.cuDNN_CUDA12_win_v3.7z",
+        "size": 849141159,
+        "sha256": "ec00119dbeec2adff661302883becd004028784031a4547ea1749e7683ffb67f"
+      }
+    },
+    "timestamp_url": "http://timestamp.digicert.com"
+  },
   "runtime": [],
   "translation_models": {
     "index_revision": "ff90de60728f7c1338ff6b75974e4c89b2442d22",

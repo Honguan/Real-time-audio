@@ -5,6 +5,7 @@
 - 設定改用單一具 schema 版本的 `config/settings.json`，透過原子寫入與備份復原避免中斷或並行保存造成損毀；執行狀態分離至 `config/state.json`。
 - 新增 MIT LICENSE、第三方授權 notices 與 CycloneDX SBOM；未能確認完整再散布授權的 runtime 與 Argos 模型不再隨 Release 封裝。
 - Release 上傳前會從乾淨工作目錄執行實際 PyInstaller EXE，驗證 imports、Tk、PortAudio 與必要路徑並輸出 JSON 結果。
+- 新增可選 Authenticode 簽章的 Windows installer；依 GPU／VRAM 選擇 CPU 或 CUDA 上游 runtime，提供 VB-CABLE 指引與逐類別安全卸載，並保留 portable ZIP。
 
 ## v0.1.34
 

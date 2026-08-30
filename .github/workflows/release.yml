@@ -50,8 +50,11 @@ jobs:
         shell: pwsh
         run: .\scripts\test.ps1
 
-      - name: Build release zips
+      - name: Build and package release (sign when configured)
         shell: pwsh
+        env:
+          WINDOWS_SIGNING_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_BASE64 }}
+          WINDOWS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_PASSWORD }}
         run: |
           $version = "${{ inputs.version }}"
           if ([string]::IsNullOrWhiteSpace($version)) {
@@ -60,10 +63,44 @@ jobs:
           if ($version -notlike "v*") {
             throw "Release version must start with v, for example v0.1.1."
           }
+          $hasCertificate = -not [string]::IsNullOrWhiteSpace($env:WINDOWS_SIGNING_CERTIFICATE_BASE64)
+          $hasPassword = -not [string]::IsNullOrWhiteSpace($env:WINDOWS_SIGNING_CERTIFICATE_PASSWORD)
+          if ($hasCertificate -ne $hasPassword) {
+            throw "Both Authenticode signing secrets must be configured together."
+          }
+          $certificate = $null
+          if ($hasCertificate) {
+            $certificate = Join-Path $env:RUNNER_TEMP "windows-signing.pfx"
+            [IO.File]::WriteAllBytes($certificate, [Convert]::FromBase64String($env:WINDOWS_SIGNING_CERTIFICATE_BASE64))
+          }
           & ./scripts/build.ps1 -SkipInstall
-          & ./scripts/package_app_zip.ps1 -Version $version -SkipBuild
-          Copy-Item release-lock.json dist-release\RELEASE_MANIFEST.json
-          & ./scripts/make_checksums.ps1
+          try {
+            $lock = Get-Content release-lock.json -Raw | ConvertFrom-Json
+            if ($hasCertificate) {
+              & ./scripts/sign_windows.ps1 `
+                -Files "dist\RealtimeAudioTranslator\RealtimeAudioTranslator.exe" `
+                -CertificatePath $certificate `
+                -CertificatePassword $env:WINDOWS_SIGNING_CERTIFICATE_PASSWORD `
+                -TimestampUrl $lock.installer.timestamp_url
+            }
+            & ./scripts/package_app_zip.ps1 -Version $version -SkipBuild
+            Copy-Item release-lock.json dist-release\RELEASE_MANIFEST.json
+            $iscc = & ./scripts/install_inno_setup.ps1 -InstallDir (Join-Path $env:RUNNER_TEMP "inno-setup")
+            & ./scripts/build_installer.ps1 -Version $version -IsccPath $iscc
+            $installer = Join-Path $PWD "dist-release\RealtimeAudioTranslator-$version-setup.exe"
+            if ($hasCertificate) {
+              & ./scripts/sign_windows.ps1 `
+                -Files $installer `
+                -CertificatePath $certificate `
+                -CertificatePassword $env:WINDOWS_SIGNING_CERTIFICATE_PASSWORD `
+                -TimestampUrl $lock.installer.timestamp_url
+            }
+            & ./scripts/make_checksums.ps1
+          } finally {
+            if ($certificate) {
+              Remove-Item -LiteralPath $certificate -Force -ErrorAction SilentlyContinue
+            }
+          }
 
       - name: Smoke-test packaged executable
         shell: pwsh
@@ -95,6 +132,7 @@ jobs:
           body_path: docs/RELEASE_NOTES.md
           files: |
             dist-release/*.zip
+            dist-release/*.exe
             dist-release/LICENSE
             dist-release/THIRD_PARTY_NOTICES.md
             dist-release/THIRD_PARTY_LICENSES.txt

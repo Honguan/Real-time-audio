@@ -6,9 +6,11 @@ Windows x64 即時雙向語音翻譯工具。可擷取喇叭與麥克風聲音�
 
 ## 最快使用
 
-1. 到 GitHub Releases 下載 `RealtimeAudioTranslator-<tag>-win-x64.zip`。
-2. 解壓後執行 `RealtimeAudioTranslator.exe`。
-3. 若提示缺 runtime，按「下載上游 runtime」，從 Faster-Whisper-XXL 上游取得 Windows runtime；CUDA 模式另需 `cuBLAS.and.cuDNN_CUDA12_win_v3.7z`。
+1. 到 GitHub Releases 下載 `RealtimeAudioTranslator-<tag>-setup.exe`；若版本有 Authenticode 簽章，先確認 Publisher。未簽章的個人用途版本仍可安裝。
+2. 安裝程式會偵測 NVIDIA GPU／VRAM；CPU 模式只下載 runtime 核心，CUDA 模式才下載 CUDA DLL。Runtime 直接來自 Faster-Whisper-XXL 上游並驗證 SHA-256。
+3. 若未偵測到 VB-CABLE，安裝程式只提供官方下載指引，不會靜默安裝第三方驅動程式。
+
+需要免安裝版時，仍可下載 `RealtimeAudioTranslator-<tag>-win-x64.zip`，解壓後執行 `RealtimeAudioTranslator.exe`，再按「下載上游 runtime」並使用「手動匯入 runtime」。
 
 把上游檔案解壓到同一個暫存資料夾，再於程式內按「手動匯入 runtime」並選擇該資料夾；程式會驗證內容後安全安裝到：
 
@@ -21,10 +23,13 @@ Windows x64 即時雙向語音翻譯工具。可擷取喇叭與麥克風聲音�
 
 ## 需要下載哪些檔案
 
-- 必下載：`RealtimeAudioTranslator-<tag>-win-x64.zip`
+- 建議：`RealtimeAudioTranslator-<tag>-setup.exe`
+- 免安裝版：`RealtimeAudioTranslator-<tag>-win-x64.zip`
 - Runtime：從 Faster-Whisper-XXL 上游 Releases 下載，不隨本專案 Release 再散布
 - 授權與供應鏈清單：`LICENSE`、`THIRD_PARTY_NOTICES.md`、`SBOM.cdx.json`
 - 校驗用：`SHA256SUMS.txt`
+
+解除安裝時會分別詢問是否移除 runtime、模型、設定與紀錄／快取；預設全部保留，且不會遞迴刪除 `%USERPROFILE%\.realtime-audio` 內未列入的其他資料。
 
 模型 zip 若有提供，請解壓到：
 

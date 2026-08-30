@@ -392,7 +392,7 @@ class ReleaseModelsTests(unittest.TestCase):
         quick_start = Path("docs/README_QUICK_START_zh-TW.txt").read_text(encoding="utf-8")
 
         self.assertIn("RealtimeAudioTranslator.exe", quick_start)
-        self.assertIn("Faster-Whisper-XXL 上游 Releases", quick_start)
+        self.assertIn("Faster-Whisper-XXL 上游", quick_start)
         self.assertIn("%USERPROFILE%\\.realtime-audio\\runtime\\cuda12", quick_start)
         self.assertIn("%USERPROFILE%\\.realtime-audio\\models", quick_start)
         self.assertIn("場景", quick_start)
