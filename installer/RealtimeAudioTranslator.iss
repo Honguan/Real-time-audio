@@ -134,10 +134,12 @@ begin
   end;
   CudaAvailable := HardwareValue('runtime') = 'cuda';
   VbCableDetected := HardwareValue('vb_cable') = 'true';
-  if CudaAvailable then
-    WizardSelectComponents('runtime,runtime\core,runtime\cuda')
-  else
-    WizardSelectComponents('runtime,runtime\core');
+  if Lowercase(ExpandConstant('{param:TYPE|}')) <> 'app' then begin
+    if CudaAvailable then
+      WizardSelectComponents('runtime,runtime\core,runtime\cuda')
+    else
+      WizardSelectComponents('runtime,runtime\core');
+  end;
   if VbCableDetected then
     VbStatus := '已偵測'
   else

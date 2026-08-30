@@ -41,9 +41,11 @@ $Arguments = @(
   "/DRuntimeCudaHash=$($Cuda.sha256)",
   (Join-Path $Root "installer\RealtimeAudioTranslator.iss")
 )
-& $IsccPath @Arguments | Out-Host
-if ($LASTEXITCODE -ne 0) {
-  throw "Inno Setup compilation failed: $LASTEXITCODE"
+$CompilerOutput = & $IsccPath @Arguments
+$CompilerExitCode = $LASTEXITCODE
+$CompilerOutput | ForEach-Object { Write-Host $_ }
+if ($CompilerExitCode -ne 0) {
+  throw "Inno Setup compilation failed: $CompilerExitCode"
 }
 $Installer = Join-Path $OutputDir "RealtimeAudioTranslator-$Version-setup.exe"
 if (-not (Test-Path -LiteralPath $Installer)) {

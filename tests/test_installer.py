@@ -56,6 +56,32 @@ class InstallerTests(unittest.TestCase):
             self.assertTrue(verify_install_manifest(root, verify_hashes=True))
             self.assertTrue(runtime_status(root, "cpu", verify_hashes=True)["ready"])
 
+    def test_installer_builder_returns_only_output_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            dist = root / "dist"
+            output = root / "output"
+            dist.mkdir()
+            (dist / "RealtimeAudioTranslator.exe").write_bytes(b"app")
+            compiler = root / "fake-iscc.ps1"
+            compiler.write_text(
+                "$out = ($args | Where-Object { $_ -like '/DOutputDir=*' }).Substring(12)\n"
+                "$tag = ($args | Where-Object { $_ -like '/DReleaseTag=*' }).Substring(13)\n"
+                "New-Item -ItemType Directory -Path $out -Force | Out-Null\n"
+                "Set-Content -LiteralPath (Join-Path $out \"RealtimeAudioTranslator-$tag-setup.exe\") -Value app\n"
+                "Write-Output 'compiler log'\n"
+                "exit 0\n",
+                encoding="utf-8",
+            )
+            expected = output / "RealtimeAudioTranslator-v1.2.3-setup.exe"
+            command = (
+                f"$result = & '{ROOT / 'scripts' / 'build_installer.ps1'}' -Version v1.2.3 "
+                f"-IsccPath '{compiler}' -DistDir '{dist}' -ReleaseDir '{root}' -OutputDir '{output}'; "
+                f"if (@($result).Count -ne 1 -or $result -ne '{expected}') {{ throw 'Unexpected builder output' }}"
+            )
+            result = subprocess.run(["pwsh", "-NoProfile", "-Command", command], cwd=ROOT, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_installer_and_workflows_enforce_safety_and_signing(self):
         lock = json.loads((ROOT / "release-lock.json").read_text(encoding="utf-8"))
         installer = (ROOT / "installer" / "RealtimeAudioTranslator.iss").read_text(encoding="utf-8")
@@ -69,6 +95,7 @@ class InstallerTests(unittest.TestCase):
         self.assertIn("external download extractarchive", installer)
         self.assertIn("uninsneveruninstall", installer)
         self.assertIn("CPU 模式不下載 CUDA DLL", installer)
+        self.assertIn("{param:TYPE|}", installer)
         self.assertIn("https://vb-audio.com/Cable/", installer)
         self.assertIn("MB_DEFBUTTON2", installer)
         self.assertNotIn("DelTree(UserRoot,", installer)
