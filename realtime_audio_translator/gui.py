@@ -206,6 +206,44 @@ def overlay_visibility_action(visible: bool) -> str:
     return "show" if visible else "hide"
 
 
+def clamp_window_position(x: int, y: int, width: int, height: int, work_area: tuple[int, int, int, int]) -> tuple[int, int]:
+    left, top, right, bottom = work_area
+    return min(max(x, left), max(left, right - width)), min(max(y, top), max(top, bottom - height))
+
+
+def responsive_button_columns(width: int) -> int:
+    return max(1, min(5, width // 180))
+
+
+def _geometry_offset(x: int, y: int) -> str:
+    return f"+{x}+{y}"
+
+
+def _work_area(window: tk.Misc, x: int | None = None, y: int | None = None) -> tuple[int, int, int, int]:
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        if x is not None and y is not None:
+            class MonitorInfo(ctypes.Structure):
+                _fields_ = [("size", wintypes.DWORD), ("monitor", wintypes.RECT), ("work", wintypes.RECT), ("flags", wintypes.DWORD)]
+
+            user32 = ctypes.windll.user32
+            user32.MonitorFromPoint.argtypes = (wintypes.POINT, wintypes.DWORD)
+            user32.MonitorFromPoint.restype = wintypes.HMONITOR
+            monitor = user32.MonitorFromPoint(wintypes.POINT(x, y), 0)
+            if monitor:
+                info = MonitorInfo(size=ctypes.sizeof(MonitorInfo))
+                if user32.GetMonitorInfoW(monitor, ctypes.byref(info)):
+                    return info.work.left, info.work.top, info.work.right, info.work.bottom
+        rect = wintypes.RECT()
+        if ctypes.windll.user32.SystemParametersInfoW(0x0030, 0, ctypes.byref(rect), 0):
+            return rect.left, rect.top, rect.right, rect.bottom
+    except (AttributeError, OSError, TypeError):
+        pass
+    return 0, 0, window.winfo_screenwidth(), window.winfo_screenheight()
+
+
 def toggle_overlay_visibility(visible: bool) -> bool:
     return not visible
 
@@ -324,13 +362,23 @@ def cloud_activation_requires_confirmation(old_provider: str, old_tts_provider: 
 
 
 class Overlay(tk.Toplevel):
-    def __init__(self, master: tk.Tk, topmost: bool, opacity: float, font_size: int):
+    def __init__(self, master: tk.Tk, topmost: bool, opacity: float, font_size: int, x: int = -1, y: int = -1, moved=None):
         super().__init__(master)
         self.overrideredirect(True)
         self.attributes("-topmost", topmost)
         self.attributes("-alpha", opacity)
         self.configure(bg="#111111")
-        self.geometry("900x96+240+820")
+        self._moved = moved
+        work_area = _work_area(self, x, y) if (x, y) != (-1, -1) else _work_area(self)
+        width = min(900, work_area[2] - work_area[0])
+        self._width = width
+        height = 96
+        if x < work_area[0]:
+            x = work_area[0] + max(0, (work_area[2] - work_area[0] - width) // 2)
+        if y < work_area[1]:
+            y = work_area[3] - height - 20
+        x, y = clamp_window_position(x, y, width, height, work_area)
+        self.geometry(f"{width}x{height}{_geometry_offset(x, y)}")
         self.speaker = tk.StringVar(value="")
         self.mine = tk.StringVar(value="")
         self._drag = (0, 0)
@@ -342,12 +390,29 @@ class Overlay(tk.Toplevel):
         self.grid_columnconfigure(0, weight=1)
         self.bind("<ButtonPress-1>", self._start_drag)
         self.bind("<B1-Motion>", self._drag_to)
+        self.bind("<ButtonRelease-1>", self._finish_drag)
+        self.after_idle(self._fit_height)
 
     def _start_drag(self, event):
         self._drag = (event.x, event.y)
 
     def _drag_to(self, event):
-        self.geometry(f"+{self.winfo_x() + event.x - self._drag[0]}+{self.winfo_y() + event.y - self._drag[1]}")
+        self.geometry(_geometry_offset(self.winfo_x() + event.x - self._drag[0], self.winfo_y() + event.y - self._drag[1]))
+
+    def _finish_drag(self, _event=None) -> None:
+        self.ensure_visible()
+        if self._moved is not None:
+            self._moved(self.winfo_x(), self.winfo_y())
+
+    def ensure_visible(self) -> None:
+        x, y = clamp_window_position(self.winfo_x(), self.winfo_y(), self.winfo_width(), self.winfo_height(), _work_area(self, self.winfo_x(), self.winfo_y()))
+        self.geometry(_geometry_offset(x, y))
+
+    def _fit_height(self) -> None:
+        self.update_idletasks()
+        height = max(96, self.winfo_reqheight())
+        self.geometry(f"{self._width}x{height}{_geometry_offset(self.winfo_x(), self.winfo_y())}")
+        self.ensure_visible()
 
     def update_lines(self, speaker: str = "", mine: str = "") -> None:
         if speaker:
@@ -362,6 +427,7 @@ class Overlay(tk.Toplevel):
     def set_font_size(self, font_size: int) -> None:
         for label in self.labels:
             label.configure(font=("Microsoft JhengHei UI", font_size))
+        self._fit_height()
 
 
 class TranslatorApp(tk.Tk):
@@ -383,7 +449,11 @@ class TranslatorApp(tk.Tk):
         self._runtime_check_generation = 0
         self._closing = False
         self.title("Realtime Audio Translator")
-        self.geometry("900x680")
+        left, top, right, bottom = _work_area(self)
+        work_width, work_height = right - left, bottom - top
+        width, height = min(1000, work_width), min(760, work_height)
+        self.geometry(f"{width}x{height}{_geometry_offset(left, top)}")
+        self.minsize(min(720, work_width), min(520, work_height))
         self.protocol("WM_DELETE_WINDOW", self._quit)
         self.status = tk.StringVar(value="就緒")
         self.runtime_text = tk.StringVar(value="")
@@ -395,7 +465,11 @@ class TranslatorApp(tk.Tk):
             self.config["overlay_topmost"],
             overlay_opacity_value(self.config.get("overlay_opacity", 0.86)),
             overlay_font_size_value(self.config.get("overlay_font_size", 18)),
+            int(self.config.get("overlay_x", -1)),
+            int(self.config.get("overlay_y", -1)),
+            self._overlay_moved,
         )
+        self.bind("<Configure>", lambda event: self.after_idle(self.overlay.ensure_visible) if event.widget is self else None, add="+")
         self._build()
         self._set_overlay_visible(bool(self.config.get("overlay_visible", True)))
         self._refresh_lists()
@@ -417,8 +491,19 @@ class TranslatorApp(tk.Tk):
             self.__dict__["_engine"] = value
 
     def _build(self) -> None:
-        frame = ttk.Frame(self, padding=12)
-        frame.pack(fill="both", expand=True)
+        container = ttk.Frame(self)
+        container.pack(fill="both", expand=True)
+        canvas = tk.Canvas(container, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(container, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+        frame = ttk.Frame(canvas, padding=12)
+        self._content_canvas = canvas
+        self._content_window = canvas.create_window((0, 0), window=frame, anchor="nw")
+        frame.bind("<Configure>", lambda _event: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.bind("<Configure>", self._resize_content)
+        self.bind("<MouseWheel>", self._scroll_content, add="+")
         self.vars = {key: tk.StringVar(value=str(value)) for key, value in self.config.items()}
         self.vars["scenario"].set(scenario_label(self.config["scenario"]))
         self.overlay_visible = tk.BooleanVar(value=bool(self.config["overlay_visible"]))
@@ -519,6 +604,7 @@ class TranslatorApp(tk.Tk):
         ttk.Checkbutton(frame, text="輸出到虛擬麥克風", variable=self.virtual_mic_enabled, command=self._save).grid(row=next_row + 6, column=1, sticky="w")
 
         buttons = ttk.Frame(frame)
+        self._buttons_frame = buttons
         buttons.grid(row=next_row + 8, column=0, columnspan=3, sticky="ew", pady=12)
         self.button_widgets: list[tuple[str, ttk.Button]] = []
         def copy_overlay() -> None:
@@ -587,6 +673,28 @@ class TranslatorApp(tk.Tk):
         ttk.Label(frame, textvariable=self.status).grid(row=next_row + 9, column=0, columnspan=3, sticky="ew")
         frame.grid_columnconfigure(1, weight=1)
         self._apply_mode(save=False)
+
+    def _resize_content(self, event) -> None:
+        self._content_canvas.itemconfigure(self._content_window, width=event.width)
+        self._layout_buttons(event.width)
+
+    def _scroll_content(self, event):
+        if self._content_canvas.winfo_containing(event.x_root, event.y_root) is not None:
+            self._content_canvas.yview_scroll(-1 if event.delta > 0 else 1, "units")
+            return "break"
+
+    def _layout_buttons(self, width: int | None = None) -> None:
+        for _text, button in self.button_widgets:
+            button.grid_forget()
+        visible = set(visible_button_texts([text for text, _button in self.button_widgets], self.advanced_mode.get()))
+        columns = responsive_button_columns(width or self._buttons_frame.winfo_width())
+        index = 0
+        for text, button in self.button_widgets:
+            if text in visible:
+                button.grid(row=index // columns, column=index % columns, sticky="ew", padx=3, pady=3)
+                index += 1
+        for column in range(5):
+            self._buttons_frame.grid_columnconfigure(column, weight=1 if column < columns else 0)
 
     def _refresh_lists(self) -> None:
         self.status.set("正在重新整理裝置與模型")
@@ -676,7 +784,7 @@ class TranslatorApp(tk.Tk):
     def _config_from_vars(self) -> dict:
         config = self.config.copy()
         for key, variable in self.vars.items():
-            if key.startswith("last_"):
+            if key.startswith("last_") or key in {"overlay_x", "overlay_y"}:
                 continue
             config[key] = self._device_id_by_label.get(variable.get(), "") if key in AUDIO_DEVICE_KEYS else variable.get()
         config["scenario"] = scenario_key(config["scenario"])
@@ -832,12 +940,7 @@ class TranslatorApp(tk.Tk):
                 widget.grid()
             else:
                 widget.grid_remove()
-        for _text, button in self.button_widgets:
-            button.pack_forget()
-        visible_buttons = visible_button_texts([text for text, _button in self.button_widgets], self.advanced_mode.get())
-        for text, button in self.button_widgets:
-            if text in visible_buttons:
-                button.pack(side="left", padx=3)
+        self._layout_buttons()
         if save:
             self._save()
 
@@ -850,7 +953,15 @@ class TranslatorApp(tk.Tk):
         self.overlay.attributes("-topmost", self.overlay_topmost.get())
         self.overlay.attributes("-alpha", overlay_opacity_value(self.vars["overlay_opacity"].get()))
         self.overlay.set_font_size(overlay_font_size_value(self.vars["overlay_font_size"].get()))
+        self.overlay.ensure_visible()
         self._save()
+
+    def _overlay_moved(self, x: int, y: int) -> None:
+        self.config.update({"overlay_x": x, "overlay_y": y})
+        if "overlay_x" in self.vars:
+            self.vars["overlay_x"].set(str(x))
+            self.vars["overlay_y"].set(str(y))
+        save_config(APP_DIR, self.config)
 
     def _set_overlay_visible(self, visible: bool) -> None:
         if overlay_visibility_action(visible) == "show":

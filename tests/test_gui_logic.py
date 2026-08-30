@@ -8,10 +8,30 @@ from unittest.mock import Mock, patch
 from realtime_audio_translator.config import DEFAULT_CONFIG, _has_reparse_point, clear_cache, clear_logs, ensure_app_dirs, ensure_glossary_file, load_config, log_files_to_clear, save_audio_devices, save_config
 from realtime_audio_translator.diagnostics import DiagnosticIssue, collect_diagnostics
 from realtime_audio_translator.engine import RealtimeEngine, audio_devices_overlap, direction_label, drain_queue, overlay_text_from_config, safe_target_language
-from realtime_audio_translator.gui import LANGUAGE_CHOICES, PERFORMANCE_CHOICES, PROVIDER_CHOICES, TARGET_LANGUAGE_CHOICES, TTS_PROVIDER_CHOICES, TranslatorApp, conversation_log_notice, diagnostic_action_label, diagnostic_actions, first_diagnostic_action, first_run_setup_action, first_run_wizard_needed, format_overlay_line, language_lock_value, latency_seconds_value, main_status_summary, mode_notice, overlay_clipboard_text, overlay_font_size_value, overlay_hold_seconds_value, overlay_opacity_value, overlay_visibility_action, performance_segment_seconds, setup_guide_actions, status_message_is_error, subtitle_updates_allowed, swap_language_values, troubleshooting_action, visible_button_texts, visible_setting_keys
+from realtime_audio_translator.gui import LANGUAGE_CHOICES, PERFORMANCE_CHOICES, PROVIDER_CHOICES, TARGET_LANGUAGE_CHOICES, TTS_PROVIDER_CHOICES, TranslatorApp, _geometry_offset, clamp_window_position, conversation_log_notice, diagnostic_action_label, diagnostic_actions, first_diagnostic_action, first_run_setup_action, first_run_wizard_needed, format_overlay_line, language_lock_value, latency_seconds_value, main_status_summary, mode_notice, overlay_clipboard_text, overlay_font_size_value, overlay_hold_seconds_value, overlay_opacity_value, overlay_visibility_action, performance_segment_seconds, responsive_button_columns, setup_guide_actions, status_message_is_error, subtitle_updates_allowed, swap_language_values, troubleshooting_action, visible_button_texts, visible_setting_keys
 
 
 class GuiLogicTests(unittest.TestCase):
+    def test_window_position_is_clamped_to_visible_work_area(self):
+        area = (0, 0, 1366, 728)
+
+        self.assertEqual(clamp_window_position(2000, 900, 900, 96, area), (466, 632))
+        self.assertEqual(clamp_window_position(-200, -100, 900, 96, area), (0, 0))
+        self.assertEqual(_geometry_offset(-200, -100), "+-200+-100")
+
+    def test_button_columns_respond_to_available_width(self):
+        self.assertEqual(responsive_button_columns(350), 1)
+        self.assertEqual(responsive_button_columns(720), 4)
+        self.assertEqual(responsive_button_columns(1920), 5)
+
+    def test_advanced_layout_uses_scrollable_canvas_and_button_grid(self):
+        gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
+
+        self.assertIn("canvas = tk.Canvas(container", gui_source)
+        self.assertIn('ttk.Scrollbar(container, orient="vertical", command=canvas.yview)', gui_source)
+        self.assertIn("button.grid(row=index // columns", gui_source)
+        self.assertIn("self.overlay.ensure_visible()", gui_source)
+
     def test_async_audio_result_does_not_restore_stale_settings(self):
         app = TranslatorApp.__new__(TranslatorApp)
         app.config = {"provider": "openai"}
@@ -80,13 +100,14 @@ class GuiLogicTests(unittest.TestCase):
         app._drain_ui_events()
         self.assertEqual(len(overlays), 1000)
 
-    def test_config_from_vars_preserves_runtime_state(self):
+    def test_config_from_vars_preserves_runtime_state_and_overlay_position(self):
         app = TranslatorApp.__new__(TranslatorApp)
         app.config = DEFAULT_CONFIG.copy()
         app.config["last_error"] = "new runtime error"
+        app.config.update({"overlay_x": 420, "overlay_y": 315})
         stale = Mock()
         stale.get.return_value = "old widget error"
-        app.vars = {"last_error": stale}
+        app.vars = {"last_error": stale, "overlay_x": stale, "overlay_y": stale}
         for name in (
             "overlay_visible", "overlay_topmost", "show_language_labels", "show_original_text",
             "show_translated_text", "tts_enabled", "speaker_tts_enabled", "start_virtual_mic_muted",
@@ -99,6 +120,7 @@ class GuiLogicTests(unittest.TestCase):
         config = app._config_from_vars()
 
         self.assertEqual(config["last_error"], "new runtime error")
+        self.assertEqual((config["overlay_x"], config["overlay_y"]), (420, 315))
 
     def test_conversation_logs_are_off_by_default(self):
         self.assertFalse(DEFAULT_CONFIG["record_logs"])

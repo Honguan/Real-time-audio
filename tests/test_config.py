@@ -15,6 +15,16 @@ from realtime_audio_translator.release_updater import RELEASES_URL, current_vers
 
 
 class ConfigTests(unittest.TestCase):
+    def test_overlay_position_is_persisted(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config = DEFAULT_CONFIG | {"overlay_x": 420, "overlay_y": 315}
+
+            save_config(root, config)
+
+            loaded = load_config(root)
+            self.assertEqual((loaded["overlay_x"], loaded["overlay_y"]), (420, 315))
+
     def test_interrupted_config_write_preserves_last_complete_settings(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
