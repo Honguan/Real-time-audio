@@ -15,6 +15,15 @@ from realtime_audio_translator.release_updater import RELEASES_URL, current_vers
 
 
 class ConfigTests(unittest.TestCase):
+    def test_app_language_is_validated_and_persisted(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            save_config(root, DEFAULT_CONFIG | {"app_language": "en"})
+            self.assertEqual(load_config(root)["app_language"], "en")
+
+            save_config(root, DEFAULT_CONFIG | {"app_language": "unsupported"})
+            self.assertEqual(load_config(root)["app_language"], "zh-TW")
+
     def test_overlay_position_is_persisted(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -267,6 +276,7 @@ class ConfigTests(unittest.TestCase):
         self.assertIn("有新版本可下載", release_update_message("v0.1.0", "v0.2.0"))
         self.assertIn("v0.2.0", release_update_message("v0.1.0", "v0.2.0"))
         self.assertIn("已是最新版本", release_update_message("v0.1.0", "v0.1.0"))
+        self.assertIn("new version", release_update_message("v0.1.0", "v0.2.0", "en"))
 
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

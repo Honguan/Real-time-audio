@@ -11,6 +11,7 @@ import requests
 
 from .archive_install import atomic_replace_tree, validate_tree
 from .config import APP_DIR
+from .localization import translate
 
 
 KNOWN_MODELS = ("small", "medium", "large-v3-turbo", "large-v2")
@@ -198,12 +199,12 @@ def model_manifest(model: str, session=requests) -> dict:
     return {"version": 2, "model": model, "repository": resolved_repository, "revision": revision, "files": files}
 
 
-def _progress_text(model: str, downloaded: int, total: int, speed: float) -> str:
+def _progress_text(model: str, downloaded: int, total: int, speed: float, language: str = "zh-TW") -> str:
     percent = 100.0 * downloaded / total if total else 0.0
-    return f"正在下載模型 {model}：{percent:.1f}%（{downloaded / 1024**2:.1f}/{total / 1024**2:.1f} MB，{speed / 1024**2:.1f} MB/s）"
+    return translate(language, "正在下載模型 {model}：{percent:.1f}%（{downloaded:.1f}/{total:.1f} MB，{speed:.1f} MB/s）", model=model, percent=percent, downloaded=downloaded / 1024**2, total=total / 1024**2, speed=speed / 1024**2)
 
 
-def _download_file(model: str, entry: dict, staging: Path, downloaded_before: int, total: int, started: float, network_bytes: list[int], progress, cancel_event, session) -> int:
+def _download_file(model: str, entry: dict, staging: Path, downloaded_before: int, total: int, started: float, network_bytes: list[int], progress, cancel_event, session, language: str) -> int:
     final = staging / entry["path"]
     partial = staging / f"{entry['path']}.partial"
     if final.is_file() and final.stat().st_size == entry["size"] and _digest(final, entry["algorithm"]) == entry["digest"]:
@@ -237,7 +238,7 @@ def _download_file(model: str, entry: dict, staging: Path, downloaded_before: in
                     raise RuntimeError(f"模型檔案大小超出 manifest：{entry['path']}")
                 if progress:
                     current = downloaded_before + written
-                    progress(_progress_text(model, current, total, network_bytes[0] / max(time.perf_counter() - started, 0.001)))
+                    progress(_progress_text(model, current, total, network_bytes[0] / max(time.perf_counter() - started, 0.001), language))
     if written != entry["size"] or _digest(partial, entry["algorithm"]) != entry["digest"]:
         partial.unlink(missing_ok=True)
         raise RuntimeError(f"模型檔案完整性驗證失敗：{entry['path']}")
@@ -245,11 +246,11 @@ def _download_file(model: str, entry: dict, staging: Path, downloaded_before: in
     return written
 
 
-def download_model(model: str, model_dir: Path, progress=None, cancel_event=None, session=requests) -> Path:
+def download_model(model: str, model_dir: Path, progress=None, cancel_event=None, session=requests, language: str = "zh-TW") -> Path:
     if cancel_event is not None and cancel_event.is_set():
         raise ModelDownloadCancelled("模型下載已取消；可稍後重試")
     if progress:
-        progress(f"正在取得模型 {model} 的版本與檔案資訊")
+        progress(translate(language, "正在取得模型 {model} 的版本與檔案資訊", model=model))
     manifest = model_manifest(model, session)
     model_dir.mkdir(parents=True, exist_ok=True)
     target = model_dir / f"faster-whisper-{model}"
@@ -268,7 +269,7 @@ def download_model(model: str, model_dir: Path, progress=None, cancel_event=None
     for entry in manifest["files"]:
         if cancel_event is not None and cancel_event.is_set():
             raise ModelDownloadCancelled("模型下載已取消；可稍後重試")
-        downloaded += _download_file(model, entry, staging, downloaded, total, started, network_bytes, progress, cancel_event, session)
+        downloaded += _download_file(model, entry, staging, downloaded, total, started, network_bytes, progress, cancel_event, session, language)
     allowed = {entry["path"] for entry in manifest["files"]}
     for stale in staging.iterdir():
         if stale.name in allowed | {MODEL_MARKER}:
@@ -283,5 +284,5 @@ def download_model(model: str, model_dir: Path, progress=None, cancel_event=None
         raise RuntimeError("模型安裝 manifest 驗證失敗")
     atomic_replace_tree(staging, target)
     if progress:
-        progress(f"模型 {model} 下載完成；版本 {manifest['revision'][:12]}，SHA 完整性驗證成功")
+        progress(translate(language, "模型 {model} 下載完成；版本 {revision}，SHA 完整性驗證成功", model=model, revision=manifest["revision"][:12]))
     return target

@@ -19,6 +19,7 @@ from .commands import command_choices
 from .config import APP_DIR, clear_cache, clear_logs, ensure_glossary_file, load_config, log_files_to_clear, save_audio_devices, save_config, save_config_state, validate_language_pair
 from .engine import RealtimeEngine
 from .logbook import conversation_log_usage
+from .localization import SUPPORTED_LANGUAGES, setup_guide_text, translate, translate_known
 from .models import MODEL_INVALID, MODEL_READY, cuda_hardware_from_check_output, list_models, model_available, model_install_message, models_dir, recommend_model
 from .paths import resource_root
 from .runtime import DEFAULT_RUNTIME_DIR, UPSTREAM_RUNTIME_RELEASE_URL, runtime_dir, runtime_install_message, runtime_status
@@ -45,6 +46,7 @@ class UiEvent:
 
 
 SETTING_ROWS = (
+    ("介面語言", "app_language"),
     ("來源語言", "source_language"),
     ("目標語言", "target_language"),
     ("翻譯服務", "provider"),
@@ -85,6 +87,7 @@ SETTING_ROWS = (
     ("runtime 資料夾", "runtime_dir"),
 )
 BASIC_SETTING_KEYS = {
+    "app_language",
     "source_language",
     "target_language",
     "scenario",
@@ -167,7 +170,7 @@ def latency_seconds_value(value) -> float | None:
 
 
 def status_message_is_error(message: str) -> bool:
-    return any(marker in message for marker in ("找不到", "失敗", "沒有可用音訊裝置"))
+    return any(marker in message.casefold() for marker in ("找不到", "失敗", "沒有可用音訊裝置", "not found", "failed", "no audio device"))
 
 
 def format_overlay_line(text: str, language: str, show_language: bool) -> str:
@@ -281,8 +284,8 @@ def troubleshooting_action(issue: str) -> tuple[str, str]:
     return actions[issue]
 
 
-def diagnostic_action_label(action: str) -> str:
-    return {
+def diagnostic_action_label(action: str, language: str = "zh-TW") -> str:
+    label = {
         "open_runtime": "開啟 runtime 資料夾 / 下載 runtime",
         "download_model": "下載模型",
         "download_translation_models": "下載離線翻譯模型",
@@ -292,18 +295,12 @@ def diagnostic_action_label(action: str) -> str:
         "optimize_settings": "自動優化",
         "language_settings": "來源語言",
         "open_logs": "開啟紀錄",
-    }.get(action, action)
+    }.get(action)
+    return translate(language, label) if label else action
 
 
-def setup_guide_message() -> str:
-    return (
-        "1. 按「一鍵診斷」處理 runtime，進階模式也可手動匯入 runtime。\n"
-        "2. 按「一鍵診斷」下載模型，或把模型 zip 解壓到 models 資料夾。\n"
-        "3. 選擇「喇叭來源」、「麥克風來源」與「TTS 輸出」。\n"
-        "4. 本工具「TTS 輸出」選虛擬音訊線輸出，通話軟體麥克風選對應的輸入。\n"
-        "5. 選場景會自動套用；進階模式可調模型、runtime 路徑與自動優化。\n"
-        "6. 開始前先跑「測試麥克風」與「測試虛擬麥克風」；進階模式可再測字幕、喇叭與 TTS。"
-    )
+def setup_guide_message(language: str = "zh-TW") -> str:
+    return setup_guide_text(language)
 
 
 def setup_guide_actions() -> tuple[str, ...]:
@@ -455,7 +452,7 @@ class TranslatorApp(tk.Tk):
         self.geometry(f"{width}x{height}{_geometry_offset(left, top)}")
         self.minsize(min(720, work_width), min(520, work_height))
         self.protocol("WM_DELETE_WINDOW", self._quit)
-        self.status = tk.StringVar(value="就緒")
+        self.status = tk.StringVar(value=self._t("就緒"))
         self.runtime_text = tk.StringVar(value="")
         self.mode_text = tk.StringVar(value=self._mode_text())
         self.overlay_generation = 0
@@ -490,6 +487,9 @@ class TranslatorApp(tk.Tk):
         else:
             self.__dict__["_engine"] = value
 
+    def _t(self, message: str, **values) -> str:
+        return translate(self.config.get("app_language"), message, **values)
+
     def _build(self) -> None:
         container = ttk.Frame(self)
         container.pack(fill="both", expand=True)
@@ -505,7 +505,7 @@ class TranslatorApp(tk.Tk):
         canvas.bind("<Configure>", self._resize_content)
         self.bind("<MouseWheel>", self._scroll_content, add="+")
         self.vars = {key: tk.StringVar(value=str(value)) for key, value in self.config.items()}
-        self.vars["scenario"].set(scenario_label(self.config["scenario"]))
+        self.vars["scenario"].set(self._t(scenario_label(self.config["scenario"])))
         self.overlay_visible = tk.BooleanVar(value=bool(self.config["overlay_visible"]))
         self.overlay_topmost = tk.BooleanVar(value=bool(self.config["overlay_topmost"]))
         self.show_language_labels = tk.BooleanVar(value=bool(self.config["show_language_labels"]))
@@ -524,15 +524,15 @@ class TranslatorApp(tk.Tk):
 
         for row, (label, key) in enumerate(SETTING_ROWS):
             row_widgets: list[tk.Widget] = []
-            label_widget = ttk.Label(frame, text=label)
+            label_widget = ttk.Label(frame, text=self._t(label))
             label_widget.grid(row=row, column=0, sticky="w", pady=4)
             row_widgets.append(label_widget)
             if key in ("source_language", "target_language"):
                 values = LANGUAGE_CHOICES if key == "source_language" else TARGET_LANGUAGE_CHOICES
                 widget = ttk.Combobox(frame, textvariable=self.vars[key], values=values)
                 widget.bind("<<ComboboxSelected>>", lambda _event: self._save())
-            elif key in ("provider", "tts_provider", "performance_mode", "scenario", "conversation_log_content"):
-                values = tuple(scenario_label(key) for key in SCENARIO_CHOICES) if key == "scenario" else ("both", "original", "translation", "none") if key == "conversation_log_content" else PERFORMANCE_CHOICES if key == "performance_mode" else TTS_PROVIDER_CHOICES if key == "tts_provider" else PROVIDER_CHOICES
+            elif key in ("app_language", "provider", "tts_provider", "performance_mode", "scenario", "conversation_log_content"):
+                values = SUPPORTED_LANGUAGES if key == "app_language" else tuple(self._t(scenario_label(key)) for key in SCENARIO_CHOICES) if key == "scenario" else ("both", "original", "translation", "none") if key == "conversation_log_content" else PERFORMANCE_CHOICES if key == "performance_mode" else TTS_PROVIDER_CHOICES if key == "tts_provider" else PROVIDER_CHOICES
                 widget = ttk.Combobox(frame, textvariable=self.vars[key], values=values, state="readonly")
                 widget.bind("<<ComboboxSelected>>", lambda _event, name=key: self._apply_performance_mode() if name == "performance_mode" else self._apply_scenario() if name == "scenario" else self._save())
             elif key in AUDIO_DEVICE_KEYS or key in ("model", "device", "compute_type", "tts_voice_name"):
@@ -544,27 +544,27 @@ class TranslatorApp(tk.Tk):
             widget.grid(row=row, column=1, sticky="ew", pady=4, padx=8)
             row_widgets.append(widget)
             if key == "google_service_account_json":
-                button = ttk.Button(frame, text="選擇", command=self._pick_google_json)
+                button = ttk.Button(frame, text=self._t("選擇"), command=self._pick_google_json)
                 button.grid(row=row, column=2, sticky="ew")
                 row_widgets.append(button)
             if key == "glossary_path":
-                button = ttk.Button(frame, text="選擇", command=self._pick_glossary_json)
+                button = ttk.Button(frame, text=self._t("選擇"), command=self._pick_glossary_json)
                 button.grid(row=row, column=2, sticky="ew")
                 row_widgets.append(button)
             if key in ("overlay_opacity", "overlay_font_size", "overlay_hold_seconds"):
-                button = ttk.Button(frame, text="套用", command=self._apply_overlay)
+                button = ttk.Button(frame, text=self._t("套用"), command=self._apply_overlay)
                 button.grid(row=row, column=2, sticky="ew")
                 row_widgets.append(button)
             if key == "runtime_dir":
-                button = ttk.Button(frame, text="選擇", command=self._pick_runtime_dir)
+                button = ttk.Button(frame, text=self._t("選擇"), command=self._pick_runtime_dir)
                 button.grid(row=row, column=2, sticky="ew")
                 row_widgets.append(button)
             if key == "log_dir":
-                button = ttk.Button(frame, text="選擇", command=self._pick_log_dir)
+                button = ttk.Button(frame, text=self._t("選擇"), command=self._pick_log_dir)
                 button.grid(row=row, column=2, sticky="ew")
                 row_widgets.append(button)
             if key == "tts_voice_name":
-                button = ttk.Button(frame, text="列出", command=self._list_tts_voices)
+                button = ttk.Button(frame, text=self._t("列出"), command=self._list_tts_voices)
                 button.grid(row=row, column=2, sticky="ew")
                 row_widgets.append(button)
             self.setting_widgets[key] = row_widgets
@@ -575,33 +575,33 @@ class TranslatorApp(tk.Tk):
 
         runtime_buttons_widget = ttk.Frame(frame)
         runtime_buttons_widget.grid(row=next_row + 2, column=0, columnspan=3, sticky="ew", pady=4)
-        ttk.Button(runtime_buttons_widget, text="開啟 runtime 資料夾", command=self._open_runtime_dir).pack(side="left", padx=3)
-        ttk.Button(runtime_buttons_widget, text="匯入已解壓 runtime", command=self._import_runtime).pack(side="left", padx=3)
-        ttk.Button(runtime_buttons_widget, text="下載上游 runtime", command=lambda: webbrowser.open(UPSTREAM_RUNTIME_RELEASE_URL)).pack(side="left", padx=3)
+        ttk.Button(runtime_buttons_widget, text=self._t("開啟 runtime 資料夾"), command=self._open_runtime_dir).pack(side="left", padx=3)
+        ttk.Button(runtime_buttons_widget, text=self._t("匯入已解壓 runtime"), command=self._import_runtime).pack(side="left", padx=3)
+        ttk.Button(runtime_buttons_widget, text=self._t("下載上游 runtime"), command=lambda: webbrowser.open(UPSTREAM_RUNTIME_RELEASE_URL)).pack(side="left", padx=3)
 
-        ttk.Checkbutton(frame, text="顯示字幕", variable=self.overlay_visible, command=self._apply_overlay).grid(row=next_row + 3, column=0, sticky="w")
-        overlay_topmost_widget = ttk.Checkbutton(frame, text="字幕最上層", variable=self.overlay_topmost, command=self._apply_overlay)
+        ttk.Checkbutton(frame, text=self._t("顯示字幕"), variable=self.overlay_visible, command=self._apply_overlay).grid(row=next_row + 3, column=0, sticky="w")
+        overlay_topmost_widget = ttk.Checkbutton(frame, text=self._t("字幕最上層"), variable=self.overlay_topmost, command=self._apply_overlay)
         overlay_topmost_widget.grid(row=next_row + 3, column=1, sticky="w")
-        language_labels_widget = ttk.Checkbutton(frame, text="顯示語言", variable=self.show_language_labels, command=self._save)
+        language_labels_widget = ttk.Checkbutton(frame, text=self._t("顯示語言"), variable=self.show_language_labels, command=self._save)
         language_labels_widget.grid(row=next_row + 3, column=2, sticky="w")
-        original_text_widget = ttk.Checkbutton(frame, text="顯示原文", variable=self.show_original_text, command=self._save)
+        original_text_widget = ttk.Checkbutton(frame, text=self._t("顯示原文"), variable=self.show_original_text, command=self._save)
         original_text_widget.grid(row=next_row + 4, column=0, sticky="w")
-        translated_text_widget = ttk.Checkbutton(frame, text="顯示譯文", variable=self.show_translated_text, command=self._save)
+        translated_text_widget = ttk.Checkbutton(frame, text=self._t("顯示譯文"), variable=self.show_translated_text, command=self._save)
         translated_text_widget.grid(row=next_row + 4, column=1, sticky="w")
-        ttk.Checkbutton(frame, text="播放翻譯語音", variable=self.tts_enabled, command=self._save).grid(row=next_row + 4, column=2, sticky="w")
-        speaker_capture_widget = ttk.Checkbutton(frame, text="擷取喇叭", variable=self.speaker_enabled, command=self._save)
+        ttk.Checkbutton(frame, text=self._t("播放翻譯語音"), variable=self.tts_enabled, command=self._save).grid(row=next_row + 4, column=2, sticky="w")
+        speaker_capture_widget = ttk.Checkbutton(frame, text=self._t("擷取喇叭"), variable=self.speaker_enabled, command=self._save)
         speaker_capture_widget.grid(row=next_row + 5, column=0, sticky="w")
-        microphone_capture_widget = ttk.Checkbutton(frame, text="擷取麥克風", variable=self.microphone_enabled, command=self._save)
+        microphone_capture_widget = ttk.Checkbutton(frame, text=self._t("擷取麥克風"), variable=self.microphone_enabled, command=self._save)
         microphone_capture_widget.grid(row=next_row + 5, column=1, sticky="w")
-        ttk.Checkbutton(frame, text="進階設定", variable=self.advanced_mode, command=self._apply_mode).grid(row=next_row + 5, column=2, sticky="w")
-        record_logs_widget = ttk.Checkbutton(frame, text="儲存對話紀錄", variable=self.record_logs, command=self._save)
+        ttk.Checkbutton(frame, text=self._t("進階設定"), variable=self.advanced_mode, command=self._apply_mode).grid(row=next_row + 5, column=2, sticky="w")
+        record_logs_widget = ttk.Checkbutton(frame, text=self._t("儲存對話紀錄"), variable=self.record_logs, command=self._save)
         record_logs_widget.grid(row=next_row + 6, column=0, sticky="w")
-        speaker_tts_widget = ttk.Checkbutton(frame, text="播放對方翻譯", variable=self.speaker_tts_enabled, command=self._save)
+        speaker_tts_widget = ttk.Checkbutton(frame, text=self._t("播放對方翻譯"), variable=self.speaker_tts_enabled, command=self._save)
         speaker_tts_widget.grid(row=next_row + 6, column=2, sticky="w")
-        start_virtual_mic_muted_widget = ttk.Checkbutton(frame, text="虛擬麥克風啟動時靜音", variable=self.start_virtual_mic_muted, command=self._save)
+        start_virtual_mic_muted_widget = ttk.Checkbutton(frame, text=self._t("虛擬麥克風啟動時靜音"), variable=self.start_virtual_mic_muted, command=self._save)
         start_virtual_mic_muted_widget.grid(row=next_row + 7, column=0, sticky="w")
         self.advanced_mode_widgets = [runtime_buttons_widget, overlay_topmost_widget, language_labels_widget, original_text_widget, translated_text_widget, speaker_capture_widget, microphone_capture_widget, record_logs_widget, speaker_tts_widget, start_virtual_mic_muted_widget]
-        ttk.Checkbutton(frame, text="輸出到虛擬麥克風", variable=self.virtual_mic_enabled, command=self._save).grid(row=next_row + 6, column=1, sticky="w")
+        ttk.Checkbutton(frame, text=self._t("輸出到虛擬麥克風"), variable=self.virtual_mic_enabled, command=self._save).grid(row=next_row + 6, column=1, sticky="w")
 
         buttons = ttk.Frame(frame)
         self._buttons_frame = buttons
@@ -610,11 +610,11 @@ class TranslatorApp(tk.Tk):
         def copy_overlay() -> None:
             text = overlay_clipboard_text(self.overlay.speaker.get(), self.overlay.mine.get())
             if not text:
-                self.status.set("沒有字幕可複製")
+                self.status.set(self._t("沒有字幕可複製"))
                 return
             self.clipboard_clear()
             self.clipboard_append(text)
-            self.status.set("字幕已複製")
+            self.status.set(self._t("字幕已複製"))
 
         for text, command in (
             ("設定精靈", self._show_setup_guide),
@@ -663,9 +663,9 @@ class TranslatorApp(tk.Tk):
             ("清除紀錄", self._clear_logs),
             ("清除本機資料", self._clear_local_data),
         ):
-            button = ttk.Button(buttons, text=text, command=command)
+            button = ttk.Button(buttons, text=self._t(text), command=command)
             self.button_widgets.append((text, button))
-        ptt_button = ttk.Button(buttons, text="按住說話")
+        ptt_button = ttk.Button(buttons, text=self._t("按住說話"))
         ptt_button.bind("<ButtonPress-1>", lambda _event: self._push_to_talk(True))
         ptt_button.bind("<ButtonRelease-1>", lambda _event: self._push_to_talk(False))
         self.button_widgets.append(("按住說話", ptt_button))
@@ -697,7 +697,7 @@ class TranslatorApp(tk.Tk):
             self._buttons_frame.grid_columnconfigure(column, weight=1 if column < columns else 0)
 
     def _refresh_lists(self) -> None:
-        self.status.set("正在重新整理裝置與模型")
+        self.status.set(self._t("正在重新整理裝置與模型"))
         config = self._config_from_vars()
         generation = self._list_generation + 1
 
@@ -713,18 +713,19 @@ class TranslatorApp(tk.Tk):
         if self.controller.submit(work, lambda result: self._lists_ready(generation, result), name="refresh_lists"):
             self._list_generation = generation
         else:
-            self.status.set("裝置與模型重新整理已在進行")
+            self.status.set(self._t("裝置與模型重新整理已在進行"))
 
     def _lists_ready(self, generation: int, result: TaskResult) -> None:
         if generation != self._list_generation:
             return
         if result.error is not None:
-            self.status.set(f"無法重新整理裝置與模型：{result.error}")
+            self.status.set(self._t("無法重新整理裝置與模型：{error}", error=result.error))
             return
         raw_devices, models, asr_devices, compute_types = result.value
         config_changed = False
-        self._device_id_by_label = {"系統預設": ""}
-        self._device_label_by_id = {"": "系統預設"}
+        default_device = self._t("系統預設")
+        self._device_id_by_label = {default_device: ""}
+        self._device_label_by_id = {"": default_device}
         for device in raw_devices:
             label = format_device_label(device)
             identity = device_identity(device)
@@ -733,7 +734,7 @@ class TranslatorApp(tk.Tk):
         for key in AUDIO_DEVICE_KEYS:
             identity = str(self.config.get(key) or "")
             if not identity:
-                self.vars[key].set("系統預設")
+                self.vars[key].set(default_device)
                 continue
             try:
                 index = find_device(identity, want_output=key in {"speaker_device", "tts_output_device", "speaker_tts_output_device"}, devices=raw_devices)
@@ -762,7 +763,7 @@ class TranslatorApp(tk.Tk):
                 widget.configure(values=compute_types)
             elif key != "tts_voice_name":
                 widget.configure(values=devices)
-        self.status.set("裝置與模型已更新")
+        self.status.set(self._t("裝置與模型已更新"))
         self._refresh_runtime_status()
 
     def _list_tts_voices(self) -> None:
@@ -770,11 +771,11 @@ class TranslatorApp(tk.Tk):
 
     def _tts_voices_ready(self, voices: list[str]) -> None:
         self.comboboxes["tts_voice_name"].configure(values=voices)
-        self.status.set("; ".join(voices) if voices else "找不到 Windows TTS 聲音")
+        self.status.set("; ".join(voices) if voices else self._t("找不到 Windows TTS 聲音"))
 
     def _swap_languages(self) -> None:
         if self.vars["source_language"].get() == "auto":
-            self.status.set("自動偵測來源語言時無法交換；請先選擇固定來源語言")
+            self.status.set(self._t("自動偵測來源語言時無法交換；請先選擇固定來源語言"))
             return
         source, target = swap_language_values(self.vars["source_language"].get(), self.vars["target_language"].get())
         self.vars["source_language"].set(source)
@@ -787,7 +788,7 @@ class TranslatorApp(tk.Tk):
             if key.startswith("last_") or key in {"overlay_x", "overlay_y"}:
                 continue
             config[key] = self._device_id_by_label.get(variable.get(), "") if key in AUDIO_DEVICE_KEYS else variable.get()
-        config["scenario"] = scenario_key(config["scenario"])
+        config["scenario"] = next((key for key in SCENARIO_CHOICES if config["scenario"] == self._t(scenario_label(key))), scenario_key(config["scenario"]))
         config["overlay_visible"] = self.overlay_visible.get()
         config["overlay_topmost"] = self.overlay_topmost.get()
         config["show_language_labels"] = self.show_language_labels.get()
@@ -835,19 +836,22 @@ class TranslatorApp(tk.Tk):
 
     def _save(self) -> bool:
         config = self._config_from_vars()
+        language_changed = config.get("app_language") != self.config.get("app_language")
         try:
             validate_language_pair(config)
         except ValueError as exc:
-            self.status.set(str(exc))
+            self.status.set(translate_known(self.config.get("app_language"), str(exc)))
             return False
         cloud_enabled = bool({config["provider"], config["tts_provider"]} & set(CLOUD_PROVIDERS))
         if cloud_activation_requires_confirmation(self.config.get("provider", "local"), self.config.get("tts_provider", "local"), config["provider"], config["tts_provider"]):
-            if not messagebox.askyesno("啟用雲端 API？", mode_notice(config["provider"], config["tts_provider"], bool(config["record_logs"]), config.get("local_translate_url", ""))):
+            cloud_message = self._t("雲端 API 可能傳送語音或文字並產生費用。是否繼續？") if config.get("app_language") == "en" else mode_notice(config["provider"], config["tts_provider"], bool(config["record_logs"]), config.get("local_translate_url", ""))
+            if not messagebox.askyesno(self._t("啟用雲端 API？"), cloud_message):
                 self._load_config_into_widgets(self.config)
-                self.status.set("雲端 API 未啟用")
+                self.status.set(self._t("雲端 API 未啟用"))
                 return False
         if config["record_logs"] and not getattr(self, "_log_consent_granted", False):
-            if not messagebox.askyesno("啟用本次對話紀錄？", conversation_log_notice(config) + "\n\n本次執行是否允許儲存上述內容？"):
+            log_message = self._t("本次執行是否允許儲存設定中指定的對話內容？") if config.get("app_language") == "en" else conversation_log_notice(config) + "\n\n本次執行是否允許儲存上述內容？"
+            if not messagebox.askyesno(self._t("啟用本次對話紀錄？"), log_message):
                 self.record_logs.set(False)
                 config["record_logs"] = False
             else:
@@ -859,11 +863,13 @@ class TranslatorApp(tk.Tk):
             try:
                 self.engine.update_config(config)
             except Exception as exc:
-                self.status.set(f"設定套用失敗：{exc}")
+                self.status.set(self._t("設定套用失敗：{error}", error=exc))
                 return False
         self.config = config
         self.mode_text.set(self._mode_text())
         save_config(APP_DIR, self.config)
+        if language_changed:
+            self.status.set(self._t("介面語言已變更；請重新啟動程式以完整套用"))
         return True
 
     def _set_last_error(self, message: str) -> None:
@@ -900,17 +906,19 @@ class TranslatorApp(tk.Tk):
             self.after(50, self._drain_ui_events)
 
     def _submit(self, status: str, work, done, error_title: str, task_name: str | None = None) -> None:
+        status = translate_known(self.config.get("app_language"), status)
+        error_title = translate_known(self.config.get("app_language"), error_title)
         self.status.set(status)
 
         def finish(result: TaskResult) -> None:
             if result.error is not None:
-                self.status.set(f"{error_title}：{result.error}")
+                self.status.set(f"{error_title}: {result.error}" if self.config.get("app_language") == "en" else f"{error_title}：{result.error}")
                 messagebox.showerror(error_title, str(result.error))
             else:
                 done(result.value)
 
         if not self.controller.submit(work, finish, name=task_name or error_title):
-            self.status.set(f"{status}；相同工作已在進行")
+            self.status.set(self._t("{status}；相同工作已在進行", status=status))
 
     def _task_state_changed(self, _state: TaskState) -> None:
         disabled = self.controller.busy
@@ -923,9 +931,15 @@ class TranslatorApp(tk.Tk):
             model_cancel.set()
             self._model_download_cancel = None
         count = self.controller.cancel()
-        self.status.set(f"已取消 {count} 個背景工作" if count else "目前沒有可取消的背景工作")
+        self.status.set(self._t("已取消 {count} 個背景工作", count=count) if count else self._t("目前沒有可取消的背景工作"))
 
     def _mode_text(self) -> str:
+        if self.config.get("app_language") == "en":
+            return "\n".join((
+                self._t("模式：翻譯 {provider}；TTS {tts_provider}", provider=self.config["provider"], tts_provider=self.config["tts_provider"]),
+                self._t("對話紀錄：{state}", state=self._t("開啟" if self.config["record_logs"] else "關閉")),
+                self._t("場景：{scenario}；來源 {source}；目標 {target}", scenario=self._t(scenario_label(str(self.config.get("scenario", "")))), source=self.config["source_language"], target=self.config["target_language"]),
+            ))
         return f"{mode_notice(self.config['provider'], self.config['tts_provider'], bool(self.config['record_logs']), self.config.get('local_translate_url', ''))}\n{conversation_log_notice(self.config)}\n{main_status_summary(self.config)}"
 
     def _apply_mode(self, save: bool = True) -> None:
@@ -970,13 +984,13 @@ class TranslatorApp(tk.Tk):
             self.overlay.withdraw()
 
     def _pick_google_json(self) -> None:
-        path = filedialog.askopenfilename(filetypes=[("JSON", "*.json"), ("所有檔案", "*.*")])
+        path = filedialog.askopenfilename(filetypes=[("JSON", "*.json"), (self._t("所有檔案"), "*.*")])
         if path:
             self.vars["google_service_account_json"].set(path)
             self._save()
 
     def _pick_glossary_json(self) -> None:
-        path = filedialog.askopenfilename(filetypes=[("JSON", "*.json"), ("所有檔案", "*.*")])
+        path = filedialog.askopenfilename(filetypes=[("JSON", "*.json"), (self._t("所有檔案"), "*.*")])
         if path:
             self.vars["glossary_path"].set(path)
             self._save()
@@ -1011,34 +1025,34 @@ class TranslatorApp(tk.Tk):
 
     def _add_glossary_term(self) -> None:
         self._save()
-        source = simpledialog.askstring("新增術語", "原文")
+        source = simpledialog.askstring(self._t("新增術語"), self._t("原文"))
         if not source:
             return
-        target = simpledialog.askstring("新增術語", "譯文")
+        target = simpledialog.askstring(self._t("新增術語"), self._t("譯文"))
         if not target:
             return
         path = ensure_glossary_file(Path(self.config.get("glossary_path") or APP_DIR / "glossary.json"))
         add_glossary_term(path, source, target)
-        self.status.set("詞彙已加入")
+        self.status.set(self._t("詞彙已加入"))
 
     def _fix_last_translation(self) -> None:
         self._save()
         source = str(self.config.get("last_source_text") or "").strip()
         if not source:
-            self.status.set("沒有可修正的近期翻譯")
+            self.status.set(self._t("沒有可修正的近期翻譯"))
             return
-        target = simpledialog.askstring("修正上次翻譯", f"請輸入修正翻譯：\n{source}", initialvalue=str(self.config.get("last_translated_text") or ""))
+        target = simpledialog.askstring(self._t("修正上次翻譯"), self._t("請輸入修正翻譯：\n{source}", source=source), initialvalue=str(self.config.get("last_translated_text") or ""))
         if not target:
             return
-        if not messagebox.askyesno("加入術語表？", "是否將這個修正加入術語表？"):
-            self.status.set("翻譯修正未加入詞彙表")
+        if not messagebox.askyesno(self._t("加入術語表？"), self._t("是否將這個修正加入術語表？")):
+            self.status.set(self._t("翻譯修正未加入詞彙表"))
             return
         path = ensure_glossary_file(Path(self.config.get("glossary_path") or APP_DIR / "glossary.json"))
         add_glossary_term(path, source, target)
-        self.status.set("翻譯修正已加入詞彙表")
+        self.status.set(self._t("翻譯修正已加入詞彙表"))
 
     def _import_runtime(self) -> None:
-        source = filedialog.askdirectory(title="選擇已解壓的 Faster-Whisper-XXL 資料夾")
+        source = filedialog.askdirectory(title=self._t("選擇已解壓的 Faster-Whisper-XXL 資料夾"))
         if not source:
             return
         config = self._config_from_vars()
@@ -1053,15 +1067,15 @@ class TranslatorApp(tk.Tk):
         self.vars["runtime_dir"].set(str(result.target))
         self._save()
         if not result.status["ready"]:
-            messagebox.showerror("runtime 不完整", "缺少：" + ", ".join(result.status["missing"]))
+            messagebox.showerror(self._t("runtime 不完整"), self._t("缺少：{missing}", missing=", ".join(result.status["missing"])))
             return
         self._refresh_lists()
-        self.status.set("runtime 已匯入；commands.json 已更新")
+        self.status.set(self._t("runtime 已匯入；commands.json 已更新"))
 
     def _refresh_runtime_status(self) -> None:
         config = self._config_from_vars()
         target = runtime_dir(config)
-        self.runtime_text.set("正在檢查 runtime")
+        self.runtime_text.set(self._t("正在檢查 runtime"))
         generation = self._runtime_check_generation + 1
         if self.controller.submit(
             lambda: self.runtime_service.check(target, config.get("device", "auto"), config.get("compute_type", "auto")),
@@ -1074,7 +1088,7 @@ class TranslatorApp(tk.Tk):
         if generation != self._runtime_check_generation:
             return
         if result.error is not None:
-            self.runtime_text.set(f"runtime 檢查失敗：{result.error}")
+            self.runtime_text.set(self._t("runtime 檢查失敗：{error}", error=result.error))
             return
         check = result.value
         assert check is not None
@@ -1083,28 +1097,28 @@ class TranslatorApp(tk.Tk):
             self.config["last_ffmpeg_failed"] = check.ffmpeg_failed
             self.vars["last_ffmpeg_failed"].set(str(check.ffmpeg_failed))
             save_config_state(APP_DIR, self.config, {"last_ffmpeg_failed"})
-            note = f"runtime 已就緒；CPU：{'可用' if status['cpu_ready'] else '不可用'}；CUDA：{'可用' if status['cuda_ready'] else '不可用'}"
+            note = self._t("runtime 已就緒；CPU：{cpu}；CUDA：{cuda}", cpu=self._t("可用" if status["cpu_ready"] else "不可用"), cuda=self._t("可用" if status["cuda_ready"] else "不可用"))
             if not model_available(config["model"], self.repo_root / "_models", models_dir(config)):
-                note += f"；找不到模型：{config['model']}"
+                note += "; " + self._t("找不到模型：{model}", model=config["model"])
             self.runtime_text.set(note)
         else:
-            self.runtime_text.set(runtime_install_message(runtime_dir(config), config.get("device", "auto")))
+            self.runtime_text.set(self._t("runtime 尚未就緒；請開啟 runtime 資料夾或匯入 runtime") if self.config.get("app_language") == "en" else runtime_install_message(runtime_dir(config), config.get("device", "auto")))
 
     def _diagnostic_message(self, issues) -> str:
         config = self._config_from_vars()
         if not issues:
-            return "目前沒有發現需要處理的設定問題。"
+            return self._t("目前沒有發現需要處理的設定問題。")
         log_path = Path(config.get("log_dir") or APP_DIR / "logs") / "app.log"
         lines = []
         for issue in issues:
             lines.append(
-                f"[{SEVERITY_LABELS.get(issue.severity, issue.severity)}]\n"
-                f"問題名稱：{issue.title}\n"
-                f"可能原因：{issue.detail}\n"
-                f"自動檢查結果：{issue.code}\n"
-                f"建議修復步驟：{issue.fix}\n"
-                f"一鍵修復按鈕：{diagnostic_action_label(issue.action)}\n"
-                f"進階日誌：{log_path}"
+                f"[{self._t(SEVERITY_LABELS.get(issue.severity, issue.severity))}]\n"
+                f"{self._t('問題名稱：{title}', title=issue.title)}\n"
+                f"{self._t('可能原因：{detail}', detail=issue.detail)}\n"
+                f"{self._t('自動檢查結果：{code}', code=issue.code)}\n"
+                f"{self._t('建議修復步驟：{fix}', fix=issue.fix)}\n"
+                f"{self._t('一鍵修復按鈕：{action}', action=diagnostic_action_label(issue.action, self.config.get('app_language', 'zh-TW')))}\n"
+                f"{self._t('進階日誌：{path}', path=log_path)}"
             )
         return "\n\n".join(lines)
 
@@ -1118,12 +1132,12 @@ class TranslatorApp(tk.Tk):
 
     def _first_run_diagnostics_ready(self, result: TaskResult) -> None:
         if result.error is not None:
-            self.status.set(f"首次診斷失敗：{result.error}")
+            self.status.set(self._t("首次診斷失敗：{error}", error=result.error))
             return
         issues = result.value
         action = first_run_setup_action(issues, bool(self.config.get("setup_guide_shown", False)))
         if action == "diagnostics":
-            self._show_diagnostics("首次設定", issues)
+            self._show_diagnostics(self._t("首次設定"), issues)
         elif action == "guide":
             self._optimize_settings()
             self._show_setup_guide()
@@ -1135,17 +1149,19 @@ class TranslatorApp(tk.Tk):
     def _run_diagnostics(self) -> None:
         config = self._config_from_vars()
         self._submit(
-            "正在執行診斷",
+            self._t("正在執行診斷"),
             lambda: self.audio_diagnostics.collect(config, self.repo_root),
-            lambda issues: self._show_diagnostics("診斷結果", issues),
-            "診斷失敗",
+            lambda issues: self._show_diagnostics(self._t("診斷結果"), issues),
+            self._t("診斷失敗"),
         )
 
     def _show_diagnostics(self, title: str, issues) -> None:
         message = self._diagnostic_message(issues)
-        actions = [(diagnostic_action_label(action), lambda name=action: self._run_diagnostic_action(name)) for action in diagnostic_actions(issues)]
-        if not any(label == "設定指南" for label, _callback in actions):
-            actions.append(("設定指南", self._show_setup_guide))
+        language = self.config.get("app_language", "zh-TW")
+        actions = [(diagnostic_action_label(action, language), lambda name=action: self._run_diagnostic_action(name)) for action in diagnostic_actions(issues)]
+        guide_label = self._t("設定指南")
+        if not any(label == guide_label for label, _callback in actions):
+            actions.append((guide_label, self._show_setup_guide))
         self._show_text_dialog(title, message, actions)
 
     def _show_text_dialog(self, title: str, message: str, actions: list[tuple[str, object]]) -> None:
@@ -1176,7 +1192,7 @@ class TranslatorApp(tk.Tk):
         for index, (label, callback) in enumerate(actions):
             ttk.Button(buttons, text=label, command=lambda cb=callback, dialog=window: self._run_dialog_action(dialog, cb)).grid(row=index // 3, column=index % 3, sticky="ew", padx=3, pady=3)
         close_index = len(actions)
-        ttk.Button(buttons, text="關閉", command=window.destroy).grid(row=close_index // 3, column=close_index % 3, sticky="ew", padx=3, pady=3)
+        ttk.Button(buttons, text=self._t("關閉視窗"), command=window.destroy).grid(row=close_index // 3, column=close_index % 3, sticky="ew", padx=3, pady=3)
 
     def _run_dialog_action(self, window: tk.Toplevel, callback) -> None:
         window.destroy()
@@ -1209,16 +1225,16 @@ class TranslatorApp(tk.Tk):
             self.vars["target_language"].get(),
         )
         if locked == self.vars["source_language"].get():
-            self.status.set("沒有偵測到可鎖定的語言")
+            self.status.set(self._t("沒有偵測到可鎖定的語言"))
             return
         self.vars["source_language"].set(locked)
         self._save()
-        self.status.set(f"來源語言已鎖定：{locked}")
+        self.status.set(self._t("來源語言已鎖定：{language}", language=locked))
 
     def _check_updates(self) -> None:
         self._submit(
             "正在檢查更新",
-            lambda: self.update_service.check(self.repo_root),
+            lambda: self.update_service.check(self.repo_root, self.config.get("app_language", "zh-TW")),
             self.status.set,
             "更新檢查失敗",
         )
@@ -1233,8 +1249,8 @@ class TranslatorApp(tk.Tk):
             "測試虛擬麥克風": self._test_virtual_mic,
             "測試 TTS": self._test_tts,
         }
-        actions = [(label, action_map[label]) for label in setup_guide_actions()]
-        self._show_text_dialog("設定指南", setup_guide_message(), actions)
+        actions = [(self._t(label), action_map[label]) for label in setup_guide_actions()]
+        self._show_text_dialog(self._t("設定指南"), setup_guide_message(self.config.get("app_language", "zh-TW")), actions)
 
     def _recommend(self) -> None:
         config = self._config_from_vars()
@@ -1249,7 +1265,7 @@ class TranslatorApp(tk.Tk):
     def _recommend_ready(self, config: dict, result: RuntimeCheckResult) -> None:
         status = result.status
         if not status["ready"]:
-            self.status.set("找不到 runtime：" + ", ".join(status["missing"]))
+            self.status.set(self._t("找不到 runtime：{missing}", missing=", ".join(status["missing"])))
             self.vars["model"].set("medium")
             return
         devices, vram_gb = cuda_hardware_from_check_output(status["cuda_probe_output"]) if status["cuda_ready"] else (0, 0)
@@ -1268,16 +1284,16 @@ class TranslatorApp(tk.Tk):
         try:
             updated = apply_scenario(config, config["scenario"])
         except ValueError as exc:
-            self.status.set(str(exc))
+            self.status.set(translate_known(self.config.get("app_language"), str(exc)))
             return
         self._load_config_into_widgets(updated)
         self._save()
-        self.status.set(f"已套用場景：{scenario_label(updated['scenario'])}")
+        self.status.set(self._t("已套用場景：{scenario}", scenario=self._t(scenario_label(updated["scenario"]))))
 
     def _load_config_into_widgets(self, updated: dict) -> None:
         for key, variable in self.vars.items():
             if key in updated:
-                value = self._device_label_by_id.get(str(updated[key]), "系統預設") if key in AUDIO_DEVICE_KEYS else scenario_label(str(updated[key])) if key == "scenario" else str(updated[key])
+                value = self._device_label_by_id.get(str(updated[key]), self._t("系統預設")) if key in AUDIO_DEVICE_KEYS else self._t(scenario_label(str(updated[key]))) if key == "scenario" else str(updated[key])
                 variable.set(value)
         self.overlay_visible.set(bool(updated.get("overlay_visible", self.overlay_visible.get())))
         self.overlay_topmost.set(bool(updated.get("overlay_topmost", self.overlay_topmost.get())))
@@ -1309,71 +1325,71 @@ class TranslatorApp(tk.Tk):
         self.config.update({"last_cuda_devices": devices, "last_vram_gb": vram_gb})
         save_config_state(APP_DIR, before, {"last_cuda_devices", "last_vram_gb"})
         if not decision.recommendations:
-            self.status.set("設定已是建議值")
+            self.status.set(self._t("設定已是建議值"))
             return
-        if not messagebox.askyesno("預覽自動優化", format_tuning_preview(before, decision.config, decision.recommendations)):
-            self.status.set("已保留原設定")
+        preview = self._t("套用 {count} 項自動優化建議？", count=len(decision.recommendations)) if self.config.get("app_language") == "en" else format_tuning_preview(before, decision.config, decision.recommendations)
+        if not messagebox.askyesno(self._t("預覽自動優化"), preview):
+            self.status.set(self._t("已保留原設定"))
             return
         self._load_config_into_widgets(decision.config)
         self._save()
-        self.status.set(decision.summary)
+        self.status.set(self._t("已套用 {count} 項自動優化建議", count=len(decision.recommendations)) if self.config.get("app_language") == "en" else decision.summary)
 
     def _download_model(self) -> None:
         if self.__dict__.get("_model_download_cancel") is not None:
-            self.status.set("模型下載已在進行；可按「取消模型下載」")
+            self.status.set(self._t("模型下載已在進行；可按「取消模型下載」"))
             return
         self._save()
         model = self.config["model"]
         app_models = models_dir(self.config)
         cancel = threading.Event()
         self._model_download_cancel = cancel
-        self.status.set(f"正在下載模型 {model}")
+        self.status.set(self._t("正在下載模型 {model}", model=model))
 
         if not self.controller.submit(
-            lambda: self.model_service.download(model, app_models, lambda message: self._post_ui("status", message), cancel),
+            lambda: self.model_service.download(model, app_models, lambda message: self._post_ui("status", message), cancel, self.config.get("app_language", "zh-TW")),
             self._model_downloaded,
             name="model_download",
         ):
             self._model_download_cancel = None
-            self.status.set("前一個模型下載仍在結束中")
+            self.status.set(self._t("前一個模型下載仍在結束中"))
 
     def _model_downloaded(self, result: TaskResult[Path]) -> None:
         self._model_download_cancel = None
         if result.error is not None:
             self.status.set(str(result.error))
         else:
-            self.status.set(f"模型下載完成：{result.value.name}；版本與 SHA 完整性已驗證")
+            self.status.set(self._t("模型下載完成：{model}；版本與 SHA 完整性已驗證", model=result.value.name))
         self._refresh_lists()
 
     def _cancel_model_download(self) -> None:
         cancel = self.__dict__.get("_model_download_cancel")
         if cancel is None:
-            self.status.set("目前沒有模型下載工作")
+            self.status.set(self._t("目前沒有模型下載工作"))
             return
         cancel.set()
-        self.status.set("正在取消模型下載；已下載部分可供稍後續傳")
+        self.status.set(self._t("正在取消模型下載；已下載部分可供稍後續傳"))
 
     def _download_translation_models(self) -> None:
         self._save()
         source_language = self.config["source_language"]
         target_language = self.config["target_language"]
         if source_language == "auto":
-            messagebox.showinfo("請先選擇來源語言", "下載離線翻譯模型前，請把「來源語言」改成固定語言。")
+            messagebox.showinfo(self._t("請先選擇來源語言"), self._t("下載離線翻譯模型前，請把「來源語言」改成固定語言。"))
             return
         if not messagebox.askyesno(
-            "下載離線翻譯模型",
-            f"將下載 {source_language} 與 {target_language} 的雙向 Argos Translate 模型。\n"
-            "模型會儲存在程式資料夾的 models\\translation。",
+            self._t("下載離線翻譯模型"),
+            self._t("將下載 {source} 與 {target} 的雙向 Argos Translate 模型。\n模型會儲存在程式資料夾的 models\\translation。", source=source_language, target=target_language),
         ):
             return
-        self.status.set("正在下載離線翻譯模型")
+        self.status.set(self._t("正在下載離線翻譯模型"))
 
         config = self.config.copy()
         registry = self.engine.offline_translation_registry if self.engine else None
         self._submit(
             "正在下載離線翻譯模型",
             lambda: self.model_service.download_translation(config, source_language, target_language, registry),
-            lambda downloaded: self.status.set(f"離線翻譯模型下載完成：{len(downloaded)} 個"),
+            lambda downloaded: self.status.set(self._t("離線翻譯模型下載完成：{count} 個", count=len(downloaded))),
             "離線翻譯模型下載失敗",
         )
 
@@ -1382,7 +1398,7 @@ class TranslatorApp(tk.Tk):
         self._submit(
             "正在更新 commands.json",
             lambda: self.runtime_service.refresh_commands(runtime),
-            lambda _value: (self._refresh_lists(), self.status.set("commands.json 已更新")),
+            lambda _value: (self._refresh_lists(), self.status.set(self._t("commands.json 已更新"))),
             "commands.json 更新失敗",
         )
 
@@ -1393,51 +1409,51 @@ class TranslatorApp(tk.Tk):
 
     def _test_tone(self) -> None:
         config = self._config_from_vars()
-        self._submit("正在測試裝置音", lambda: self.audio_diagnostics.test_tone(config), lambda _value: self.status.set("裝置音測試完成"), "裝置音測試失敗")
+        self._submit("正在測試裝置音", lambda: self.audio_diagnostics.test_tone(config), lambda _value: self.status.set(self._t("裝置音測試完成")), "裝置音測試失敗")
 
     def _test_tts(self) -> None:
         config = self._config_from_vars()
-        self.status.set("正在測試 TTS")
+        self.status.set(self._t("正在測試 TTS"))
         if not self.controller.submit(lambda: self.audio_diagnostics.test_tts(config), lambda result: self._tts_tested(config, result), name="tts_test"):
-            self.status.set("TTS 測試已在進行")
+            self.status.set(self._t("TTS 測試已在進行"))
 
     def _tts_tested(self, config: dict, result: TaskResult) -> None:
         self.config["last_tts_failed"] = result.error is not None
         save_config_state(APP_DIR, self.config, {"last_tts_failed"})
         if result.error is not None:
-            messagebox.showerror("TTS 測試失敗", str(result.error))
+            messagebox.showerror(self._t("TTS 測試失敗"), str(result.error))
         else:
-            self.status.set("TTS 輸出測試完成")
+            self.status.set(self._t("TTS 輸出測試完成"))
 
     def _test_virtual_mic(self) -> None:
         config = self._config_from_vars()
-        self.status.set("正在測試虛擬麥克風")
+        self.status.set(self._t("正在測試虛擬麥克風"))
         if not self.controller.submit(lambda: self.audio_diagnostics.test_virtual_microphone(config), lambda result: self._virtual_mic_tested(config, result), name="virtual_mic_test"):
-            self.status.set("虛擬麥克風測試已在進行")
+            self.status.set(self._t("虛擬麥克風測試已在進行"))
 
     def _virtual_mic_tested(self, config: dict, result: TaskResult[bool]) -> None:
         active = bool(result.value) if result.error is None else False
         self.config["last_virtual_mic_failed"] = not active
         save_config_state(APP_DIR, self.config, {"last_virtual_mic_failed"})
         if result.error is not None:
-            messagebox.showerror("虛擬麥克風測試失敗", str(result.error))
+            messagebox.showerror(self._t("虛擬麥克風測試失敗"), str(result.error))
         else:
-            self.status.set("虛擬麥克風已偵測到聲音" if active else "虛擬麥克風沒有偵測到聲音")
+            self.status.set(self._t("虛擬麥克風已偵測到聲音" if active else "虛擬麥克風沒有偵測到聲音"))
 
     def _test_speaker(self) -> None:
         config = self._config_from_vars()
-        self.status.set("正在測試喇叭")
+        self.status.set(self._t("正在測試喇叭"))
         if not self.controller.submit(lambda: self.audio_diagnostics.test_speaker(config), lambda result: self._speaker_tested(config, result), name="speaker_test"):
-            self.status.set("喇叭測試已在進行")
+            self.status.set(self._t("喇叭測試已在進行"))
 
     def _speaker_tested(self, config: dict, result: TaskResult[bool]) -> None:
         if result.error is not None:
-            messagebox.showerror("喇叭測試失敗", str(result.error))
+            messagebox.showerror(self._t("喇叭測試失敗"), str(result.error))
             return
         active = bool(result.value)
         self.config["last_speaker_quiet"] = not active
         save_config_state(APP_DIR, self.config, {"last_speaker_quiet"})
-        self.status.set("喇叭已偵測到聲音" if active else "喇叭目前沒有偵測到聲音")
+        self.status.set(self._t("喇叭已偵測到聲音" if active else "喇叭目前沒有偵測到聲音"))
 
     def _test_mic(self) -> None:
         config = self._config_from_vars()
@@ -1451,26 +1467,26 @@ class TranslatorApp(tk.Tk):
     def _microphone_tested(self, config: dict, level: float) -> None:
         self.config["last_mic_quiet"] = level < float(config["speech_threshold"])
         save_config_state(APP_DIR, self.config, {"last_mic_quiet"})
-        self.status.set(f"麥克風音量 {level:.4f}")
+        self.status.set(self._t("麥克風音量 {level:.4f}", level=level))
 
     def _test_subtitles(self) -> None:
         self.overlay_visible.set(True)
         self._apply_overlay()
         self.overlay.update_lines("字幕測試", "字幕測試")
-        self.status.set("字幕測試完成")
+        self.status.set(self._t("字幕測試完成"))
 
     def _troubleshoot(self, issue: str) -> None:
         action, target = troubleshooting_action(issue)
         if action == "overlay":
             self.overlay_visible.set(True)
             self._apply_overlay()
-            self.status.set("字幕已顯示")
+            self.status.set(self._t("字幕已顯示"))
             return
         if target.startswith("ms-settings:"):
             subprocess.Popen(["cmd", "/c", "start", "", target], shell=False)
         else:
             webbrowser.open(target)
-        self.status.set("已開啟修復說明")
+        self.status.set(self._t("已開啟修復說明"))
 
     def _start(self) -> None:
         if not self._save():
@@ -1490,24 +1506,25 @@ class TranslatorApp(tk.Tk):
 
     def _start_checked(self, config: dict, app_models: Path, result: tuple[RuntimeCheckResult, str]) -> None:
         if self._config_from_vars() != config:
-            self.status.set("設定已在啟動檢查期間變更；請重新按開始")
+            self.status.set(self._t("設定已在啟動檢查期間變更；請重新按開始"))
             return
         runtime_check, current_model_status = result
         status = runtime_check.status
         if not status["ready"]:
             append_app_log(APP_DIR, "runtime_missing", missing=status["missing"])
-            error = "找不到 runtime：" + ", ".join(status["missing"])
+            error = self._t("找不到 runtime：{missing}", missing=", ".join(status["missing"]))
             if "CUDA --checkcuda probe" in status["missing"]:
                 error += "；CUDA probe：" + status["cuda_probe_output"]
-            messagebox.showerror("runtime 不可用", error + "\n\n" + runtime_install_message(runtime_dir(self.config), self.config.get("device", "auto")))
+            install_message = self._t("runtime 尚未就緒；請開啟 runtime 資料夾或匯入 runtime") if self.config.get("app_language") == "en" else runtime_install_message(runtime_dir(self.config), self.config.get("device", "auto"))
+            messagebox.showerror(self._t("runtime 不可用"), error + "\n\n" + install_message)
             self._set_last_error(error)
             self.status.set(error)
             return
         if current_model_status != MODEL_READY:
             corrupt = current_model_status == MODEL_INVALID
-            title = "模型不完整或損毀" if corrupt else "找不到模型"
+            title = self._t("模型不完整或損毀" if corrupt else "找不到模型")
             append_app_log(APP_DIR, "model_corrupt" if corrupt else "model_missing", model=config["model"])
-            messagebox.showerror(title, model_install_message(config["model"], app_models))
+            messagebox.showerror(title, self._t("請下載或重新安裝模型：{model}", model=config["model"]) if self.config.get("app_language") == "en" else model_install_message(config["model"], app_models))
             error = f"{title}：{config['model']}"
             self._set_last_error(error)
             self.status.set(error)
@@ -1518,7 +1535,7 @@ class TranslatorApp(tk.Tk):
         save_config_state(APP_DIR, config, {"last_cuda_devices", "last_vram_gb"})
         recommendations = recommend_tuning(config, devices, vram_gb) if config.get("ai_auto_optimize", True) else []
         if recommendations:
-            self.status.set(f"自動優化有 {len(recommendations)} 項建議；請按「自動優化」預覽並確認")
+            self.status.set(self._t("自動優化有 {count} 項建議；請按「自動優化」預覽並確認", count=len(recommendations)))
         self._set_last_error("")
         append_app_log(APP_DIR, "start", model=config["model"], provider=config["provider"])
         engine = RealtimeEngine(
@@ -1529,19 +1546,19 @@ class TranslatorApp(tk.Tk):
             APP_DIR,
         )
         if not self.controller.start_engine(engine, self._engine_started):
-            self.status.set("啟動工作已在進行")
+            self.status.set(self._t("啟動工作已在進行"))
 
     def _engine_started(self, result: TaskResult) -> None:
         if result.error is not None:
-            self._engine_status(f"啟動失敗：{result.error}")
+            self._engine_status(self._t("啟動失敗：{error}", error=result.error))
 
     def _stop(self) -> None:
         if self.controller.stop_engine(self._engine_stopped) is False:
-            self.status.set("停止工作已在進行")
+            self.status.set(self._t("停止工作已在進行"))
 
     def _engine_stopped(self, result: TaskResult[str]) -> None:
         if result.error is not None:
-            self._engine_status(f"停止失敗：{result.error}")
+            self._engine_status(self._t("停止失敗：{error}", error=result.error))
         elif not self._closing and result.value:
             self._engine_status(result.value)
         append_app_log(APP_DIR, "stop")
@@ -1601,7 +1618,7 @@ class TranslatorApp(tk.Tk):
     def _clear_cache(self) -> None:
         self._save()
         clear_cache(APP_DIR, Path(self.config.get("translation_cache_path") or APP_DIR / "cache" / "translation_cache.db"))
-        self.status.set("快取已清除")
+        self.status.set(self._t("快取已清除"))
 
     def _open_logs(self) -> None:
         self._save()
@@ -1614,21 +1631,21 @@ class TranslatorApp(tk.Tk):
         log_dir = Path(self.config.get("log_dir") or APP_DIR / "logs")
         logs = sorted(log_dir.glob("*.jsonl"), key=lambda path: path.stat().st_mtime, reverse=True)
         if not logs:
-            self.status.set("沒有可匯出的紀錄")
+            self.status.set(self._t("沒有可匯出的紀錄"))
             append_app_log(APP_DIR, "subtitle_export_empty")
             return
         output_dir = APP_DIR / "exports" / "subtitles"
         srt = export_jsonl_to_srt(logs[0], output_dir)
         txt = export_jsonl_to_txt(logs[0], output_dir)
         append_app_log(APP_DIR, "subtitle_export", source=logs[0], output=srt, text_output=txt)
-        self.status.set(f"字幕已匯出：{srt}")
+        self.status.set(self._t("字幕已匯出：{path}", path=srt))
 
     def _clear_logs(self) -> None:
         target = self._confirm_log_cleanup()
         if target is None:
             return
         clear_logs(APP_DIR, target)
-        self.status.set("紀錄已清除")
+        self.status.set(self._t("紀錄已清除"))
 
     def _clear_local_data(self) -> None:
         target = self._confirm_log_cleanup()
@@ -1636,7 +1653,7 @@ class TranslatorApp(tk.Tk):
             return
         clear_cache(APP_DIR, Path(self.config.get("translation_cache_path") or APP_DIR / "cache" / "translation_cache.db"))
         clear_logs(APP_DIR, target)
-        self.status.set("本機快取與紀錄已清除")
+        self.status.set(self._t("本機快取與紀錄已清除"))
 
     def _confirm_log_cleanup(self) -> Path | None:
         self._save()
@@ -1644,11 +1661,11 @@ class TranslatorApp(tk.Tk):
         try:
             files = log_files_to_clear(APP_DIR, target)
         except ValueError as exc:
-            messagebox.showerror("無法清除紀錄", str(exc))
+            messagebox.showerror(self._t("無法清除紀錄"), str(exc))
             return None
         if not target.resolve().is_relative_to(APP_DIR.resolve()) and not messagebox.askyesno(
-            "確認清除外部紀錄",
-            f"將從以下資料夾清除 {sum(path.parent == target.resolve() for path in files)} 個本程式紀錄檔：\n{target.resolve()}\n\n其他檔案與子資料夾不會刪除。是否繼續？",
+            self._t("確認清除外部紀錄"),
+            self._t("將從以下資料夾清除 {count} 個本程式紀錄檔：\n{path}\n\n其他檔案與子資料夾不會刪除。是否繼續？", count=sum(path.parent == target.resolve() for path in files), path=target.resolve()),
         ):
             return None
         return target

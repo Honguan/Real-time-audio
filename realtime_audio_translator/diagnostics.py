@@ -5,6 +5,7 @@ from pathlib import Path
 from .ai_auto_tuner import recommend_tuning
 from .audio import find_device, same_device_identity, virtual_mic_recaptures_tts
 from .config import APP_DIR
+from .localization import diagnostic_fields
 from .models import MODEL_INVALID, MODEL_MISSING, MODEL_READY, model_status, models_dir
 from .offline_translation import translation_model_available, translation_models_dir
 from .performance import ASR_BUDGET_SECONDS, ASR_LATENCY, END_TO_END_P95, END_TO_END_P95_BUDGET_SECONDS, QUEUE_WAIT, QUEUE_WAIT_BUDGET_SECONDS, TRANSLATION_BUDGET_SECONDS, TRANSLATION_LATENCY, TTS_PLAYBACK, TTS_STAGE_BUDGET_SECONDS, TTS_SYNTHESIS, metric_value
@@ -397,4 +398,6 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
             "先依上方診斷項目處理；需要細節時開啟 app.log 查看最近事件",
             "open_logs",
         ))
+    if config.get("app_language") == "en":
+        issues = [DiagnosticIssue(issue.code, issue.severity, *diagnostic_fields("en", issue.code, issue.action, issue.title, issue.detail, issue.fix), issue.action) for issue in issues]
     return issues

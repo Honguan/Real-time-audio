@@ -8,7 +8,7 @@ from unittest.mock import Mock, patch
 from realtime_audio_translator.config import DEFAULT_CONFIG, _has_reparse_point, clear_cache, clear_logs, ensure_app_dirs, ensure_glossary_file, load_config, log_files_to_clear, save_audio_devices, save_config
 from realtime_audio_translator.diagnostics import DiagnosticIssue, collect_diagnostics
 from realtime_audio_translator.engine import RealtimeEngine, audio_devices_overlap, direction_label, drain_queue, overlay_text_from_config, safe_target_language
-from realtime_audio_translator.gui import LANGUAGE_CHOICES, PERFORMANCE_CHOICES, PROVIDER_CHOICES, TARGET_LANGUAGE_CHOICES, TTS_PROVIDER_CHOICES, TranslatorApp, _geometry_offset, clamp_window_position, conversation_log_notice, diagnostic_action_label, diagnostic_actions, first_diagnostic_action, first_run_setup_action, first_run_wizard_needed, format_overlay_line, language_lock_value, latency_seconds_value, main_status_summary, mode_notice, overlay_clipboard_text, overlay_font_size_value, overlay_hold_seconds_value, overlay_opacity_value, overlay_visibility_action, performance_segment_seconds, responsive_button_columns, setup_guide_actions, status_message_is_error, subtitle_updates_allowed, swap_language_values, troubleshooting_action, visible_button_texts, visible_setting_keys
+from realtime_audio_translator.gui import LANGUAGE_CHOICES, PERFORMANCE_CHOICES, PROVIDER_CHOICES, TARGET_LANGUAGE_CHOICES, TTS_PROVIDER_CHOICES, TranslatorApp, _geometry_offset, clamp_window_position, conversation_log_notice, diagnostic_action_label, diagnostic_actions, first_diagnostic_action, first_run_setup_action, first_run_wizard_needed, format_overlay_line, language_lock_value, latency_seconds_value, main_status_summary, mode_notice, overlay_clipboard_text, overlay_font_size_value, overlay_hold_seconds_value, overlay_opacity_value, overlay_visibility_action, performance_segment_seconds, responsive_button_columns, setup_guide_actions, setup_guide_message, status_message_is_error, subtitle_updates_allowed, swap_language_values, troubleshooting_action, visible_button_texts, visible_setting_keys
 
 
 class GuiLogicTests(unittest.TestCase):
@@ -147,15 +147,15 @@ class GuiLogicTests(unittest.TestCase):
     def test_record_logs_toggle_saves_immediately(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
 
-        self.assertIn('record_logs_widget = ttk.Checkbutton(frame, text="儲存對話紀錄", variable=self.record_logs, command=self._save)', gui_source)
-        self.assertIn('speaker_tts_widget = ttk.Checkbutton(frame, text="播放對方翻譯", variable=self.speaker_tts_enabled, command=self._save)', gui_source)
-        self.assertIn('start_virtual_mic_muted_widget = ttk.Checkbutton(frame, text="虛擬麥克風啟動時靜音", variable=self.start_virtual_mic_muted, command=self._save)', gui_source)
-        self.assertIn('overlay_topmost_widget = ttk.Checkbutton(frame, text="字幕最上層", variable=self.overlay_topmost, command=self._apply_overlay)', gui_source)
-        self.assertIn('language_labels_widget = ttk.Checkbutton(frame, text="顯示語言", variable=self.show_language_labels, command=self._save)', gui_source)
-        self.assertIn('speaker_capture_widget = ttk.Checkbutton(frame, text="擷取喇叭", variable=self.speaker_enabled, command=self._save)', gui_source)
+        self.assertIn('record_logs_widget = ttk.Checkbutton(frame, text=self._t("儲存對話紀錄"), variable=self.record_logs, command=self._save)', gui_source)
+        self.assertIn('speaker_tts_widget = ttk.Checkbutton(frame, text=self._t("播放對方翻譯"), variable=self.speaker_tts_enabled, command=self._save)', gui_source)
+        self.assertIn('start_virtual_mic_muted_widget = ttk.Checkbutton(frame, text=self._t("虛擬麥克風啟動時靜音"), variable=self.start_virtual_mic_muted, command=self._save)', gui_source)
+        self.assertIn('overlay_topmost_widget = ttk.Checkbutton(frame, text=self._t("字幕最上層"), variable=self.overlay_topmost, command=self._apply_overlay)', gui_source)
+        self.assertIn('language_labels_widget = ttk.Checkbutton(frame, text=self._t("顯示語言"), variable=self.show_language_labels, command=self._save)', gui_source)
+        self.assertIn('speaker_capture_widget = ttk.Checkbutton(frame, text=self._t("擷取喇叭"), variable=self.speaker_enabled, command=self._save)', gui_source)
         self.assertIn("self.advanced_mode_widgets = [runtime_buttons_widget, overlay_topmost_widget, language_labels_widget, original_text_widget, translated_text_widget, speaker_capture_widget, microphone_capture_widget, record_logs_widget, speaker_tts_widget, start_virtual_mic_muted_widget]", gui_source)
         self.assertIn("for widget in self.advanced_mode_widgets:", gui_source)
-        self.assertIn('translated_text_widget = ttk.Checkbutton(frame, text="顯示譯文", variable=self.show_translated_text, command=self._save)', gui_source)
+        self.assertIn('translated_text_widget = ttk.Checkbutton(frame, text=self._t("顯示譯文"), variable=self.show_translated_text, command=self._save)', gui_source)
 
     def test_open_logs_button_opens_configured_log_dir(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
@@ -193,9 +193,9 @@ class GuiLogicTests(unittest.TestCase):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
 
         self.assertIn('self.start_virtual_mic_muted = tk.BooleanVar(value=bool(self.config.get("start_virtual_mic_muted", False)))', gui_source)
-        self.assertIn('ttk.Checkbutton(frame, text="虛擬麥克風啟動時靜音", variable=self.start_virtual_mic_muted, command=self._save)', gui_source)
+        self.assertIn('ttk.Checkbutton(frame, text=self._t("虛擬麥克風啟動時靜音"), variable=self.start_virtual_mic_muted, command=self._save)', gui_source)
         self.assertIn('config["start_virtual_mic_muted"] = self.start_virtual_mic_muted.get()', gui_source)
-        self.assertIn('ptt_button = ttk.Button(buttons, text="按住說話")', gui_source)
+        self.assertIn('ptt_button = ttk.Button(buttons, text=self._t("按住說話"))', gui_source)
         self.assertIn('ptt_button.bind("<ButtonPress-1>", lambda _event: self._push_to_talk(True))', gui_source)
         self.assertIn('ptt_button.bind("<ButtonRelease-1>", lambda _event: self._push_to_talk(False))', gui_source)
         self.assertIn('self.engine.set_virtual_mic_muted(False)', gui_source)
@@ -250,7 +250,7 @@ class GuiLogicTests(unittest.TestCase):
 
         self.assertIn('("測試麥克風", self._test_mic)', gui_source)
         self.assertIn('def _test_mic(self) -> None:', gui_source)
-        self.assertIn('self.status.set(f"麥克風音量 {level:.4f}")', gui_source)
+        self.assertIn('self.status.set(self._t("麥克風音量 {level:.4f}", level=level))', gui_source)
         self.assertIn('config["last_mic_quiet"] = level < float(config["speech_threshold"])', gui_source)
         self.assertIn("def test_microphone(self, config: dict) -> float:", service_source)
 
@@ -261,7 +261,7 @@ class GuiLogicTests(unittest.TestCase):
         self.assertIn('("測試喇叭", self._test_speaker)', gui_source)
         self.assertIn('def _test_speaker(self) -> None:', gui_source)
         self.assertIn('capture_wav(path, device, 0.5, loopback=True)', service_source)
-        self.assertIn('self.status.set("喇叭已偵測到聲音" if active else "喇叭目前沒有偵測到聲音")', gui_source)
+        self.assertIn('self.status.set(self._t("喇叭已偵測到聲音" if active else "喇叭目前沒有偵測到聲音"))', gui_source)
         self.assertIn('config["last_speaker_quiet"] = not active', gui_source)
 
     def test_tts_test_button_uses_configured_output(self):
@@ -283,19 +283,20 @@ class GuiLogicTests(unittest.TestCase):
 
     def test_setup_guide_button_shows_first_run_steps(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
+        guide = setup_guide_message()
 
         self.assertIn('("設定精靈", self._show_setup_guide)', gui_source)
         self.assertIn('def _show_setup_guide(self) -> None:', gui_source)
         self.assertIn("一鍵診斷", gui_source)
-        self.assertIn("手動匯入 runtime", gui_source)
+        self.assertIn("手動匯入 runtime", guide)
         self.assertIn("下載模型", gui_source)
         self.assertIn("套用場景", gui_source)
         self.assertIn("自動優化", gui_source)
-        self.assertIn("喇叭來源", gui_source)
-        self.assertIn("麥克風來源", gui_source)
-        self.assertIn("TTS 輸出", gui_source)
-        self.assertIn("虛擬音訊線輸出", gui_source)
-        self.assertIn("選場景會自動套用", gui_source)
+        self.assertIn("喇叭來源", guide)
+        self.assertIn("麥克風來源", guide)
+        self.assertIn("TTS 輸出", guide)
+        self.assertIn("虛擬音訊線輸出", guide)
+        self.assertIn("選場景會自動套用", guide)
         self.assertIn("自動優化", gui_source)
         self.assertIn("測試麥克風", gui_source)
         self.assertIn("測試虛擬麥克風", gui_source)
@@ -448,8 +449,8 @@ class GuiLogicTests(unittest.TestCase):
 
         self.assertIn('("場景", "scenario")', gui_source)
         self.assertIn("SCENARIO_CHOICES", gui_source)
-        self.assertIn("tuple(scenario_label(key) for key in SCENARIO_CHOICES)", gui_source)
-        self.assertIn('config["scenario"] = scenario_key(config["scenario"])', gui_source)
+        self.assertIn("tuple(self._t(scenario_label(key)) for key in SCENARIO_CHOICES)", gui_source)
+        self.assertIn('config["scenario"] = next(', gui_source)
         self.assertIn('("套用場景", self._apply_scenario)', gui_source)
         self.assertIn('("自動優化", self._optimize_settings)', gui_source)
         self.assertIn('("一鍵診斷", self._run_diagnostics)', gui_source)
@@ -463,7 +464,7 @@ class GuiLogicTests(unittest.TestCase):
         self.assertIn("def _show_diagnostics", gui_source)
         self.assertIn("def _show_text_dialog", gui_source)
         self.assertIn("ttk.Scrollbar", gui_source)
-        self.assertIn('text="關閉"', gui_source)
+        self.assertIn('text=self._t("關閉視窗")', gui_source)
         self.assertIn("def _run_diagnostic_action", gui_source)
         self.assertIn("webbrowser.open(UPSTREAM_RUNTIME_RELEASE_URL)", gui_source)
         self.assertIn("collect_diagnostics", service_source)
@@ -488,7 +489,7 @@ class GuiLogicTests(unittest.TestCase):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
         service_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "app_services.py").read_text(encoding="utf-8")
 
-        self.assertIn('text="下載上游 runtime"', gui_source)
+        self.assertIn('text=self._t("下載上游 runtime")', gui_source)
         self.assertIn("UPSTREAM_RUNTIME_RELEASE_URL", gui_source)
         self.assertIn("install_runtime_from", service_source)
         self.assertNotIn("download_runtime", gui_source)
@@ -551,6 +552,7 @@ class GuiLogicTests(unittest.TestCase):
         self.assertTrue(status_message_is_error("找不到 runtime：faster-whisper-xxl.exe"))
         self.assertTrue(status_message_is_error("對方：翻譯失敗：timeout"))
         self.assertTrue(status_message_is_error("沒有可用音訊裝置"))
+        self.assertTrue(status_message_is_error("Speaker: translation failed: timeout"))
         self.assertFalse(status_message_is_error("執行中"))
 
     def test_diagnostic_action_label_shows_user_button_names(self):
@@ -689,6 +691,7 @@ class GuiLogicTests(unittest.TestCase):
         source = Mock()
         source.get.return_value = "auto"
         app.vars = {"source_language": source, "target_language": Mock()}
+        app.config = DEFAULT_CONFIG.copy()
         app.status = Mock()
         app._save = Mock()
 
@@ -812,6 +815,23 @@ class GuiLogicTests(unittest.TestCase):
         self.assertIn("cloud_activation_requires_confirmation", gui_source)
         self.assertIn('config["cloud_api_enabled"] = cloud_enabled', gui_source)
         self.assertIn("啟用本次對話紀錄？", gui_source)
+
+    @patch("realtime_audio_translator.gui.save_config")
+    def test_language_change_is_persisted_and_requires_restart(self, save):
+        app = TranslatorApp.__new__(TranslatorApp)
+        app.config = DEFAULT_CONFIG.copy()
+        app._config_from_vars = lambda: DEFAULT_CONFIG | {"app_language": "en"}
+        app._log_consent_granted = False
+        app.status = Mock()
+        app.mode_text = Mock()
+        app.engine = None
+        app._mode_text = lambda: "mode"
+
+        self.assertTrue(app._save())
+
+        self.assertEqual(app.config["app_language"], "en")
+        app.status.set.assert_called_with("Interface language changed; restart the app to apply it completely")
+        save.assert_called_once()
 
     def test_main_status_summary_shows_required_main_screen_state(self):
         config = DEFAULT_CONFIG.copy()

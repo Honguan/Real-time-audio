@@ -215,6 +215,11 @@ class AiTests(unittest.TestCase):
         self.assertIn("語言模型分數 無法取得", unavailable)
         self.assertIn("ASR 模型分數 無法取得", unavailable)
 
+        english = format_quality_status(snapshot, advanced=True, language="en")
+        self.assertIn("Cloud API mode", english)
+        self.assertIn("ASR latency 820ms", english)
+        self.assertFalse(any("\u4e00" <= character <= "\u9fff" for character in english))
+
 
 if __name__ == "__main__":
     unittest.main()
