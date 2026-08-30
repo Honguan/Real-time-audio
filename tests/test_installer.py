@@ -77,6 +77,9 @@ class InstallerTests(unittest.TestCase):
         for secret in ("WINDOWS_SIGNING_CERTIFICATE_BASE64", "WINDOWS_SIGNING_CERTIFICATE_PASSWORD"):
             self.assertIn(f"secrets.{secret}", release)
         self.assertGreaterEqual(release.count("./scripts/sign_windows.ps1"), 2)
+        self.assertGreaterEqual(release.count("if ($hasCertificate)"), 3)
+        self.assertIn("Both Authenticode signing secrets must be configured together.", release)
+        self.assertNotIn("signing secrets are required for every release", release)
         self.assertIn("dist-release/*.exe", release)
         self.assertIn("Build and test app-only installer", ci)
         self.assertIn("/TYPE=app", ci)

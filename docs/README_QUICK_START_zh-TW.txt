@@ -1,6 +1,6 @@
 RealtimeAudioTranslator 快速開始
 
-1. 從 GitHub Releases 下載已簽章的 `RealtimeAudioTranslator-<tag>-setup.exe`，確認 Publisher 後執行。
+1. 從 GitHub Releases 下載 `RealtimeAudioTranslator-<tag>-setup.exe`；若版本有 Authenticode 簽章，先確認 Publisher。未簽章的個人用途版本仍可安裝。
 2. 安裝程式會偵測 GPU／VRAM；CPU 模式只下載 runtime 核心，CUDA 模式才下載 CUDA DLL。下載都直接來自上游並驗證 SHA-256。
 3. 需要免安裝版時，下載 `RealtimeAudioTranslator-<tag>-win-x64.zip`，解壓後執行 `RealtimeAudioTranslator.exe`；
    再從 Faster-Whisper-XXL 上游下載 runtime，使用「手動匯入 runtime」安裝到 `%USERPROFILE%\.realtime-audio\runtime\cuda12`。

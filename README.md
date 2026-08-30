@@ -6,7 +6,7 @@ Windows x64 即時雙向語音翻譯工具。可擷取喇叭與麥克風聲音�
 
 ## 最快使用
 
-1. 到 GitHub Releases 下載已簽章的 `RealtimeAudioTranslator-<tag>-setup.exe`，確認 Publisher 後執行。
+1. 到 GitHub Releases 下載 `RealtimeAudioTranslator-<tag>-setup.exe`；若版本有 Authenticode 簽章，先確認 Publisher。未簽章的個人用途版本仍可安裝。
 2. 安裝程式會偵測 NVIDIA GPU／VRAM；CPU 模式只下載 runtime 核心，CUDA 模式才下載 CUDA DLL。Runtime 直接來自 Faster-Whisper-XXL 上游並驗證 SHA-256。
 3. 若未偵測到 VB-CABLE，安裝程式只提供官方下載指引，不會靜默安裝第三方驅動程式。
 
