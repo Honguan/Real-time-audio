@@ -246,8 +246,13 @@ class ConfigTests(unittest.TestCase):
             self.assertTrue((root / "exports" / "subtitles").is_dir())
 
     def test_release_updater_compares_versions_and_reads_latest_tag(self):
-        self.assertTrue(is_newer_version("v0.2.0", "v0.1.9"))
-        self.assertFalse(is_newer_version("v0.1.0", "v0.1.0"))
+        self.assertTrue(is_newer_version("v1.2.1", "v1.2.0"))
+        self.assertFalse(is_newer_version("v1.2.0", "v1.2.0"))
+        self.assertFalse(is_newer_version("v1.2.0-rc1", "v1.1.9"))
+        self.assertFalse(is_newer_version("v1.2.0-beta.2", "v1.1.9"))
+        self.assertTrue(is_newer_version("v1.2.0-beta.2", "v1.1.9", allow_prerelease=True))
+        with self.assertRaisesRegex(ValueError, "Invalid version"):
+            is_newer_version("not-a-version", "v1.2.0")
         self.assertEqual(latest_release_tag_from_json(b'{"tag_name":"v1.2.3"}'), "v1.2.3")
         self.assertIn("有新版本可下載", release_update_message("v0.1.0", "v0.2.0"))
         self.assertIn("v0.2.0", release_update_message("v0.1.0", "v0.2.0"))

@@ -1,7 +1,8 @@
 import json
-import re
 import urllib.request
 from pathlib import Path
+
+from packaging.version import Version
 
 from . import __version__
 
@@ -27,18 +28,13 @@ def latest_release_tag_from_json(data: bytes) -> str:
     return str(json.loads(data.decode("utf-8"))["tag_name"])
 
 
-def is_newer_version(latest: str, current: str) -> bool:
-    left = _version_parts(latest)
-    right = _version_parts(current)
-    length = max(len(left), len(right))
-    return left + (0,) * (length - len(left)) > right + (0,) * (length - len(right))
+def is_newer_version(latest: str, current: str, *, allow_prerelease: bool = False) -> bool:
+    left = Version(latest)
+    right = Version(current)
+    return left > right and (allow_prerelease or not left.is_prerelease)
 
 
 def release_update_message(current: str, latest: str) -> str:
     if is_newer_version(latest, current):
         return f"有新版本可下載：{latest}（{RELEASES_URL}）"
     return f"已是最新版本：{current}"
-
-
-def _version_parts(value: str) -> tuple[int, ...]:
-    return tuple(int(part) for part in re.findall(r"\d+", value))
