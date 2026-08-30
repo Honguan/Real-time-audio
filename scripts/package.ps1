@@ -249,7 +249,7 @@ $Checksums = Join-Path $Out "SHA256SUMS.txt"
 $Sha256 = [System.Security.Cryptography.SHA256]::Create()
 try {
   Get-ChildItem -LiteralPath $Out |
-    Where-Object { $_.Name -ne "SHA256SUMS.txt" -and ($_.Name -eq "LICENSE" -or $_.Extension -in ".zip", ".7z", ".json", ".md", ".txt") } |
+    Where-Object { $_.Name -ne "SHA256SUMS.txt" -and ($_.Name -eq "LICENSE" -or $_.Extension -in ".zip", ".7z", ".exe", ".json", ".md", ".txt") } |
     ForEach-Object {
       $Path = $_.FullName
       $Stream = [System.IO.File]::OpenRead((Resolve-Path -LiteralPath $Path))
