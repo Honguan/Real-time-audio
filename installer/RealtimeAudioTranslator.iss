@@ -62,8 +62,8 @@ Source: "{#ReleaseDir}\SBOM.cdx.json"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#RepoRoot}\docs\README_QUICK_START_zh-TW.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#RepoRoot}\scripts\detect_installer_hardware.ps1"; Flags: dontcopy
 Source: "{#RepoRoot}\scripts\normalize_installer_runtime.ps1"; Flags: dontcopy
-Source: "{#RuntimeCoreUrl}"; DestDir: "{userprofile}\.realtime-audio\runtime\cuda12"; DestName: "runtime-core.7z"; ExternalSize: {#RuntimeCoreSize}; Hash: "{#RuntimeCoreHash}"; Components: runtime\core; Flags: external download extractarchive ignoreversion recursesubdirs createallsubdirs uninsneveruninstall
-Source: "{#RuntimeCudaUrl}"; DestDir: "{userprofile}\.realtime-audio\runtime\cuda12"; DestName: "runtime-cuda.7z"; ExternalSize: {#RuntimeCudaSize}; Hash: "{#RuntimeCudaHash}"; Components: runtime\cuda; Flags: external download extractarchive ignoreversion recursesubdirs createallsubdirs uninsneveruninstall
+Source: "{#RuntimeCoreUrl}"; DestDir: "{%USERPROFILE}\.realtime-audio\runtime\cuda12"; DestName: "runtime-core.7z"; ExternalSize: {#RuntimeCoreSize}; Hash: "{#RuntimeCoreHash}"; Components: runtime\core; Flags: external download extractarchive ignoreversion recursesubdirs createallsubdirs uninsneveruninstall
+Source: "{#RuntimeCudaUrl}"; DestDir: "{%USERPROFILE}\.realtime-audio\runtime\cuda12"; DestName: "runtime-cuda.7z"; ExternalSize: {#RuntimeCudaSize}; Hash: "{#RuntimeCudaHash}"; Components: runtime\cuda; Flags: external download extractarchive ignoreversion recursesubdirs createallsubdirs uninsneveruninstall
 
 [Icons]
 Name: "{autoprograms}\Realtime Audio Translator"; Filename: "{app}\RealtimeAudioTranslator.exe"
@@ -165,7 +165,7 @@ begin
       Device := 'cpu';
     Params := '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ' +
       AddQuotes(ExpandConstant('{tmp}\normalize_installer_runtime.ps1')) +
-      ' -RuntimeRoot ' + AddQuotes(ExpandConstant('{userprofile}\.realtime-audio\runtime\cuda12')) +
+      ' -RuntimeRoot ' + AddQuotes(ExpandConstant('{%USERPROFILE}\.realtime-audio\runtime\cuda12')) +
       ' -Device ' + Device;
     if (not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'), Params, '', SW_HIDE,
       ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then
@@ -194,7 +194,7 @@ var
 begin
   if CurUninstallStep <> usUninstall then
     Exit;
-  UserRoot := ExpandConstant('{userprofile}\.realtime-audio');
+  UserRoot := ExpandConstant('{%USERPROFILE}\.realtime-audio');
   if RemoveRuntimeData then
     DelTree(UserRoot + '\runtime', True, True, True);
   if RemoveModelData then
