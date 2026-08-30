@@ -785,12 +785,12 @@ class AudioTests(unittest.TestCase):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
         service_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "app_services.py").read_text(encoding="utf-8")
 
-        self.assertIn('text="下載上游 runtime"', gui_source)
+        self.assertIn('text=self._t("下載上游 runtime")', gui_source)
         self.assertIn("UPSTREAM_RUNTIME_RELEASE_URL", gui_source)
         self.assertIn('subprocess.run([str(target / "ffmpeg.exe"), "-version"]', service_source)
         self.assertIn('config["last_ffmpeg_failed"]', gui_source)
         self.assertIn('self.runtime_service.check(target, "cuda", before.get("compute_type", "auto"), verify_hashes=True)', gui_source)
-        self.assertIn('self.status.set("找不到 runtime：" + ", ".join(status["missing"]))', gui_source)
+        self.assertIn('error = self._t("找不到 runtime：{missing}", missing=", ".join(status["missing"]))', gui_source)
         self.assertNotIn('subprocess.run([str(exe), "--checkcuda"]', service_source)
         self.assertIn('cuda_hardware_from_check_output(status["cuda_probe_output"])', gui_source)
 
@@ -798,12 +798,12 @@ class AudioTests(unittest.TestCase):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
         service_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "app_services.py").read_text(encoding="utf-8")
 
-        self.assertIn('messagebox.showerror("runtime 不完整", "缺少：" + ", ".join(result.status["missing"]))', gui_source)
+        self.assertIn('messagebox.showerror(self._t("runtime 不完整"), self._t("缺少：{missing}", missing=", ".join(result.status["missing"])))', gui_source)
         self.assertIn('if not result.status["ready"]:', gui_source)
         self.assertIn('refresh_commands(whisper_exe(installed), self.commands_path)', service_source)
-        self.assertIn('self._refresh_lists()\n        self.status.set("runtime 已匯入；commands.json 已更新")', gui_source)
+        self.assertIn('self._refresh_lists()\n        self.status.set(self._t("runtime 已匯入；commands.json 已更新"))', gui_source)
         self.assertIn('refresh_commands(whisper_exe(target), self.commands_path)', service_source)
-        self.assertIn('self.status.set("commands.json 已更新")', gui_source)
+        self.assertIn('self.status.set(self._t("commands.json 已更新"))', gui_source)
         self.assertIn('"commands.json 更新失敗"', gui_source)
         self.assertIn('if result.error is not None:', gui_source)
 

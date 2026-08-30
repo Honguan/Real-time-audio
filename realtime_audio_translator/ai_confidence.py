@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 
+from .localization import translate
+
 
 CLOUD_PROVIDERS = {"google", "openai"}
 
@@ -53,35 +55,36 @@ def build_quality_snapshot(
     )
 
 
-def format_quality_status(snapshot: QualitySnapshot, advanced: bool = False) -> str:
-    mode = "雲端 API 模式" if snapshot.cloud_enabled else "本機免費模式"
+def format_quality_status(snapshot: QualitySnapshot, advanced: bool = False, language: str = "zh-TW") -> str:
+    t = lambda message, **values: translate(language, message, **values)
+    mode = t("雲端 API 模式" if snapshot.cloud_enabled else "本機免費模式")
     total = sum(value for value in (snapshot.asr_latency_seconds, snapshot.translation_latency_seconds, snapshot.tts_latency_seconds) if value is not None)
-    parts = [mode, f"延遲 {total:.2f} 秒", f"翻譯服務 {_provider_label(snapshot.provider)}", f"費用 {'可能' if snapshot.cost_risk else '否'}"]
+    parts = [mode, t("延遲 {total:.2f} 秒", total=total), t("翻譯服務 {provider}", provider=_provider_label(snapshot.provider, language)), t("費用 {risk}", risk=t("可能" if snapshot.cost_risk else "否"))]
     if not advanced:
         return "; ".join(parts)
 
     details = list(parts)
     if snapshot.language_model_score is not None:
-        details.append(f"偵測語言 {snapshot.source_language} 模型分數 {snapshot.language_model_score:.2f}（未校準）")
+        details.append(t("偵測語言 {source} 模型分數 {score:.2f}（未校準）", source=snapshot.source_language, score=snapshot.language_model_score))
     else:
-        details.append("語言模型分數 無法取得")
+        details.append(t("語言模型分數 無法取得"))
     if snapshot.asr_model_score is not None:
-        details.append(f"ASR 模型分數 {snapshot.asr_model_score:.2f}（平均 log probability，未校準）")
+        details.append(t("ASR 模型分數 {score:.2f}（平均 log probability，未校準）", score=snapshot.asr_model_score))
     else:
-        details.append("ASR 模型分數 無法取得")
+        details.append(t("ASR 模型分數 無法取得"))
     if snapshot.provider_quality_signal is None:
-        details.append("翻譯品質訊號 無法取得")
+        details.append(t("翻譯品質訊號 無法取得"))
     else:
-        details.append(f"翻譯品質訊號 {snapshot.provider_quality_signal:.2f}（供應商訊號）")
+        details.append(t("翻譯品質訊號 {signal:.2f}（供應商訊號）", signal=snapshot.provider_quality_signal))
     if snapshot.translation_heuristic_warning:
-        details.append(f"翻譯提示 {snapshot.translation_heuristic_warning}")
+        details.append(t("翻譯提示 可用") if language == "en" else f"翻譯提示 {snapshot.translation_heuristic_warning}")
     if snapshot.asr_latency_seconds is not None:
-        details.append(f"ASR 延遲 {_milliseconds(snapshot.asr_latency_seconds)}")
+        details.append(t("ASR 延遲 {latency}", latency=_milliseconds(snapshot.asr_latency_seconds)))
     if snapshot.translation_latency_seconds is not None:
-        details.append(f"翻譯延遲 {_milliseconds(snapshot.translation_latency_seconds)}")
+        details.append(t("翻譯延遲 {latency}", latency=_milliseconds(snapshot.translation_latency_seconds)))
     if snapshot.tts_latency_seconds is not None:
-        details.append(f"TTS 延遲 {_milliseconds(snapshot.tts_latency_seconds)}")
-    details.append(f"TTS 服務 {_provider_label(snapshot.tts_provider)}")
+        details.append(t("TTS 延遲 {latency}", latency=_milliseconds(snapshot.tts_latency_seconds)))
+    details.append(t("TTS 服務 {provider}", provider=_provider_label(snapshot.tts_provider, language)))
     return "; ".join(details)
 
 
@@ -89,5 +92,6 @@ def _milliseconds(seconds: float) -> str:
     return f"{round(seconds * 1000)}ms"
 
 
-def _provider_label(provider: str) -> str:
-    return {"local": "本機", "google": "Google", "openai": "OpenAI"}.get(provider, provider)
+def _provider_label(provider: str, language: str = "zh-TW") -> str:
+    label = {"local": "本機", "google": "Google", "openai": "OpenAI"}.get(provider, provider)
+    return translate(language, label) if label == "本機" else label

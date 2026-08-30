@@ -11,6 +11,7 @@ from .audio import AudioSegment, DeviceResolutionError, SegmentWorker, WorkerHea
 from .ai_confidence import build_quality_snapshot, format_quality_status
 from .config import APP_DIR, DEFAULT_CONFIG, STATE_KEYS, TARGET_LANGUAGE_CHOICES, save_config_state, validate_language_pair
 from .logbook import ConversationLog
+from .localization import translate, translate_known
 from .models import models_dir
 from .offline_translation import OfflineTranslationRegistry
 from .performance import FIRST_SUBTITLE_P50, FIRST_SUBTITLE_P95, FIRST_SUBTITLE_P99, LatencyWindow
@@ -41,8 +42,8 @@ class TtsTask:
     cancel: threading.Event
 
 
-def direction_label(direction: str) -> str:
-    return "喇叭" if direction == "speaker" else "麥克風"
+def direction_label(direction: str, language: str = "zh-TW") -> str:
+    return translate(language, "喇叭" if direction == "speaker" else "麥克風")
 
 
 def drain_queue(items) -> int:
@@ -124,6 +125,9 @@ class RealtimeEngine:
         self.offline_translation_registry: OfflineTranslationRegistry | None = None
         self.transcriber: AudioTranscriber | None = None
 
+    def _t(self, message: str, **values) -> str:
+        return translate(self.config.get("app_language"), message, **values)
+
     def start(self) -> None:
         with self._lifecycle_lock:
             if self.running or self._closed:
@@ -145,7 +149,7 @@ class RealtimeEngine:
         except ValueError as exc:
             self.running = False
             if self._session == session:
-                self.status(str(exc))
+                self.status(translate_known(self.config.get("app_language"), str(exc)))
             return
         if self.config.get("provider") == "local" and not self.config.get("local_translate_url", "").strip():
             try:
@@ -153,7 +157,7 @@ class RealtimeEngine:
             except Exception as exc:
                 self.running = False
                 if self._session == session:
-                    self.status(f"離線翻譯模型載入失敗：{exc}")
+                    self.status(self._t("離線翻譯模型載入失敗：{error}", error=exc))
                 return
         session_counters = {"last_provider_error_count": 0, "last_rate_limit_count": 0, "last_max_queue_depth": 0, "last_dropped_segments": 0}
         self.config.update(session_counters)
@@ -176,7 +180,7 @@ class RealtimeEngine:
             self._save_state({"last_asr_failed"})
             message = str(exc)
             if message.startswith("Runtime missing: "):
-                message = "找不到 runtime：" + message.removeprefix("Runtime missing: ")
+                message = self._t("找不到 runtime：{missing}", missing=message.removeprefix("Runtime missing: "))
             self.status(message)
             return
         if not self._session_active(session):
@@ -209,16 +213,17 @@ class RealtimeEngine:
             self._discard_tts_queue()
         skips = []
         if skipped_feedback:
-            skips.append("喇叭擷取已略過：和 TTS 輸出相同")
+            skips.append(self._t("喇叭擷取已略過：和 TTS 輸出相同"))
         if skipped_mic_feedback:
-            skips.append("麥克風擷取已略過：和虛擬麥克風輸出相同")
+            skips.append(self._t("麥克風擷取已略過：和虛擬麥克風輸出相同"))
         if any(started) and self.running:
             if self._session_active(session):
-                self._publish_capture_status(session, f"；{'；'.join(skips)}" if skips else "")
+                separator = "; " if self.config.get("app_language") == "en" else "；"
+                self._publish_capture_status(session, separator + separator.join(skips) if skips else "")
         elif self._session == session:
             self.running = False
             if not self._cancel.is_set():
-                self.status("沒有可用音訊裝置" + (f"；{'；'.join(skips)}" if skips else ""))
+                self.status(self._t("沒有可用音訊裝置") + (f"；{'；'.join(skips)}" if skips and self.config.get("app_language") != "en" else ""))
 
     def stop(self, join_timeout: float = 5.0) -> str:
         deadline = time.monotonic() + max(0.0, join_timeout)
@@ -248,25 +253,25 @@ class RealtimeEngine:
             if not alive:
                 self.workers = [worker for worker in self.workers if worker not in workers]
         pending = len(alive) + (not callback_stopped) + (not log_closed)
-        message = f"停止逾時：仍有 {pending} 個背景工作" if pending else "已停止"
+        message = self._t("停止逾時：仍有 {count} 個背景工作", count=pending) if pending else self._t("已停止")
         self.status(message)
         return message
 
     def set_paused(self, paused: bool) -> None:
         self.paused = paused
-        self.status("已暫停" if paused else self._capture_status("執行中"))
+        self.status(self._t("已暫停") if paused else self._capture_status(self._t("執行中")))
 
     def set_virtual_mic_muted(self, muted: bool) -> None:
         with self._lifecycle_lock:
             self.virtual_mic_muted = muted
             self._virtual_mic_cancel = self._set_output_muted("me", muted, self._virtual_mic_cancel)
-        self.status("虛擬麥克風已靜音" if muted else self._capture_status("虛擬麥克風已取消靜音"))
+        self.status(self._t("虛擬麥克風已靜音") if muted else self._capture_status(self._t("虛擬麥克風已取消靜音")))
 
     def set_speaker_translation_muted(self, muted: bool) -> None:
         with self._lifecycle_lock:
             self.speaker_translation_muted = muted
             self._speaker_translation_cancel = self._set_output_muted("speaker", muted, self._speaker_translation_cancel)
-        self.status("本機翻譯播放已靜音" if muted else self._capture_status("本機翻譯播放已取消靜音"))
+        self.status(self._t("本機翻譯播放已靜音") if muted else self._capture_status(self._t("本機翻譯播放已取消靜音")))
 
     def _set_output_muted(self, direction: str, muted: bool, cancel_event: threading.Event) -> threading.Event:
         if muted:
@@ -277,24 +282,26 @@ class RealtimeEngine:
 
     def _capture_status(self, healthy: str) -> str:
         with self._health_lock:
-            failed = [direction_label(direction) for direction, health in self.capture_health.items() if health.state == "failed"]
-            recovering = [direction_label(direction) for direction, health in self.capture_health.items() if health.state in {"degraded", "recovering"}]
+            language = self.config.get("app_language", "zh-TW")
+            failed = [direction_label(direction, language) for direction, health in self.capture_health.items() if health.state == "failed"]
+            recovering = [direction_label(direction, language) for direction, health in self.capture_health.items() if health.state in {"degraded", "recovering"}]
+        separator = "、" if language == "zh-TW" else ", "
         if failed:
-            return f"部分可用；{'、'.join(failed)}擷取失敗；請停止後重新啟動"
+            return self._t("部分可用；{sources}擷取失敗；請停止後重新啟動", sources=separator.join(failed))
         if recovering:
-            return f"音訊降級；{'、'.join(recovering)}擷取恢復中"
+            return self._t("音訊降級；{sources}擷取恢復中", sources=separator.join(recovering))
         return healthy
 
     def _publish_capture_status(self, session: str | None, suffix: str = "") -> None:
         with self._callback_lock:
             if self._session_active(session):
-                self.status(self._capture_status("執行中") + suffix)
+                self.status(self._capture_status(self._t("執行中")) + suffix)
 
     def _start_direction(self, direction: str, device_hint: str, loopback: bool) -> bool:
         try:
             device = find_device(device_hint, want_output=loopback)
         except (DeviceResolutionError, OSError) as exc:
-            self.status(f"{direction_label(direction)}：{exc}")
+            self.status(self._t("{source}：{error}", source=direction_label(direction, self.config.get("app_language", "zh-TW")), error=exc))
             return False
         session = self._session
         worker = SegmentWorker(
@@ -332,15 +339,15 @@ class RealtimeEngine:
         with self._health_lock:
             previous = self.capture_health.get(health.direction)
             self.capture_health[health.direction] = health
-        label = direction_label(health.direction)
+        label = direction_label(health.direction, self.config.get("app_language", "zh-TW"))
         if health.state == "degraded":
-            self._publish(session, self.status, f"{label}擷取暫時失敗 [{health.error_code}]：{health.message}；第 {health.attempt} 次重試")
+            self._publish(session, self.status, self._t("{source}擷取暫時失敗 [{code}]：{error}；第 {attempt} 次重試", source=label, code=health.error_code, error=health.message, attempt=health.attempt))
         elif health.state == "recovering":
-            self._publish(session, self.status, f"{label}擷取恢復中；第 {health.attempt} 次重試")
+            self._publish(session, self.status, self._t("{source}擷取恢復中；第 {attempt} 次重試", source=label, attempt=health.attempt))
         elif health.state == "capturing" and previous and previous.state != "capturing":
-            self._publish(session, self.status, f"{label}擷取已恢復")
+            self._publish(session, self.status, self._t("{source}擷取已恢復", source=label))
         elif health.state == "failed":
-            self._publish(session, self.status, f"{label}擷取失敗 [{health.error_code}]：{health.message}；請停止後重新啟動")
+            self._publish(session, self.status, self._t("{source}擷取失敗 [{code}]：{error}；請停止後重新啟動", source=label, code=health.error_code, error=health.message))
             if not self._starting_directions and self._all_captures_failed():
                 self.running = False
                 self._cancel.set()
@@ -468,7 +475,7 @@ class RealtimeEngine:
                 }
                 self._record_metrics(direction, backlog_metrics, set(backlog_metrics))
                 if dropped_segments > previous_dropped or queue_depth >= max(1, worker.queue.maxsize - 1):
-                    self._publish(session, self.status, f"{direction_label(direction)}：處理落後，已略過 {dropped_segments} 段；佇列 {queue_depth}/{worker.queue.maxsize}")
+                    self._publish(session, self.status, self._t("{source}：處理落後，已略過 {dropped} 段；佇列 {depth}/{maximum}", source=direction_label(direction, self.config.get("app_language", "zh-TW")), dropped=dropped_segments, depth=queue_depth, maximum=worker.queue.maxsize))
                 started = time.perf_counter()
                 cpu_started = time.thread_time()
                 vad_latency = timing.get("_vad_seconds", 0.0)
@@ -532,7 +539,7 @@ class RealtimeEngine:
                     self._record_provider_error(direction, exc)
                     translated = ""
                     translation_failed = True
-                    self._publish(session, self.status, f"{direction_label(direction)}：翻譯失敗：{exc}")
+                    self._publish(session, self.status, self._t("{source}：翻譯失敗：{error}", source=direction_label(direction, self.config.get("app_language", "zh-TW")), error=exc))
                 metrics["last_translation_empty"] = not translation_failed and not bool(str(translated).strip())
                 state_keys.add("last_translation_empty")
                 if not translation_failed:
@@ -625,9 +632,11 @@ class RealtimeEngine:
                         provider_quality_signal=provider_quality_signal,
                         translation_heuristic_warning=translation_heuristic_warning,
                     )
-                    self._publish(session, self.status, f"{direction_label(direction)}延遲 {latency:.2f} 秒；{format_quality_status(snapshot, bool(config.get('advanced_mode')))}")
+                    separator = "; " if config.get("app_language") == "en" else "；"
+                    quality = separator + format_quality_status(snapshot, bool(config.get("advanced_mode")), config.get("app_language", "zh-TW"))
+                    self._publish(session, self.status, self._t("{source}延遲 {latency:.2f} 秒", source=direction_label(direction, config.get("app_language", "zh-TW")), latency=latency) + quality)
             except Exception as exc:
-                self._publish(session, self.status, f"{direction_label(direction)}：{exc}")
+                self._publish(session, self.status, self._t("{source}：{error}", source=direction_label(direction, config.get("app_language", "zh-TW")), error=exc))
             finally:
                 discard_audio_segment(wav)
 
@@ -774,7 +783,7 @@ class RealtimeEngine:
                 timing.setdefault("tts_playback_completed_at", now)
             tts_failed = True
             self._record_provider_error(direction, exc)
-            self._publish(session, self.status, f"{direction_label(direction)}：TTS 失敗：{exc}")
+            self._publish(session, self.status, self._t("{source}：TTS 失敗：{error}", source=direction_label(direction, self.config.get("app_language", "zh-TW")), error=exc))
         tts_metrics = {
             "last_tts_failed": tts_failed,
             "last_tts_latency_seconds": time.perf_counter() - tts_started,

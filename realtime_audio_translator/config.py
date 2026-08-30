@@ -146,6 +146,7 @@ STATE_KEYS = DIAGNOSTIC_STATE_KEYS | SESSION_STATE_KEYS
 SETTINGS_KEYS = set(DEFAULT_CONFIG) - STATE_KEYS
 PATH_SETTING_KEYS = {"log_dir", "glossary_path", "translation_cache_path", "runtime_dir", "runtime_path", "models_path"}
 SETTING_CHOICES = {
+    "app_language": {"zh-TW", "en"},
     "ui_mode": {"simple", "advanced"},
     "translation_engine": {"local", "google", "openai"},
     "translation_style": {"plain", "formal"},

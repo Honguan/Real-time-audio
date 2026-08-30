@@ -8,6 +8,7 @@ from pathlib import Path
 from .audio import DeviceResolutionError, audio_segment_active, capture_wav, find_device
 from .commands import refresh_commands
 from .diagnostics import DiagnosticIssue, collect_diagnostics
+from .localization import translate
 from .models import download_model, model_status
 from .offline_translation import download_translation_models
 from .providers import TextToSpeech, Translator, google_access_token
@@ -61,8 +62,8 @@ class ModelService:
     def status(self, model: str, local_models: Path, app_models: Path) -> str:
         return model_status(model, local_models, app_models)
 
-    def download(self, model: str, target: Path, progress, cancel: threading.Event) -> Path:
-        return download_model(model, target, progress, cancel)
+    def download(self, model: str, target: Path, progress, cancel: threading.Event, language: str = "zh-TW") -> Path:
+        return download_model(model, target, progress, cancel, language=language)
 
     def download_translation(self, config: dict, source: str, target: str, registry=None) -> list:
         return download_translation_models(config, source, target, registry)
@@ -78,7 +79,7 @@ class AudioDiagnosticsService:
     def test_api(self, config: dict) -> str:
         if config["provider"] == "google":
             google_access_token(config["google_service_account_json"])
-            return "Google 驗證成功"
+            return translate(config.get("app_language"), "Google 驗證成功")
         return Translator(config).translate("hello", "en", "zh").text[:80]
 
     def test_tone(self, config: dict) -> None:
@@ -132,5 +133,5 @@ class AudioDiagnosticsService:
 
 
 class UpdateService:
-    def check(self, app_root: Path) -> str:
-        return release_update_message(current_version(app_root), latest_release_tag())
+    def check(self, app_root: Path, language: str = "zh-TW") -> str:
+        return release_update_message(current_version(app_root), latest_release_tag(), language)

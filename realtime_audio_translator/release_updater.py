@@ -5,6 +5,7 @@ from pathlib import Path
 from packaging.version import Version
 
 from . import __version__
+from .localization import translate
 
 
 RELEASES_URL = "https://github.com/Honguan/Real-time-audio/releases"
@@ -34,7 +35,7 @@ def is_newer_version(latest: str, current: str, *, allow_prerelease: bool = Fals
     return left > right and (allow_prerelease or not left.is_prerelease)
 
 
-def release_update_message(current: str, latest: str) -> str:
+def release_update_message(current: str, latest: str, language: str = "zh-TW") -> str:
     if is_newer_version(latest, current):
-        return f"有新版本可下載：{latest}（{RELEASES_URL}）"
-    return f"已是最新版本：{current}"
+        return translate(language, "有新版本可下載：{latest}（{url}）", latest=latest, url=RELEASES_URL)
+    return translate(language, "已是最新版本：{current}", current=current)
