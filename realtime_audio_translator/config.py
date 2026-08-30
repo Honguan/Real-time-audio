@@ -45,6 +45,8 @@ DEFAULT_CONFIG = {
     "overlay_opacity": 0.86,
     "overlay_font_size": 18,
     "overlay_hold_seconds": 8.0,
+    "overlay_x": -1,
+    "overlay_y": -1,
     "subtitle_always_on_top": True,
     "show_language_labels": True,
     "show_original_text": True,
