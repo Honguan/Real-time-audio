@@ -895,12 +895,13 @@ class EngineTests(unittest.TestCase):
 
         class TTS:
             def speak_local(self, text, device):
-                time.sleep(0.01)
+                pass
 
         engine._pipeline("me").tts = TTS()
-        engine._speak_translation("me", "hi", "en", "", None, {}, threading.Event())
+        with patch("realtime_audio_translator.engine.time.perf_counter", side_effect=[1.0, 1.0, 1.01, 1.01, 1.01]):
+            engine._speak_translation("me", "hi", "en", "", None, {}, threading.Event())
 
-        self.assertGreaterEqual(engine.config["last_tts_latency_seconds"], 0.01)
+        self.assertAlmostEqual(engine.config["last_tts_latency_seconds"], 0.01)
 
     def test_tts_playback_does_not_block_subsequent_subtitles(self):
         config = DEFAULT_CONFIG.copy()
