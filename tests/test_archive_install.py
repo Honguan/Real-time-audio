@@ -133,6 +133,25 @@ class ArchiveInstallTests(unittest.TestCase):
             nested.write_text("unexpected", encoding="utf-8")
             self.assertFalse(verify_install_manifest(root, verify_hashes=True))
 
+    def test_manifest_hashes_detect_same_size_change_among_multiple_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for index in range(8):
+                (root / f"payload-{index}.bin").write_bytes(b"working")
+            write_install_manifest(root)
+            self.assertTrue(verify_install_manifest(root, verify_hashes=True))
+            (root / "payload-3.bin").write_bytes(b"changed")
+            self.assertTrue(verify_install_manifest(root, verify_hashes=False))
+            self.assertFalse(verify_install_manifest(root, verify_hashes=True))
+
+    def test_manifest_hash_read_error_is_a_verification_failure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "payload.bin").write_bytes(b"working")
+            write_install_manifest(root)
+            with patch("realtime_audio_translator.archive_install._sha256", side_effect=PermissionError("unreadable")):
+                self.assertFalse(verify_install_manifest(root, verify_hashes=True))
+
     def test_failed_tree_swap_restores_existing_install(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

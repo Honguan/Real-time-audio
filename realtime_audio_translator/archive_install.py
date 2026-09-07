@@ -6,6 +6,7 @@ import stat
 import subprocess
 import tempfile
 import zipfile
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
 
@@ -170,14 +171,23 @@ def verify_install_manifest(root: Path, verify_hashes: bool = False) -> bool:
         if data.get("version") != 1 or not isinstance(entries, list):
             return False
         expected = set()
+        hash_checks = []
         for entry in entries:
             path = _member_target(root, entry["path"])
             relative = path.relative_to(root).as_posix()
             if relative in expected or not path.is_file() or _is_link_or_reparse(path) or path.stat().st_size != entry["size"]:
                 return False
             expected.add(relative)
-            if verify_hashes and _sha256(path) != entry["sha256"]:
-                return False
+            if verify_hashes:
+                hash_checks.append((path, entry["sha256"]))
+        if verify_hashes:
+            executor = ThreadPoolExecutor(max_workers=4)
+            try:
+                hashes = executor.map(_sha256, (path for path, _ in hash_checks))
+                if not all(digest == expected_hash for digest, (_, expected_hash) in zip(hashes, hash_checks)):
+                    return False
+            finally:
+                executor.shutdown(wait=True, cancel_futures=True)
         manifest = root / INSTALL_MANIFEST
         actual = {path.relative_to(root).as_posix() for path in root.rglob("*") if path.is_file() and path != manifest}
         return expected == actual
