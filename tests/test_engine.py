@@ -233,7 +233,64 @@ class EngineTests(unittest.TestCase):
             engine.update_config(enabled | {"record_logs": False})
 
             self.assertIsNone(engine.log)
+            self.assertEqual(engine.stop(join_timeout=1), "已停止")
             self.assertFalse(log._thread.is_alive())
+
+    def test_stop_retries_retired_log_when_blocked_writer_prevents_close(self):
+        from realtime_audio_translator.logbook import ConversationLog
+
+        with tempfile.TemporaryDirectory() as tmp:
+            config = DEFAULT_CONFIG | {"provider": "google", "record_logs": True, "log_dir": tmp}
+            old_log = ConversationLog(Path(tmp), queue_size=1)
+            with patch.object(RealtimeEngine, "_new_conversation_log", return_value=old_log):
+                engine = RealtimeEngine(Path("."), config, lambda *_args: None, lambda *_args: None)
+            entered = threading.Event()
+            release = threading.Event()
+            original_write = old_log._write
+
+            def blocked_write(row):
+                entered.set()
+                release.wait(10)
+                original_write(row)
+
+            try:
+                with patch.object(old_log, "_write", side_effect=blocked_write):
+                    old_log.append("me", "zh", "en", "first", "one", "google")
+                    self.assertTrue(entered.wait(1))
+                    old_log.append("me", "zh", "en", "second", "two", "google")
+                    started = time.monotonic()
+                    engine.update_config(config | {"record_logs": False})
+                    update_seconds = time.monotonic() - started
+
+                    self.assertEqual(engine.stop(join_timeout=0.01), "停止逾時：仍有 1 個背景工作")
+                    self.assertTrue(engine.stop_pending)
+                    self.assertLess(update_seconds, 0.2)
+                    self.assertTrue(old_log._thread.is_alive())
+                    self.assertIn(old_log, engine._retired_logs)
+                    release.set()
+                    self.assertEqual(engine.stop(join_timeout=1), "已停止")
+                    self.assertFalse(engine.stop_pending)
+
+                self.assertFalse(old_log._thread.is_alive())
+                self.assertEqual(engine._retired_logs, [])
+                records = old_log.jsonl_path.read_text(encoding="utf-8").splitlines()
+                self.assertEqual(len(records), 2)
+                self.assertIn("first", records[0])
+                self.assertIn("second", records[1])
+            finally:
+                release.set()
+                old_log.close()
+
+    def test_config_update_after_stop_does_not_create_untracked_writer(self):
+        config = DEFAULT_CONFIG | {"provider": "google", "record_logs": False}
+        engine = RealtimeEngine(Path("."), config, lambda *_args: None, lambda *_args: None)
+        engine.stop()
+
+        with patch.object(engine, "_new_conversation_log") as create_log:
+            engine.update_config(config | {"record_logs": True})
+
+        create_log.assert_not_called()
+        self.assertIsNone(engine.log)
 
     def test_engine_reports_segment_latency(self):
         statuses = []

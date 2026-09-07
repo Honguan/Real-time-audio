@@ -96,6 +96,7 @@ class RealtimeEngine:
         self.status = status
         self.state_root = state_root
         self.running = False
+        self.stop_pending = False
         self._closed = False
         self.paused = False
         self.virtual_mic_muted = bool(config.get("start_virtual_mic_muted", False))
@@ -121,6 +122,7 @@ class RealtimeEngine:
         self._active_directions: set[str] = set()
         self._starting_directions = False
         self.log = self._new_conversation_log(config)
+        self._retired_logs: list[ConversationLog] = []
         self.pipelines: dict[str, PipelineContext] = {}
         self.offline_translation_registry: OfflineTranslationRegistry | None = None
         self.transcriber: AudioTranscriber | None = None
@@ -235,6 +237,7 @@ class RealtimeEngine:
             self._speaker_translation_cancel.set()
             workers = list(self.workers)
             threads = list(self.threads)
+            logs = self._retired_logs + ([self.log] if self.log else [])
         self._discard_tts_queue()
         callback_stopped = self._callback_lock.acquire(timeout=max(0.0, deadline - time.monotonic()))
         if callback_stopped:
@@ -247,12 +250,14 @@ class RealtimeEngine:
             if thread is not current:
                 thread.join(max(0.0, deadline - time.monotonic()))
         alive = [thread for thread in threads if thread.is_alive()]
-        log_closed = self.log.close(max(0.0, deadline - time.monotonic())) if self.log else True
+        pending_logs = [log for log in logs if not log.close(max(0.0, deadline - time.monotonic()))]
         with self._lifecycle_lock:
+            self._retired_logs = [log for log in self._retired_logs if log in pending_logs]
             self.threads = [thread for thread in self.threads if thread not in threads or thread in alive]
             if not alive:
                 self.workers = [worker for worker in self.workers if worker not in workers]
-        pending = len(alive) + (not callback_stopped) + (not log_closed)
+        pending = len(alive) + (not callback_stopped) + len(pending_logs)
+        self.stop_pending = bool(pending)
         message = self._t("停止逾時：仍有 {count} 個背景工作", count=pending) if pending else self._t("已停止")
         if report_status:
             self.status(message)
@@ -379,6 +384,8 @@ class RealtimeEngine:
     def update_config(self, config: dict) -> None:
         old_log = None
         with self._lifecycle_lock:
+            if self._closed:
+                return
             previous_models_path = self.config.get("models_path")
             use_offline_registry = config.get("provider") == "local" and not config.get("local_translate_url", "").strip()
             if use_offline_registry and (
@@ -407,8 +414,9 @@ class RealtimeEngine:
                 pipeline.config.update(values)
                 if hasattr(pipeline.translator, "offline_registry"):
                     pipeline.translator.offline_registry = registry
-        if old_log:
-            old_log.close()
+            if old_log:
+                self._retired_logs.append(old_log)
+            self._retired_logs = [log for log in self._retired_logs if not log.close(0)]
 
     @staticmethod
     def _log_policy(config: dict) -> tuple:

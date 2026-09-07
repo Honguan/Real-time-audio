@@ -15,6 +15,13 @@ from realtime_audio_translator.release_updater import RELEASES_URL, current_vers
 
 
 class ConfigTests(unittest.TestCase):
+    def test_runtime_compute_types_survive_save_and_reload(self):
+        for compute_type in ("float32", "int16", "int8_float32", "int8_bfloat16", "bfloat16", "default"):
+            with self.subTest(compute_type=compute_type), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                save_config(root, DEFAULT_CONFIG | {"compute_type": compute_type})
+                self.assertEqual(load_config(root)["compute_type"], compute_type)
+
     def test_app_language_is_validated_and_persisted(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

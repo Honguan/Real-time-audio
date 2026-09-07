@@ -22,10 +22,10 @@
 
 以下保留在目標內，尚未宣稱完成；需要以量測或重現決定修法，避免只憑推測重寫架構。
 
-1. **長時間執行**：量測多場對話下的紀錄保留掃描、GUI 事件佇列與翻譯快取成本；檢查滿載時的丟棄回饋。
-2. **音訊操作**：檢查來源重連、執行中修改裝置是否生效，以及需要重新啟動的設定如何提示。
-3. **設定輸入**：檢查下拉選項是否與設定 schema、實際 runtime 相符，避免可選但不能持久化的選項。
-4. **關閉與資料完整性**：檢查紀錄 writer 關閉逾時、背景操作取消與完成提示的語意。
+1. **長時間執行**：紀錄保留掃描已量測並改善；GUI 事件佇列、翻譯快取成本與滿載丟棄回饋仍待檢查。
+2. **音訊操作**：已補 EXE 辨識硬體參數與需重新開始提示；來源重連仍需實機驗證。
+3. **設定輸入**：運算精度選項已與目前 CLI 清單對齊並驗證持久化；損毀 commands.json 的復原仍待檢查。
+4. **關閉與資料完整性**：writer／引擎停止逾時已串接保留與重試；紀錄寫入錯誤、丟棄數量的使用者回饋仍待檢查。
 5. **實機驗證**：麥克風、VB-CABLE、跨螢幕 DPI 與雲端 API 延遲仍需硬體／服務驗證；離線綠燈不能替代。
 
 本輪未加入新框架或相依套件，沒有推送、建立 PR 或發布。
@@ -37,3 +37,56 @@
 - `git diff --check` 通過。測試仍回報原有 `PurePath.is_reserved` 棄用警告，包裝測試依預期略過 runtime zip。
 - 修改程式：`config.py`、`engine.py`、`gui.py`、`localization.py`、`subtitle_export.py`。
 - 修改測試：`test_config.py`、`test_engine.py`、`test_gui_logic.py`、`test_subtitle_export.py`。另更新 `README.md` 與本企劃，共 11 檔。
+
+## 第二輪：執行設定、停止收尾與紀錄成本
+
+基準 `b1028ef`。
+
+- EXE 備援原本忽略所選 `device` 與 `compute_type`，現在明確傳入兩個 CLI 參數。測試強制進入 EXE 路徑並驗證 CPU／float32 傳遞。依據為專案 `help.txt` 與 [Faster Whisper 文件](https://github.com/SYSTRAN/faster-whisper/blob/master/README.md)。
+- 設定 schema 現在保留 CLI 提供的完整精度選項，包含原本選得到卻會被重設的 float32；裝置與精度選單使用共用 schema 作為 fallback 並過濾不支援項目。
+- 開始時保留擷取設定快照；來源／模型／切句設定變更後，底部持續列出需停止重開的項目，避免把「設定已儲存」誤認為目前擷取已切換。即時音量不列入重開項目。
+- 切換紀錄 policy 改為非阻塞收尾；尚未結束的 writer 留在引擎內，停止時一起等待。真實 writer 阻塞且佇列已滿的測試，確認解除阻塞後兩筆紀錄仍完整保存。
+- 控制器停止逾時／例外時保留引擎，完成旗標由 worker 自行釋放；過期 UI 完成回呼不會覆寫下一次停止的狀態。
+- 關閉期間仍交付控制器完成回呼。若停止未完成，取消關閉、保留視窗與錯誤提示，使用者可稍後重試，不進入無限自動重試。
+- 紀錄保留使用單次掃描的檔案 metadata，移除重複 stat 與陣列首項刪除；每次仍驗證檔頭與外部更動，並立即執行期限／容量政策。兩項限制皆停用時不掃描。
+
+### 效能量測
+
+第二輪完整測試：`scripts/test.ps1` 464 項通過、compileall 通過。真實 Tk 視窗另驗證停止逾時取消關閉、保留引擎與再次停止成功；最後狀態存檔失敗的關閉防護另以 GUI 回歸測試確認。
+
+500 個模擬 session、1000 檔，每個版本暖機後交錯執行 7 次。中位數 **247.20 → 127.58 ms（降低 48.4%）**；此數字限本機檔案系統與當時背景負載，不代表音訊端到端延遲。
+
+重現方式（僅在暫存目錄建立模擬紀錄）：
+
+```powershell
+@'
+import json, statistics, subprocess, tempfile, time
+from pathlib import Path
+from realtime_audio_translator.logbook import enforce_log_retention
+baseline = {}
+source = subprocess.run(
+    ["git", "show", "b1028ef:realtime_audio_translator/logbook.py"],
+    capture_output=True, encoding="utf-8", check=True,
+).stdout
+exec(source, baseline)
+functions = {"before": baseline["enforce_log_retention"], "after": enforce_log_retention}
+with tempfile.TemporaryDirectory() as temporary:
+    root = Path(temporary)
+    for index in range(500):
+        stem = f"session-{index}"
+        (root / f"{stem}.md").write_text(f"# Conversation {stem}\n", encoding="utf-8")
+        row = dict(session_id=stem, timestamp="now", direction="audio",
+                   source_language="en", target_language="zh", provider="local")
+        (root / f"{stem}.jsonl").write_text(json.dumps(row) + "\n", encoding="utf-8")
+    for function in functions.values():
+        function(root, 7, 100 * 1024 * 1024)
+    samples = {name: [] for name in functions}
+    for _ in range(7):
+        for name, function in functions.items():
+            started = time.perf_counter()
+            function(root, 7, 100 * 1024 * 1024)
+            samples[name].append((time.perf_counter() - started) * 1000)
+    for name, values in samples.items():
+        print(name, "median_ms =", round(statistics.median(values), 2))
+'@ | python -
+```

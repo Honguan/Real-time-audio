@@ -157,7 +157,7 @@ SETTING_CHOICES = {
     "tts_provider": {"local", "google", "openai"},
     "scenario": {"game_voice", "discord_chat", "meeting", "customer_service", "subtitle_only", "speak_translate", "two_way"},
     "performance_mode": {"low_latency", "balanced", "quality", "offline_light"},
-    "compute_type": {"auto", "float16", "int8", "int8_float16"},
+    "compute_type": {"default", "auto", "int8", "int8_float16", "int8_float32", "int8_bfloat16", "int16", "float16", "float32", "bfloat16"},
     "device": {"cuda", "cpu", "auto"},
     "conversation_log_content": {"both", "original", "translation", "none"},
 }

@@ -130,6 +130,61 @@ class SubtitleExportTests(unittest.TestCase):
 
             self.assertEqual(conversation_log_usage(root), 0)
 
+    def test_retention_rechecks_external_changes_and_preserves_unmanaged_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            log = ConversationLog(root, "session", retention_days=0, max_mb=0)
+            log.append("speaker", "en", "zh", "hello", "hi", "local")
+            self.assertTrue(log.close())
+            initial_usage = conversation_log_usage(root)
+            enforce_log_retention(root, 0, initial_usage)
+            with log.md_path.open("a", encoding="utf-8") as handle:
+                handle.write("external append")
+            self.assertGreater(conversation_log_usage(root), initial_usage)
+            unrelated = root / "notes.md"
+            unrelated.write_text("personal notes", encoding="utf-8")
+            enforce_log_retention(root, 0, initial_usage)
+            self.assertEqual(set(root.iterdir()), {unrelated})
+            log = ConversationLog(root, "new", retention_days=0, max_mb=0)
+            log.append("speaker", "en", "zh", "hello", "hi", "local")
+            self.assertTrue(log.close())
+            old_time = time.time() - 10 * 86400
+            for path in (log.jsonl_path, log.md_path):
+                os.utime(path, (old_time, old_time))
+            enforce_log_retention(root, 7, 0)
+            self.assertEqual(set(root.iterdir()), {unrelated})
+
+    def test_retention_uses_latest_file_timestamp_and_removes_whole_oldest_session(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            sessions = []
+            for name in ("older", "newer"):
+                log = ConversationLog(root, name, retention_days=0, max_mb=0)
+                log.append("speaker", "en", "zh", "hello", "hi", "local")
+                self.assertTrue(log.close())
+                sessions.append(log)
+            now = time.time()
+            older, newer = sessions
+            for path in (older.jsonl_path, older.md_path):
+                os.utime(path, (now - 100, now - 100))
+            os.utime(newer.jsonl_path, (now - 200, now - 200))
+            os.utime(newer.md_path, (now, now))
+            kept_size = newer.jsonl_path.stat().st_size + newer.md_path.stat().st_size
+            enforce_log_retention(root, 0, kept_size)
+            self.assertEqual(set(root.iterdir()), {newer.jsonl_path, newer.md_path})
+            self.assertEqual(conversation_log_usage(root), kept_size)
+            newer.jsonl_path.write_text("personal file", encoding="utf-8")
+            newer.md_path.write_text("personal notes", encoding="utf-8")
+            enforce_log_retention(root, 0, 1)
+            self.assertEqual(set(root.iterdir()), {newer.jsonl_path, newer.md_path})
+            self.assertEqual(conversation_log_usage(root), 0)
+
+    def test_disabled_retention_does_not_scan_directory(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch("realtime_audio_translator.logbook._managed_conversation_files") as scan:
+                enforce_log_retention(Path(tmp), 0, 0)
+            scan.assert_not_called()
+
     def test_jsonl_log_exports_to_srt(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

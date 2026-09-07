@@ -42,6 +42,8 @@ class AudioTranscriber:
         add_xxl_data(repo_root, runtime_root)
         self.model_name = model_name
         self.model_dir = model_dir
+        self.device = device
+        self.compute_type = compute_type
         self.exe_path = whisper_exe(runtime_root)
         self.model = None
         self._inference_lock = threading.Lock()
@@ -116,6 +118,10 @@ class AudioTranscriber:
                 self.model_name,
                 "--model_dir",
                 str(self.model_dir),
+                "--device",
+                self.device,
+                "--compute_type",
+                self.compute_type,
                 "--output_dir",
                 str(out_dir),
                 "--output_format",

@@ -92,11 +92,12 @@ class AppController:
             self._engine_starting = True
         self._notify(TaskState("engine_start", "started"))
         started = False
+        cleaned_up = False
 
         def finish(result: TaskResult[None]) -> None:
             with self._tasks_lock:
                 self._engine_starting = False
-                if result.error is not None or not started:
+                if not started and cleaned_up:
                     if self.engine is engine:
                         self.engine = None
             self._notify(TaskState("engine_start", "failed" if result.error else "completed"))
@@ -104,13 +105,14 @@ class AppController:
                 done(result)
 
         def start() -> None:
-            nonlocal started
+            nonlocal started, cleaned_up
             try:
                 engine.start()
                 started = engine.running
             finally:
                 if not started:
                     engine.stop(report_status=False)
+                    cleaned_up = not engine.stop_pending
 
         self.submit(start, finish)
         return True
@@ -128,15 +130,16 @@ class AppController:
 
         def stop() -> str:
             try:
-                return engine.stop()
+                message = engine.stop()
+                with self._tasks_lock:
+                    if self.engine is engine and not engine.stop_pending:
+                        self.engine = None
+                return message
             finally:
                 with self._tasks_lock:
-                    if self.engine is engine:
-                        self.engine = None
+                    self._engine_stopping = False
 
         def finish(result: TaskResult[str]) -> None:
-            with self._tasks_lock:
-                self._engine_stopping = False
             self._notify(TaskState("engine_stop", "failed" if result.error else "completed"))
             done(result)
 

@@ -21,6 +21,9 @@ SETUP_GUIDES = {
 
 
 ENGLISH = {
+    "背景工作尚未完成，已取消關閉；請稍後按停止重試。{reason}": "Background work has not finished. Closing was cancelled; press Stop to retry later. {reason}",
+    "需停止後重新開始以套用：{settings}": "Stop and start again to apply: {settings}",
+    "模型資料夾": "Models folder",
     "選擇要匯出的對話紀錄": "Choose a conversation log to export",
     "對話紀錄": "Conversation logs",
     "正在匯出字幕": "Exporting subtitles",

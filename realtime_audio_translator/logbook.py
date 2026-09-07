@@ -1,4 +1,5 @@
 import json
+import os
 import queue
 import threading
 import time
@@ -11,58 +12,64 @@ CONTENT_MODES = {"both", "original", "translation", "none"}
 LOG_SCHEMA_VERSION = 2
 
 
-def _managed_conversation_files(log_dir: Path) -> list[Path]:
+def _managed_conversation_files(log_dir: Path) -> list[tuple[Path, os.stat_result]]:
     files = []
     if not log_dir.is_dir():
         return files
-    for path in log_dir.iterdir():
-        if path.is_symlink() or not path.is_file() or path.suffix not in {".jsonl", ".md"}:
-            continue
-        try:
-            if path.suffix == ".md":
-                with path.open("r", encoding="utf-8") as handle:
-                    managed = handle.readline().rstrip() == f"# Conversation {path.stem}"
-            else:
-                with path.open("r", encoding="utf-8") as handle:
-                    first = next((line for line in handle if line.strip()), "")
-                row = json.loads(first)
-                required = {"session_id", "timestamp", "direction", "source_language", "target_language", "provider"}
-                managed = isinstance(row, dict) and required <= row.keys() and row["session_id"] == path.stem
-            if managed:
-                files.append(path)
-        except (OSError, UnicodeError, json.JSONDecodeError):
-            pass
+    with os.scandir(log_dir) as entries:
+        for entry in entries:
+            path = Path(entry.path)
+            if path.suffix not in {".jsonl", ".md"}:
+                continue
+            try:
+                if not entry.is_file(follow_symlinks=False):
+                    continue
+                if path.suffix == ".md":
+                    with path.open("r", encoding="utf-8") as handle:
+                        managed = handle.readline().rstrip() == f"# Conversation {path.stem}"
+                else:
+                    with path.open("r", encoding="utf-8") as handle:
+                        first = next((line for line in handle if line.strip()), "")
+                    row = json.loads(first)
+                    required = {"session_id", "timestamp", "direction", "source_language", "target_language", "provider"}
+                    managed = isinstance(row, dict) and required <= row.keys() and row["session_id"] == path.stem
+                if managed:
+                    files.append((path, entry.stat(follow_symlinks=False)))
+            except (OSError, UnicodeError, json.JSONDecodeError):
+                pass
     return files
 
 
 def conversation_log_usage(log_dir: Path) -> int:
-    return sum(path.stat().st_size for path in _managed_conversation_files(log_dir))
+    return sum(metadata.st_size for _, metadata in _managed_conversation_files(log_dir))
 
 
 def enforce_log_retention(log_dir: Path, retention_days: int, max_bytes: int, now: float | None = None) -> None:
-    files = _managed_conversation_files(log_dir)
-    groups: dict[str, list[Path]] = {}
-    for path in files:
-        groups.setdefault(path.stem, []).append(path)
+    if retention_days <= 0 and max_bytes <= 0:
+        return
+    groups: dict[str, list[tuple[Path, os.stat_result]]] = {}
+    for path, metadata in _managed_conversation_files(log_dir):
+        groups.setdefault(path.stem, []).append((path, metadata))
     current_time = time.time() if now is None else now
     if retention_days > 0:
         cutoff = current_time - retention_days * 86400
-        for stem, paths in list(groups.items()):
-            if max(path.stat().st_mtime for path in paths) < cutoff:
-                for path in paths:
+        for stem, files in list(groups.items()):
+            if max(metadata.st_mtime for _, metadata in files) < cutoff:
+                for path, _ in files:
                     path.unlink(missing_ok=True)
                 groups.pop(stem)
     if max_bytes <= 0:
         return
-    ordered = sorted(groups.values(), key=lambda paths: max(path.stat().st_mtime for path in paths))
-    total = sum(path.stat().st_size for paths in ordered for path in paths)
-    while total > max_bytes and ordered:
-        for path in ordered.pop(0):
-            try:
-                total -= path.stat().st_size
-            except OSError:
-                pass
+    total = sum(metadata.st_size for files in groups.values() for _, metadata in files)
+    if total <= max_bytes:
+        return
+    ordered = sorted(groups.values(), key=lambda files: max(metadata.st_mtime for _, metadata in files))
+    for files in ordered:
+        if total <= max_bytes:
+            break
+        for path, metadata in files:
             path.unlink(missing_ok=True)
+            total -= metadata.st_size
 
 
 class ConversationLog:

@@ -18,7 +18,7 @@ from .ai_memory import add_glossary_term
 from .ai_orchestrator import plan_session
 from .app_log import append_app_log
 from .commands import command_choices
-from .config import APP_DIR, DEFAULT_CONFIG, SETTING_RANGES, clear_cache, clear_logs, ensure_glossary_file, load_config, log_files_to_clear, normalize_config, save_audio_devices, save_config, save_config_state, validate_language_pair
+from .config import APP_DIR, DEFAULT_CONFIG, SETTING_CHOICES, SETTING_RANGES, clear_cache, clear_logs, ensure_glossary_file, load_config, log_files_to_clear, normalize_config, save_audio_devices, save_config, save_config_state, validate_language_pair
 from .engine import RealtimeEngine
 from .logbook import conversation_log_usage
 from .localization import SUPPORTED_LANGUAGES, setup_guide_text, translate, translate_known
@@ -37,6 +37,7 @@ TTS_PROVIDER_CHOICES = ("local", "google", "openai")
 PERFORMANCE_CHOICES = ("low_latency", "balanced", "quality", "offline_light")
 CLOUD_PROVIDERS = ("google", "openai")
 AUDIO_DEVICE_KEYS = ("speaker_device", "microphone_device", "tts_output_device", "virtual_mic_input_device", "speaker_tts_output_device")
+RESTART_SETTING_KEYS = {"model", "models_path", "device", "compute_type", "runtime_dir", "speaker_device", "microphone_device", "speech_threshold", "segment_seconds", "performance_mode"}
 SEVERITY_LABELS = {"error": "錯誤", "warning": "警告", "info": "提示"}
 
 
@@ -131,6 +132,11 @@ FIRST_RUN_ISSUE_CODES = {
 
 def visible_setting_keys(advanced: bool) -> list[str]:
     return [key for _label, key in SETTING_ROWS if advanced or key in BASIC_SETTING_KEYS]
+
+
+def restart_required_settings(started: dict, current: dict) -> set[str]:
+    changed = {key for key in RESTART_SETTING_KEYS if started.get(key) != current.get(key)}
+    return changed | {key for key in ("speaker_enabled", "microphone_enabled") if not started.get(key, True) and current.get(key, True)}
 
 
 def visible_button_texts(buttons: list[str], advanced: bool) -> list[str]:
@@ -463,6 +469,8 @@ class TranslatorApp(tk.Tk):
         self.minsize(min(720, work_width), min(520, work_height))
         self.protocol("WM_DELETE_WINDOW", self._quit)
         self.status = tk.StringVar(value=self._t("就緒"))
+        self.restart_notice = tk.StringVar()
+        self._session_config = None
         self.runtime_text = tk.StringVar(value="")
         self.mode_text = tk.StringVar(value=self._mode_text())
         self.overlay_generation = 0
@@ -530,7 +538,9 @@ class TranslatorApp(tk.Tk):
         footer.pack(side="bottom", fill="x")
         status_label = ttk.Label(footer, textvariable=self.status, wraplength=650)
         status_label.pack(fill="x")
-        footer.bind("<Configure>", lambda event: status_label.configure(wraplength=max(200, event.width - 40)))
+        restart_label = ttk.Label(footer, textvariable=self.restart_notice, wraplength=650, foreground="#f5c26b")
+        restart_label.pack(fill="x")
+        footer.bind("<Configure>", lambda event: [label.configure(wraplength=max(200, event.width - 40)) for label in (status_label, restart_label)])
         container = ttk.Frame(self)
         container.pack(fill="both", expand=True)
         canvas = tk.Canvas(container, highlightthickness=0, background="#141516")
@@ -591,7 +601,7 @@ class TranslatorApp(tk.Tk):
                 widget = ttk.Combobox(frame, textvariable=self.vars[key], values=values, state="readonly")
                 widget.bind("<<ComboboxSelected>>", lambda _event, name=key: self._apply_performance_mode() if name == "performance_mode" else self._apply_scenario() if name == "scenario" else self._save())
             elif key in AUDIO_DEVICE_KEYS or key in ("model", "device", "compute_type", "tts_voice_name"):
-                widget = ttk.Combobox(frame, textvariable=self.vars[key], values=[], state="readonly" if key in AUDIO_DEVICE_KEYS else "normal")
+                widget = ttk.Combobox(frame, textvariable=self.vars[key], values=[], state="readonly" if key in AUDIO_DEVICE_KEYS or key in {"device", "compute_type"} else "normal")
                 widget.bind("<<ComboboxSelected>>", lambda _event: self._save())
                 self.comboboxes[key] = widget
             else:
@@ -807,8 +817,8 @@ class TranslatorApp(tk.Tk):
             save_audio_devices(APP_DIR, raw_devices)
             commands = APP_DIR / "commands.json"
             models = sorted(set(list_models(self.repo_root / "_models", models_dir(config))) | set(command_choices(commands, "model")))
-            asr_devices = command_choices(commands, "device") or ["cuda", "cpu"]
-            compute_types = command_choices(commands, "compute_type") or ["auto", "int8", "float16", "float32"]
+            asr_devices = command_choices(commands, "device") or sorted(SETTING_CHOICES["device"])
+            compute_types = command_choices(commands, "compute_type") or sorted(SETTING_CHOICES["compute_type"])
             return raw_devices, models, asr_devices, compute_types
 
         if self.controller.submit(work, lambda result: self._lists_ready(generation, result), name="refresh_lists"):
@@ -858,9 +868,9 @@ class TranslatorApp(tk.Tk):
             if key == "model":
                 widget.configure(values=models)
             elif key == "device":
-                widget.configure(values=asr_devices)
+                widget.configure(values=[value for value in asr_devices if value in SETTING_CHOICES[key]] or sorted(SETTING_CHOICES[key]))
             elif key == "compute_type":
-                widget.configure(values=compute_types)
+                widget.configure(values=[value for value in compute_types if value in SETTING_CHOICES[key]] or sorted(SETTING_CHOICES[key]))
             elif key != "tts_voice_name":
                 channel = "output_channels" if key in {"speaker_device", "tts_output_device", "speaker_tts_output_device"} else "input_channels"
                 devices = [default_device] + [format_device_label(device) for device in raw_devices if device[channel] > 0]
@@ -966,9 +976,19 @@ class TranslatorApp(tk.Tk):
             if key in {name for _label, name in SETTING_ROWS} - set(AUDIO_DEVICE_KEYS) - {"scenario"}:
                 variable.set(str(config[key]))
         self.mode_text.set(self._mode_text())
+        self._update_restart_notice()
         if language_changed:
             self.status.set(self._t("介面語言已變更；請重新啟動程式以完整套用"))
         return True
+
+    def _update_restart_notice(self) -> None:
+        notice = self.__dict__.get("restart_notice")
+        if notice is None:
+            return
+        started = self.__dict__.get("_session_config")
+        changed = restart_required_settings(started, self.config) if started and self.engine is not None and self.engine.running else set()
+        labels = {key: label for label, key in SETTING_ROWS} | {"models_path": "模型資料夾", "speaker_enabled": "擷取喇叭", "microphone_enabled": "擷取麥克風"}
+        notice.set(self._t("需停止後重新開始以套用：{settings}", settings=", ".join(self._t(labels[key]) for key in sorted(changed))) if changed else "")
 
     def _set_last_error(self, message: str) -> None:
         self.config["last_error"] = message
@@ -992,7 +1012,7 @@ class TranslatorApp(tk.Tk):
                 event = self._engine_events.get_nowait()
             except queue.Empty:
                 break
-            if self._closing or (event.engine is not None and event.engine is not self.engine):
+            if (self._closing and event.kind != "callback") or (event.engine is not None and event.engine is not self.engine):
                 continue
             try:
                 if event.kind == "status":
@@ -1003,7 +1023,7 @@ class TranslatorApp(tk.Tk):
                     event.args[0](*event.args[1:])
             except Exception:
                 self.report_callback_exception(*sys.exc_info())
-        if not self._closing:
+        if not self._closing or self.engine is not None:
             self.after(50, self._drain_ui_events)
 
     def _submit(self, status: str, work, done, error_title: str, task_name: str | None = None) -> None:
@@ -1670,8 +1690,11 @@ class TranslatorApp(tk.Tk):
         )
         if not self.controller.start_engine(engine, self._engine_started):
             self.status.set(self._t("啟動工作已在進行"))
+        else:
+            self._session_config = config.copy()
 
     def _engine_started(self, result: TaskResult) -> None:
+        self._update_restart_notice()
         if result.error is not None:
             self._engine_status(self._t("啟動失敗：{error}", error=result.error))
 
@@ -1684,10 +1707,18 @@ class TranslatorApp(tk.Tk):
             self.status.set(self._t("停止工作已在進行"))
 
     def _engine_stopped(self, result: TaskResult[str]) -> None:
-        if result.error is not None:
-            self._engine_status(self._t("停止失敗：{error}", error=result.error))
-        elif not self._closing and result.value:
-            self._engine_status(result.value)
+        self._update_restart_notice()
+        cancelled_close = self._closing and (result.error is not None or self.engine is not None)
+        if cancelled_close:
+            self._closing = False
+        try:
+            if result.error is not None:
+                self._engine_status(self._t("停止失敗：{error}", error=result.error))
+            elif result.value:
+                self._engine_status(result.value)
+        finally:
+            if cancelled_close:
+                self.status.set(self._t("背景工作尚未完成，已取消關閉；請稍後按停止重試。{reason}", reason=result.error or result.value or ""))
         append_app_log(APP_DIR, "stop")
 
     def _quit(self) -> None:
@@ -1700,6 +1731,8 @@ class TranslatorApp(tk.Tk):
         self.after(50, self._destroy_when_stopped)
 
     def _destroy_when_stopped(self) -> None:
+        if not self._closing:
+            return
         if self.engine is None:
             self.destroy()
         else:

@@ -14,7 +14,7 @@ class AppControllerTests(unittest.TestCase):
     def test_start_engine_rejects_duplicate_initialization(self):
         release = threading.Event()
         controller = AppController(lambda _kind, callback, value: callback(value))
-        engine = Mock(running=True)
+        engine = Mock(running=True, stop_pending=False)
         engine.start.side_effect = lambda: release.wait(1)
 
         self.assertTrue(controller.start_engine(engine))
@@ -67,7 +67,7 @@ class AppControllerTests(unittest.TestCase):
             with self.subTest(raises=raises):
                 callbacks = queue.Queue()
                 controller = AppController(lambda _kind, callback, value: callbacks.put((callback, value)))
-                engine = Mock(running=raises)
+                engine = Mock(running=raises, stop_pending=False)
                 failure = RuntimeError("startup failed")
                 if raises:
                     engine.start.side_effect = failure
@@ -85,7 +85,7 @@ class AppControllerTests(unittest.TestCase):
     def test_capture_failure_after_start_keeps_engine_available_for_cleanup(self):
         callbacks = queue.Queue()
         controller = AppController(lambda _kind, callback, value: callbacks.put((callback, value)))
-        engine = Mock(running=True)
+        engine = Mock(running=True, stop_pending=False)
         self.assertTrue(controller.start_engine(engine))
         callback, result = callbacks.get(timeout=1)
         engine.running = False
@@ -137,6 +137,73 @@ class AppControllerTests(unittest.TestCase):
         self.assertEqual(event["kind"], "callback")
         self.assertEqual(event["result"].value, 42)
         self.assertIsNone(event["result"].error)
+
+    def test_stop_timeout_can_be_retried_before_queued_ui_completion(self):
+        callbacks = queue.Queue()
+        controller = AppController(lambda _kind, callback, value: callbacks.put((callback, value)))
+        engine = Mock(stop_pending=True)
+        controller.engine = engine
+        self.assertTrue(controller.stop_engine(Mock()))
+        first_callback, first_result = callbacks.get(timeout=1)
+        self.assertIs(controller.engine, engine)
+        self.assertFalse(controller.busy)
+        entered = threading.Event()
+        release = threading.Event()
+
+        def finish_stop():
+            entered.set()
+            release.wait(1)
+            engine.stop_pending = False
+            return "stopped"
+
+        engine.stop.side_effect = finish_stop
+        try:
+            self.assertTrue(controller.stop_engine(Mock()))
+            self.assertTrue(entered.wait(1))
+            first_callback(first_result)
+            self.assertTrue(controller.busy)
+            self.assertFalse(controller.stop_engine(Mock()))
+            release.set()
+            callback, result = callbacks.get(timeout=1)
+            self.assertFalse(controller.busy)
+            self.assertIsNone(controller.engine)
+            callback(result)
+        finally:
+            release.set()
+
+    def test_stop_exception_preserves_engine_for_retry(self):
+        callbacks = queue.Queue()
+        controller = AppController(lambda _kind, callback, value: callbacks.put((callback, value)))
+        failure = OSError("disk unavailable")
+        engine = Mock(stop_pending=False)
+        engine.stop.side_effect = [failure, "stopped"]
+        controller.engine = engine
+        done = Mock()
+        self.assertTrue(controller.stop_engine(done))
+        callback, result = callbacks.get(timeout=1)
+        callback(result)
+        self.assertIs(controller.engine, engine)
+        self.assertIs(done.call_args.args[0].error, failure)
+        self.assertFalse(controller.busy)
+
+        self.assertTrue(controller.stop_engine(done))
+        callback, result = callbacks.get(timeout=1)
+        callback(result)
+        self.assertIsNone(controller.engine)
+
+    def test_failed_start_keeps_engine_when_cleanup_times_out_or_raises(self):
+        for raises in (False, True):
+            with self.subTest(raises=raises):
+                callbacks = queue.Queue()
+                controller = AppController(lambda _kind, callback, value: callbacks.put((callback, value)))
+                engine = Mock(running=False, stop_pending=not raises)
+                if raises:
+                    engine.stop.side_effect = OSError("cleanup failed")
+                self.assertTrue(controller.start_engine(engine))
+                callback, result = callbacks.get(timeout=1)
+                callback(result)
+                self.assertIs(controller.engine, engine)
+                self.assertFalse(controller.busy)
 
     def test_stop_engine_does_not_block_caller(self):
         posted = threading.Event()

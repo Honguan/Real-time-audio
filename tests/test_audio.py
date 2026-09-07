@@ -15,6 +15,22 @@ from tests.helpers import write_wav
 
 
 class AudioTests(unittest.TestCase):
+    def test_whisper_exe_fallback_preserves_selected_hardware(self):
+        import sys
+        import realtime_audio_translator.asr as asr_module
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            executable = root / "fw.exe"
+            executable.touch()
+            with patch.dict(sys.modules, {"faster_whisper": None}), patch.object(asr_module, "runtime_dir", return_value=root / "absent"), patch.object(asr_module, "whisper_exe", return_value=executable):
+                transcriber = AudioTranscriber(root, "small", root / "models", device="cpu", compute_type="float32")
+            with patch.object(asr_module.subprocess, "run", return_value=type("Result", (), {"returncode": 0})()) as run:
+                transcriber._transcribe_with_exe(root / "clip.wav", "en")
+            command = run.call_args.args[0]
+            self.assertEqual(command[command.index("--device") + 1], "cpu")
+            self.assertEqual(command[command.index("--compute_type") + 1], "float32")
+
     def test_capture_wav_reports_sounddevice_input_overflow(self):
         import realtime_audio_translator.audio as audio_module
 
@@ -597,6 +613,8 @@ class AudioTests(unittest.TestCase):
                 transcriber.exe_path = Path("fw.exe")
                 transcriber.model_name = "medium"
                 transcriber.model_dir = Path("models")
+                transcriber.device = "cpu"
+                transcriber.compute_type = "auto"
                 transcriber._transcribe_with_exe(out / "clip.wav", "auto")
         finally:
             asr_module.subprocess.run = original_run
@@ -619,6 +637,8 @@ class AudioTests(unittest.TestCase):
             transcriber.exe_path = Path("fw.exe")
             transcriber.model_name = "medium"
             transcriber.model_dir = Path("models")
+            transcriber.device = "cpu"
+            transcriber.compute_type = "auto"
             result = transcriber._transcribe_with_exe(Path("clip.wav"), "en")
             self.assertEqual((result.text, result.language), ("hello world", "en"))
         finally:
@@ -669,6 +689,8 @@ class AudioTests(unittest.TestCase):
         transcriber.exe_path = Path("fw.exe")
         transcriber.model_name = "medium"
         transcriber.model_dir = Path("models")
+        transcriber.device = "cpu"
+        transcriber.compute_type = "auto"
         temp_roots = []
 
         def fake_run(command, **_kwargs):
@@ -768,6 +790,8 @@ class AudioTests(unittest.TestCase):
         transcriber._inference_lock = threading.Lock()
         transcriber.model_name = "medium"
         transcriber.model_dir = Path("models")
+        transcriber.device = "cpu"
+        transcriber.compute_type = "auto"
 
         class Segment:
             text = " hello "

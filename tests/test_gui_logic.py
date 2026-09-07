@@ -12,6 +12,52 @@ from realtime_audio_translator.gui import LANGUAGE_CHOICES, PERFORMANCE_CHOICES,
 
 
 class GuiLogicTests(unittest.TestCase):
+    def test_pending_shutdown_keeps_window_and_delivers_completion(self):
+        from realtime_audio_translator.app_controller import TaskResult
+        for result, status_error in ((TaskResult(value="停止逾時"), None), (TaskResult(error=OSError("writer failed")), None), (TaskResult(error=OSError("writer failed")), OSError("state disk full"))):
+            with self.subTest(result=result):
+                app = TranslatorApp.__new__(TranslatorApp)
+                app.config = DEFAULT_CONFIG.copy()
+                app._closing = True
+                app._engine_events = queue.Queue()
+                app.engine = object()
+                app.status = Mock()
+                app._engine_status = Mock(side_effect=status_error)
+                app.report_callback_exception = Mock()
+                app.after = Mock()
+                app.destroy = Mock()
+                app._post_ui("callback", app._engine_stopped, result)
+                with patch("realtime_audio_translator.gui.append_app_log"):
+                    app._drain_ui_events()
+                self.assertFalse(app._closing)
+                self.assertIn("已取消關閉", app.status.set.call_args.args[0])
+                app._destroy_when_stopped()
+                app.destroy.assert_not_called()
+                app.after.assert_called_once()
+
+    def test_restart_notice_tracks_capture_changes_and_clears_on_revert(self):
+        app = TranslatorApp.__new__(TranslatorApp)
+        app._session_config = DEFAULT_CONFIG.copy()
+        app.config = DEFAULT_CONFIG | {"microphone_device": "another mic", "tts_volume": 30}
+        app.restart_notice = Mock()
+        app.engine = SimpleNamespace(running=True)
+        app._update_restart_notice()
+        self.assertIn("麥克風來源", app.restart_notice.set.call_args.args[0])
+        self.assertNotIn("音量", app.restart_notice.set.call_args.args[0])
+        app.config["microphone_device"] = DEFAULT_CONFIG["microphone_device"]
+        app._update_restart_notice()
+        app.restart_notice.set.assert_called_with("")
+        app.config["model"] = "tiny"
+        app.engine.running = False
+        app._update_restart_notice()
+        app.restart_notice.set.assert_called_with("")
+
+    def test_enabling_previously_absent_capture_requires_restart(self):
+        from realtime_audio_translator.gui import restart_required_settings
+        started = DEFAULT_CONFIG | {"microphone_enabled": False}
+        self.assertEqual(restart_required_settings(started, DEFAULT_CONFIG), {"microphone_enabled"})
+        self.assertEqual(restart_required_settings(DEFAULT_CONFIG, DEFAULT_CONFIG | {"microphone_enabled": False}), set())
+
     def test_config_conversion_preserves_hidden_types_and_independent_numbers(self):
         app = TranslatorApp.__new__(TranslatorApp)
         app.config = DEFAULT_CONFIG | {"translation_cache_enabled": False, "ai_auto_optimize": False}
@@ -337,8 +383,8 @@ class GuiLogicTests(unittest.TestCase):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
 
         self.assertIn('elif key in AUDIO_DEVICE_KEYS or key in ("model", "device", "compute_type", "tts_voice_name"):', gui_source)
-        self.assertIn('asr_devices = command_choices(commands, "device") or ["cuda", "cpu"]', gui_source)
-        self.assertIn('compute_types = command_choices(commands, "compute_type") or ["auto", "int8", "float16", "float32"]', gui_source)
+        self.assertIn('asr_devices = command_choices(commands, "device") or sorted(SETTING_CHOICES["device"])', gui_source)
+        self.assertIn('compute_types = command_choices(commands, "compute_type") or sorted(SETTING_CHOICES["compute_type"])', gui_source)
 
     def test_push_to_talk_button_holds_unmute(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
@@ -565,6 +611,7 @@ class GuiLogicTests(unittest.TestCase):
                 done(SimpleNamespace(value=value, error=None))
 
         app.controller = Controller()
+        app.status = Mock()
         app._engine_events = queue.Queue()
         app.destroy = lambda: calls.append("destroy")
         app.after = lambda _delay, callback: callback()
