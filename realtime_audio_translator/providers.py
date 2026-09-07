@@ -2,8 +2,10 @@ import base64
 import hashlib
 import html
 import json
+import logging
 import os
 import random
+import sqlite3
 import threading
 import time
 from collections import OrderedDict
@@ -207,10 +209,17 @@ class Translator:
         if memory_cached is not None and not self._unverified_local_passthrough(provider, text, memory_cached):
             self._remember_context(text, memory_cached)
             return TranslationResult(self._apply_glossary(memory_cached, glossary), heuristic_warning="快取結果，未重新評分")
-        db_path = Path(self.config.get("translation_cache_path", ""))
-        persistent_cache_enabled = self.config.get("translation_cache_enabled", True)
-        if persistent_cache_enabled and db_path:
-            cached = cached_translation(db_path, request_fingerprint)
+        cache_path = self.config.get("translation_cache_path", "")
+        db_path = Path(cache_path) if cache_path else None
+        persistent_cache_enabled = self.config.get("translation_cache_enabled", True) and db_path is not None
+        if persistent_cache_enabled:
+            try:
+                cached = cached_translation(db_path, request_fingerprint)
+            except (OSError, sqlite3.Error, RuntimeError) as exc:
+                # RuntimeError also covers a cache schema from a newer app version.
+                logging.getLogger(__name__).warning("Translation cache read unavailable (%s)", type(exc).__name__)
+                cached = None
+                persistent_cache_enabled = False
             if cached is not None and not self._unverified_local_passthrough(provider, text, cached):
                 self._remember_cached(request_fingerprint, cached)
                 self._remember_context(text, cached)
@@ -226,8 +235,11 @@ class Translator:
             heuristic_warning = "翻譯結果與原文相同，請確認語言與模型"
         self._remember_cached(request_fingerprint, translated)
         self._remember_context(text, translated)
-        if persistent_cache_enabled and db_path and not (provider == "local" and not self.config.get("local_translate_url", "").strip() and translated == text):
-            cache_translation(db_path, request_fingerprint, provider, source_language, target_language, text, translated)
+        if persistent_cache_enabled and not (provider == "local" and not self.config.get("local_translate_url", "").strip() and translated == text):
+            try:
+                cache_translation(db_path, request_fingerprint, provider, source_language, target_language, text, translated)
+            except (OSError, sqlite3.Error, RuntimeError) as exc:
+                logging.getLogger(__name__).warning("Translation cache write unavailable (%s)", type(exc).__name__)
         return TranslationResult(self._apply_glossary(translated, glossary), heuristic_warning=heuristic_warning)
 
     def _request_fingerprint(self, text: str, source_language: str, target_language: str, glossary: dict | None = None) -> str:

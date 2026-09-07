@@ -12,6 +12,49 @@ from realtime_audio_translator.providers import HttpClient, TRANSLATION_MEMORY_C
 
 
 class TranslationCacheTests(unittest.TestCase):
+    def test_unavailable_persistent_cache_keeps_translation_and_memory_cache(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for failure in ("corrupt", "parent_file", "newer_schema"):
+                with self.subTest(failure=failure):
+                    path = Path(tmp) / failure
+                    if failure == "corrupt":
+                        path.write_bytes(b"not a SQLite database")
+                    elif failure == "parent_file":
+                        path.write_text("keep", encoding="utf-8")
+                        path = path / "cache.db"
+                    else:
+                        db = sqlite3.connect(path)
+                        db.execute(f"PRAGMA user_version = {CACHE_SCHEMA_VERSION + 1}")
+                        db.close()
+                    preserved = (path if failure != "parent_file" else path.parent).read_bytes()
+                    config = DEFAULT_CONFIG | {"provider": "local", "local_translate_url": "http://localhost", "translation_cache_path": str(path)}
+                    translator = Translator(config)
+                    with patch.object(translator, "_local_translate", return_value="你好") as backend:
+                        self.assertEqual(translator.translate("hello", "en", "zh").text, "你好")
+                        self.assertEqual(translator.translate("hello", "en", "zh").text, "你好")
+                    backend.assert_called_once()
+                    self.assertEqual((path if failure != "parent_file" else path.parent).read_bytes(), preserved)
+
+    def test_cache_write_failure_keeps_result_but_provider_failure_propagates(self):
+        config = DEFAULT_CONFIG | {"provider": "local", "local_translate_url": "http://localhost", "translation_cache_path": "unused.db"}
+        for error in (PermissionError("denied"), sqlite3.OperationalError("database is locked")):
+            with self.subTest(error=error):
+                translator = Translator(config)
+                with patch("realtime_audio_translator.providers.cached_translation", return_value=None), patch("realtime_audio_translator.providers.cache_translation", side_effect=error), patch.object(translator, "_local_translate", return_value="你好"):
+                    self.assertEqual(translator.translate("hello", "en", "zh").text, "你好")
+                self.assertEqual(translator.context, [("hello", "你好")])
+        translator = Translator(config)
+        with patch("realtime_audio_translator.providers.cached_translation", side_effect=PermissionError("denied")), patch.object(translator, "_local_translate", side_effect=RuntimeError("backend unavailable")):
+            with self.assertRaisesRegex(RuntimeError, "backend unavailable"):
+                translator.translate("hello", "en", "zh")
+
+    def test_empty_cache_path_does_not_access_current_directory(self):
+        translator = Translator(DEFAULT_CONFIG | {"provider": "local", "translation_cache_path": ""})
+        with patch("realtime_audio_translator.providers.cached_translation") as read, patch("realtime_audio_translator.providers.cache_translation") as write, patch.object(translator, "_local_translate", return_value="你好"):
+            self.assertEqual(translator.translate("hello", "en", "zh").text, "你好")
+        read.assert_not_called()
+        write.assert_not_called()
+
     def test_translator_caches_repeated_requests(self):
         config = DEFAULT_CONFIG.copy()
         config.update({"provider": "local", "translation_cache_enabled": False})
