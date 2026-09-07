@@ -635,6 +635,29 @@ class ConfigTests(unittest.TestCase):
             self.assertEqual(command_choices(path, "device"), ["cuda", "cpu"])
             self.assertEqual(command_choices(path, "missing"), [])
 
+    def test_command_choices_ignores_malformed_cache(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "commands.json"
+            self.assertEqual(command_choices(path, "device"), [])
+            for data in (None, [], "cuda", 1, {"device": None}, {"device": []},
+                         {"device": {"choices": None}}, {"device": {"choices": "cuda"}},
+                         {"device": {"choices": {"cuda": True}}}):
+                with self.subTest(data=data):
+                    path.write_text(json.dumps(data), encoding="utf-8")
+                    self.assertEqual(command_choices(path, "device"), [])
+            for content in (b'{"device":', b'\xff'):
+                with self.subTest(content=content):
+                    path.write_bytes(content)
+                    self.assertEqual(command_choices(path, "device"), [])
+
+    def test_command_choices_keeps_only_nonempty_strings(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "commands.json"
+            path.write_text(json.dumps({"device": {"choices": [
+                " cuda ", None, 1, True, {}, [], "", "  ", "cpu",
+            ]}}), encoding="utf-8")
+            self.assertEqual(command_choices(path, "device"), ["cuda", "cpu"])
+
 
 if __name__ == "__main__":
     unittest.main()

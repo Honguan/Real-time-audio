@@ -43,7 +43,10 @@ def refresh_commands(exe_path: Path, out_path: Path) -> dict:
 def command_choices(path: Path, option: str) -> list[str]:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
+    except (OSError, UnicodeError, json.JSONDecodeError):
         return []
-    choices = data.get(option, {}).get("choices", [])
-    return [str(choice) for choice in choices if str(choice).strip()]
+    metadata = data.get(option) if isinstance(data, dict) else None
+    choices = metadata.get("choices") if isinstance(metadata, dict) else None
+    if not isinstance(choices, list):
+        return []
+    return [choice.strip() for choice in choices if isinstance(choice, str) and choice.strip()]
