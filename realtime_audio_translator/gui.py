@@ -405,7 +405,7 @@ class Overlay(tk.Toplevel):
         self.bind("<ButtonPress-1>", self._start_drag)
         self.bind("<B1-Motion>", self._drag_to)
         self.bind("<ButtonRelease-1>", self._finish_drag)
-        self.after_idle(self._fit_height)
+        self.bind("<Map>", lambda event: self._fit_height() if event.widget is self else None)
 
     def _start_drag(self, event):
         self._drag = (event.x, event.y)
@@ -419,13 +419,16 @@ class Overlay(tk.Toplevel):
             self._moved(self.winfo_x(), self.winfo_y())
 
     def ensure_visible(self) -> None:
+        if not self.winfo_ismapped():
+            return
         x, y = clamp_window_position(self.winfo_x(), self.winfo_y(), self.winfo_width(), self.winfo_height(), _work_area(self, self.winfo_x(), self.winfo_y()))
         self.geometry(_geometry_offset(x, y))
 
     def _fit_height(self) -> None:
         self.update_idletasks()
         height = max(96, self.winfo_reqheight())
-        self.geometry(f"{self._width}x{height}{_geometry_offset(self.winfo_x(), self.winfo_y())}")
+        self.geometry(f"{self._width}x{height}")
+        self.update_idletasks()
         self.ensure_visible()
 
     def update_lines(self, speaker: str = "", mine: str = "") -> None:

@@ -12,6 +12,31 @@ from realtime_audio_translator.gui import LANGUAGE_CHOICES, PERFORMANCE_CHOICES,
 
 
 class GuiLogicTests(unittest.TestCase):
+    def test_overlay_keeps_position_before_mapping_and_after_font_change(self):
+        import tkinter as tk
+        from realtime_audio_translator.gui import Overlay
+
+        try:
+            root = tk.Tk()
+        except tk.TclError as exc:
+            self.skipTest(f"Tk display unavailable: {exc}")
+        root.withdraw()
+        try:
+            with patch("realtime_audio_translator.gui._work_area", return_value=(-1536, 209, 0, 1025)):
+                overlay = Overlay(root, False, 1, 18, x=-1491, y=314)
+                overlay.ensure_visible()
+                root.update()
+                self.assertEqual((overlay.winfo_x(), overlay.winfo_y()), (-1491, 314))
+                overlay.withdraw()
+                overlay.set_font_size(24)
+                overlay.ensure_visible()
+                overlay.deiconify()
+                root.update()
+                self.assertEqual((overlay.winfo_x(), overlay.winfo_y()), (-1491, 314))
+                self.assertLessEqual(overlay.winfo_y() + overlay.winfo_height(), 1025)
+        finally:
+            root.destroy()
+
     def test_pending_shutdown_keeps_window_and_delivers_completion(self):
         from realtime_audio_translator.app_controller import TaskResult
         for result, status_error in ((TaskResult(value="停止逾時"), None), (TaskResult(error=OSError("writer failed")), None), (TaskResult(error=OSError("writer failed")), OSError("state disk full"))):
