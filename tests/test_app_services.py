@@ -250,6 +250,28 @@ class RuntimeServiceTests(unittest.TestCase):
 
 
 class AudioDiagnosticsServiceTests(unittest.TestCase):
+    def test_microphone_uses_shared_capture_and_reports_normalized_rms(self):
+        from realtime_audio_translator.audio import AudioSegment
+
+        service = AudioDiagnosticsService(Path("cache"))
+        segment = AudioSegment((16384).to_bytes(2, "little", signed=True) * 24000, 48000)
+        with patch("realtime_audio_translator.app_services.find_device", return_value=3), patch("realtime_audio_translator.app_services.capture_audio", return_value=segment) as capture:
+            self.assertAlmostEqual(service.test_microphone({"microphone_device": "mic"}), 0.5)
+            capture.assert_called_once_with(3, 0.5)
+        with patch("realtime_audio_translator.app_services.find_device", return_value=3), patch("realtime_audio_translator.app_services.capture_audio", side_effect=OSError("input overflow")):
+            with self.assertRaisesRegex(OSError, "input overflow"):
+                service.test_microphone({"microphone_device": "mic"})
+
+    def test_tone_uses_shared_pcm_output_path(self):
+        service = AudioDiagnosticsService(Path("cache"))
+        with patch("realtime_audio_translator.app_services.play_linear16") as play:
+            service.test_tone({"tts_output_device": "cable"})
+        audio, device = play.call_args.args
+        self.assertEqual(device, "cable")
+        self.assertEqual(len(audio), 12000)
+        self.assertNotEqual(audio, b"\0" * len(audio))
+        self.assertEqual(play.call_args.kwargs, {"samplerate": 24000})
+
     def test_diagnostics_and_speaker_test_do_not_require_tk(self):
         service = AudioDiagnosticsService(Path("cache"))
         with patch("realtime_audio_translator.app_services.collect_diagnostics", return_value=["issue"]):

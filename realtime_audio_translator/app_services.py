@@ -5,7 +5,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from .audio import DeviceResolutionError, audio_segment_active, capture_wav, find_device
+from .audio import DeviceResolutionError, audio_segment_active, capture_audio, capture_wav, find_device
 from .commands import refresh_commands
 from .diagnostics import DiagnosticIssue, collect_diagnostics
 from .localization import translate
@@ -84,12 +84,10 @@ class AudioDiagnosticsService:
 
     def test_tone(self, config: dict) -> None:
         import numpy as np
-        import sounddevice as sd
 
-        device = find_device(config["tts_output_device"], want_output=True)
         samplerate = 24000
-        data = np.array([math.sin(2 * math.pi * 440 * i / samplerate) * 0.2 for i in range(samplerate // 4)], dtype="float32")
-        sd.play(data, samplerate=samplerate, device=device, blocking=True)
+        data = np.array([math.sin(2 * math.pi * 440 * i / samplerate) * 0.2 * 32767 for i in range(samplerate // 4)], dtype="<i2")
+        play_linear16(data.tobytes(), config["tts_output_device"], samplerate=samplerate)
 
     def test_tts(self, config: dict) -> None:
         provider = config.get("tts_provider", "local")
@@ -124,11 +122,10 @@ class AudioDiagnosticsService:
 
     def test_microphone(self, config: dict) -> float:
         import numpy as np
-        import sounddevice as sd
 
         device = find_device(config["microphone_device"], want_output=False)
-        data = sd.rec(int(0.5 * 16000), samplerate=16000, channels=1, dtype="float32", device=device)
-        sd.wait()
+        segment = capture_audio(device, 0.5)
+        data = np.frombuffer(segment.pcm, dtype="<i2").astype("float32") / 32768.0
         return float(np.sqrt(np.mean(np.square(data))))
 
 

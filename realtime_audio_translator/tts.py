@@ -30,7 +30,9 @@ def play_linear16(audio: bytes, device_name: str = "", samplerate: int = 24000, 
     if volume != 100:
         data = (data.astype("int32") * volume // 100).clip(-32768, 32767).astype("int16")
     block_frames = max(1, samplerate // 20)
-    with sd.OutputStream(samplerate=samplerate, device=device, channels=1, dtype="int16") as stream:
+    hostapi = sd.query_hostapis(sd.query_devices(device)["hostapi"])["name"]
+    extra_settings = sd.WasapiSettings(auto_convert=True) if hostapi == "Windows WASAPI" else None
+    with sd.OutputStream(samplerate=samplerate, device=device, channels=1, dtype="int16", extra_settings=extra_settings) as stream:
         for offset in range(0, len(data), block_frames):
             if cancel_event is not None and cancel_event.is_set():
                 stream.abort()

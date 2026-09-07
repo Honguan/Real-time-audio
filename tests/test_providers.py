@@ -12,6 +12,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import requests
+import numpy as np
 from realtime_audio_translator.archive_install import verify_install_manifest, write_install_manifest
 from realtime_audio_translator.audio import device_identity
 from realtime_audio_translator.config import DEFAULT_CONFIG, _has_reparse_point, clear_cache, clear_logs, ensure_app_dirs, ensure_glossary_file, load_config, log_files_to_clear, save_audio_devices, save_config
@@ -886,6 +887,12 @@ class ProvidersTests(unittest.TestCase):
                 devices.append(kwargs["device"])
                 return stream
 
+            def query_devices(self, device):
+                return {"hostapi": 0}
+
+            def query_hostapis(self, index):
+                return {"name": "MME"}
+
         numpy = type("Numpy", (), {"frombuffer": staticmethod(lambda audio, dtype: list(range(2400)))})()
         original_find_device = tts_module.find_device
         tts_module.find_device = lambda *args, **kwargs: 7
@@ -897,6 +904,28 @@ class ProvidersTests(unittest.TestCase):
 
         self.assertEqual(devices, [7])
         self.assertTrue(stream.aborted)
+
+    def test_pcm_playback_enables_native_conversion_only_for_wasapi(self):
+        import realtime_audio_translator.tts as tts_module
+        from unittest.mock import MagicMock
+
+        for hostapi in ("Windows WASAPI", "MME"):
+            with self.subTest(hostapi=hostapi):
+                sd = MagicMock()
+                sd.query_devices.return_value = {"hostapi": 2}
+                sd.query_hostapis.return_value = {"name": hostapi}
+                with patch.dict(sys.modules, {"sounddevice": sd}), patch.object(tts_module, "find_device", return_value=7):
+                    tts_module.play_linear16(np.zeros(2400, dtype="<i2").tobytes(), samplerate=24000)
+                sd.query_devices.assert_called_once_with(7)
+                sd.query_hostapis.assert_called_once_with(2)
+                if hostapi == "Windows WASAPI":
+                    sd.WasapiSettings.assert_called_once_with(auto_convert=True)
+                    expected = sd.WasapiSettings.return_value
+                else:
+                    sd.WasapiSettings.assert_not_called()
+                    expected = None
+                self.assertIs(sd.OutputStream.call_args.kwargs["extra_settings"], expected)
+                self.assertEqual(sd.OutputStream.call_args.kwargs["samplerate"], 24000)
 
     def test_pcm_playback_applies_output_volume(self):
         import realtime_audio_translator.tts as tts_module
@@ -916,6 +945,12 @@ class ProvidersTests(unittest.TestCase):
         class SoundDevice:
             def OutputStream(self, **kwargs):
                 return Stream()
+
+            def query_devices(self, device):
+                return {"hostapi": 0}
+
+            def query_hostapis(self, index):
+                return {"name": "MME"}
 
         original_find_device = tts_module.find_device
         tts_module.find_device = lambda *args, **kwargs: 7

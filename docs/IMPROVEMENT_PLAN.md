@@ -23,10 +23,10 @@
 以下保留在目標內，尚未宣稱完成；需要以量測或重現決定修法，避免只憑推測重寫架構。
 
 1. **長時間執行**：紀錄保留掃描與翻譯快取讀取已量測並改善，紀錄滿載已有累計遺失提示；GUI 事件泵已分批交還 Tk 控制權。
-2. **音訊操作**：已補 EXE 辨識硬體參數與需重新開始提示；來源重連仍需實機驗證。
+2. **音訊操作**：已補 EXE 辨識硬體參數與需重新開始提示，修正 WASAPI 取樣率並完成虛擬音訊往返與麥克風擷取；來源重連及專案內模型路徑解析仍待驗證／修正。
 3. **設定輸入**：運算精度選項已與目前 CLI 清單對齊並驗證持久化；損毀或結構錯誤的 commands.json 已回退至既有預設選項，並保留混合清單中的有效字串。
 4. **關閉與資料完整性**：writer／引擎停止逾時已串接保留與重試；紀錄寫入／清理錯誤及佇列遺失數量已加入執行狀態與停止結果。EXE 辨識已接上取消事件，停止時終止所啟動的程序並等待退出後清理暫存檔。
-5. **實機驗證**：麥克風、VB-CABLE、跨螢幕 DPI 與雲端 API 延遲仍需硬體／服務驗證；離線綠燈不能替代。
+5. **實機驗證**：兩組麥克風擷取與 VB-CABLE 測試音往返已通過；實際 Whisper EXE、來源重連、跨螢幕 DPI 與雲端 API 延遲仍待驗證。串流擷取成功不等於語音辨識品質驗收。
 
 本輪未加入新框架或相依套件，沒有推送、建立 PR 或發布。
 
@@ -63,6 +63,18 @@
 新增 2 項測試：真實子程序正常完成、非零退出、大量 stdout／stderr 後取消，以及等待辨識鎖時取消；確認程序退出、暫存檔移除、取消結果不含字幕。另驗證引擎開始與停止共用同一取消事件。122 項音訊／引擎測試、`scripts/test.ps1` 全部 474 項與 compileall 通過；`git diff --check` 通過。既有棄用警告與 runtime zip 略過不變。
 
 限制：本輪使用受控子程序，尚未驗證實際 Whisper EXE；Python 模型的原生推論仍無法強制中斷，持續由既有停止逾時與重試處理。本機裝置列舉可找到 WASAPI 麥克風及 VB-CABLE，但列舉不等於錄音、重連或播放驗證。
+
+### WASAPI 取樣率與實機音訊
+
+基準 `fa35dbd`。實機 `check_input_settings`／`check_output_settings` 確認裝置原生 48 kHz 可用，但固定 16／24 kHz 會拋出 `Invalid sample rate`。共用 `play_linear16` 現在僅對 WASAPI 啟用 `WasapiSettings(auto_convert=True)`，交由 Windows 在共享模式轉換取樣率；測試音也改走此共用路徑。麥克風音量測試改用既有 `capture_audio`，沿用原生取樣率、單聲道轉換與 overflow 回報。
+
+依據 [sounddevice WASAPI 設定](https://github.com/spatialaudio/python-sounddevice/blob/master/doc/api/platform-specific-settings.md) 與[版本紀錄](https://github.com/spatialaudio/python-sounddevice/blob/master/doc/version-history.md)，`auto_convert` 自 0.4.7 提供；專案已要求 `sounddevice>=0.5`，不新增相依套件。
+
+- 真實 VB-CABLE：以服務的 `test_tone` 播放 24 kHz、440 Hz、0.25 秒測試音；48 kHz 輸入回收峰值為 **440.43 Hz**、RMS **0.088851**，未回報 callback 錯誤。
+- 兩組真實 WASAPI 麥克風：使用服務的 `test_microphone` 各擷取 0.5 秒成功，只計算音量，沒有保存錄音；不以安靜環境的音量推論辨識品質。
+- 新增 3 項測試，確認 WASAPI／其他 host API 的設定分流、測試音共用播放路徑，以及擷取 RMS 與例外回報。59 項相關測試與 `scripts/test.ps1` 全部 **477 項**、compileall 通過，`git diff --check` 通過；既有棄用警告及 runtime zip 略過不變。
+
+本機 runtime 原先缺少安裝清單，已使用既有原地匯入流程建立並驗證雜湊。CUDA 探測第一次超過原有 5 秒上限；獨立重試在 3.66 秒回傳 `CUDA device: 1`。另確認診斷能找到專案 `_models` 的模型，但辨識器仍只查使用者模型目錄，後續須修正兩者不一致。沒有把本機 runtime、錄音或測試產物加入 Git。
 
 ## 驗證紀錄
 
