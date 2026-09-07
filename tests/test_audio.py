@@ -11,10 +11,73 @@ from realtime_audio_translator.archive_install import write_install_manifest
 from realtime_audio_translator.audio import AudioSegment, DeviceResolutionError, SegmentationPolicy, SegmentWorker, UtteranceSegmenter, _pcm_rms, _pyaudio_output_for_device, audio_segment_active, device_identity, find_device, format_device_label, segmentation_policy, virtual_mic_recaptures_tts
 from realtime_audio_translator.asr import AudioTranscriber, add_runtime_dll_directory, add_xxl_data
 from realtime_audio_translator.engine import RealtimeEngine, audio_devices_overlap, direction_label, drain_queue, overlay_text_from_config, safe_target_language
-from tests.helpers import write_wav
+from tests.helpers import write_model, write_wav
 
 
 class AudioTests(unittest.TestCase):
+    def test_whisper_resolves_local_models_for_python_and_exe(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        import realtime_audio_translator.asr as asr_module
+
+        for location in ("configured", "_models", "models"):
+            with self.subTest(location=location), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                directory = root / location / "faster-whisper-small"
+                write_model(directory)
+                whisper = Mock()
+                with patch.dict(sys.modules, {"faster_whisper": SimpleNamespace(WhisperModel=whisper)}), patch.object(asr_module, "runtime_dir", return_value=root / "absent"):
+                    transcriber = AudioTranscriber(root, "small", root / "configured", device="cpu")
+                self.assertEqual(whisper.call_args.args[0], str(directory.resolve()))
+
+                def run(command, **kwargs):
+                    self.assertEqual(command[command.index("--model") + 1], "small")
+                    self.assertEqual(Path(command[command.index("--model_dir") + 1]), directory.parent)
+                    output = Path(command[command.index("--output_dir") + 1])
+                    (output / "clip.json").write_text('{"text":"hello"}', encoding="utf-8")
+                    return SimpleNamespace(returncode=0)
+
+                with patch.object(asr_module.subprocess, "run", side_effect=run):
+                    self.assertEqual(transcriber._transcribe_with_exe(root / "clip.wav").text, "hello")
+
+    def test_whisper_prefers_valid_configured_model_and_skips_partial_copy(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        import realtime_audio_translator.asr as asr_module
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            configured = root / "configured" / "faster-whisper-small"
+            bundled = root / "_models" / "faster-whisper-small"
+            write_model(configured)
+            write_model(bundled)
+            for partial, expected in ((False, configured), (True, bundled)):
+                with self.subTest(partial=partial):
+                    if partial:
+                        (configured / "download.partial").write_bytes(b"unfinished")
+                    whisper = Mock()
+                    with patch.dict(sys.modules, {"faster_whisper": SimpleNamespace(WhisperModel=whisper)}), patch.object(asr_module, "runtime_dir", return_value=root / "absent"):
+                        AudioTranscriber(root, "small", root / "configured", device="cpu")
+                    self.assertEqual(whisper.call_args.args[0], str(expected.resolve()))
+
+    def test_exe_does_not_silently_select_sibling_of_plain_model_directory(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        import realtime_audio_translator.asr as asr_module
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_model(root / "configured" / "small")
+            write_model(root / "configured" / "faster-whisper-small")
+            whisper = Mock()
+            with patch.dict(sys.modules, {"faster_whisper": SimpleNamespace(WhisperModel=whisper)}), patch.object(asr_module, "runtime_dir", return_value=root / "absent"):
+                transcriber = AudioTranscriber(root, "small", root / "configured", device="cpu")
+            self.assertEqual(whisper.call_args.args[0], str((root / "configured" / "small").resolve()))
+            with patch.object(asr_module.subprocess, "run") as run:
+                with self.assertRaisesRegex(RuntimeError, "faster-whisper-"):
+                    transcriber._transcribe_with_exe(root / "clip.wav")
+                run.assert_not_called()
+
     def test_cancellable_whisper_exe_reaps_process_and_cleans_files(self):
         import realtime_audio_translator.asr as asr_module
 

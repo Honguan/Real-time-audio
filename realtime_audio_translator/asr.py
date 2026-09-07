@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .audio import AudioSegment, write_audio_segment
+from .models import model_path
 from .runtime import runtime_dir, runtime_status, whisper_exe
 
 
@@ -40,8 +41,9 @@ class AudioTranscriber:
             raise RuntimeError(f"runtime 未通過完整性驗證：{runtime_root}")
         add_runtime_dll_directory(runtime_root)
         add_xxl_data(repo_root, runtime_root)
-        self.model_name = model_name
-        self.model_dir = model_dir
+        local_model = model_path(model_name, model_dir, repo_root / "_models") or model_path(model_name, repo_root / "models", model_dir)
+        self.model_name = local_model.name.removeprefix("faster-whisper-") if local_model else model_name
+        self.model_dir = local_model.parent if local_model else model_dir
         self.device = device
         self.compute_type = compute_type
         self.exe_path = whisper_exe(runtime_root)
@@ -57,11 +59,8 @@ class AudioTranscriber:
                 raise RuntimeError(f"找不到 runtime：{self.exe_path}")
 
     def _model_path(self) -> str:
-        for name in (self.model_name, f"faster-whisper-{self.model_name}"):
-            path = self.model_dir / name
-            if path.exists():
-                return str(path)
-        return self.model_name
+        local_model = model_path(self.model_name, self.model_dir, self.model_dir)
+        return str(local_model.resolve()) if local_model else self.model_name
 
     def transcribe(self, audio: AudioSegment | Path, language: str | None = None) -> TranscriptionResult:
         if language == "auto":
@@ -113,6 +112,9 @@ class AudioTranscriber:
             language = None
         if cancel_event is not None and cancel_event.is_set():
             return TranscriptionResult("", language)
+        local_model = model_path(self.model_name, self.model_dir, self.model_dir)
+        if local_model and local_model.name != f"faster-whisper-{self.model_name}":
+            raise RuntimeError(f"EXE 模式的模型目錄需以 faster-whisper- 開頭：{local_model}")
         with tempfile.TemporaryDirectory(prefix="realtime-audio-asr-") as tmp:
             out_dir = Path(tmp)
             wav_path = audio if isinstance(audio, Path) else write_audio_segment(out_dir / "segment.wav", audio)
