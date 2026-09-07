@@ -389,12 +389,14 @@ class RealtimeEngine:
                 registry = self.offline_translation_registry
             else:
                 registry = None
-            self.config = config
             desired_policy = self._log_policy(config)
-            if self.log and (not config.get("record_logs") or self.log.policy != desired_policy):
-                old_log, self.log = self.log, None
-            if config.get("record_logs") and self.log is None:
-                self.log = self._new_conversation_log(config)
+            log = self.log
+            if log and (not config.get("record_logs") or log.policy != desired_policy):
+                old_log, log = log, None
+            if config.get("record_logs") and log is None:
+                log = self._new_conversation_log(config)
+            self.config = config
+            self.log = log
             self.offline_translation_registry = registry
             if registry is not None:
                 registry.config = config

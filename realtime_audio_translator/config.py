@@ -354,7 +354,7 @@ def _valid_state_value(key: str, value):
     return value if isinstance(value, str) else DEFAULT_CONFIG[key]
 
 
-def _normalized_config(loaded: dict, repair_pair: bool = True) -> dict:
+def normalize_config(loaded: dict, repair_pair: bool = True) -> dict:
     config = DEFAULT_CONFIG.copy()
     for key, value in loaded.items():
         if key in DEFAULT_CONFIG:
@@ -370,9 +370,9 @@ def _normalized_config(loaded: dict, repair_pair: bool = True) -> dict:
     if "advanced_mode" not in loaded and loaded.get("ui_mode") in ("advanced", "simple"):
         config["advanced_mode"] = loaded["ui_mode"] == "advanced"
     if "record_logs" not in loaded and "save_conversation_history" in loaded:
-        config["record_logs"] = bool(loaded["save_conversation_history"])
+        config["record_logs"] = config["save_conversation_history"]
     if "overlay_topmost" not in loaded and "subtitle_always_on_top" in loaded:
-        config["overlay_topmost"] = bool(loaded["subtitle_always_on_top"])
+        config["overlay_topmost"] = config["subtitle_always_on_top"]
     if not config.get("cloud_api_enabled", False):
         if config.get("provider") in ("google", "openai"):
             config["provider"] = "local"
@@ -411,6 +411,7 @@ class ConfigStore:
                     state_document, _recovered = _read_json_with_backup(self.state_path, self._valid_state_document)
                     config.update(state_document["session_metrics"])
                     config.update(state_document["diagnostics"])
+                config = normalize_config(config)
                 self._save_all(config)
                 return config
             try:
@@ -453,7 +454,7 @@ class ConfigStore:
                     **state_document.get("diagnostics", {}),
                 }
                 recovered = recovered or state_recovered
-            config = _normalized_config(loaded)
+            config = normalize_config(loaded)
             expected_settings = {key: config[key] for key in SETTINGS_KEYS}
             expected_state = {
                 "schema_version": CONFIG_SCHEMA_VERSION,
@@ -503,7 +504,7 @@ class ConfigStore:
             self._write_state(current)
 
     def _prepare(self, config: dict) -> dict:
-        prepared = _normalized_config(config.copy(), repair_pair=False)
+        prepared = normalize_config(config.copy(), repair_pair=False)
         prepared["ui_mode"] = "advanced" if prepared.get("advanced_mode") else "simple"
         prepared["asr_model"] = prepared.get("model", prepared.get("asr_model", "small"))
         prepared["translation_engine"] = prepared.get("provider", prepared.get("translation_engine", "local"))

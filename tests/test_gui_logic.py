@@ -12,6 +12,55 @@ from realtime_audio_translator.gui import LANGUAGE_CHOICES, PERFORMANCE_CHOICES,
 
 
 class GuiLogicTests(unittest.TestCase):
+    def test_config_conversion_preserves_hidden_types_and_independent_numbers(self):
+        app = TranslatorApp.__new__(TranslatorApp)
+        app.config = DEFAULT_CONFIG | {"translation_cache_enabled": False, "ai_auto_optimize": False}
+        app._device_id_by_label = {}
+        app.vars = {key: Mock(get=Mock(return_value=str(value))) for key, value in app.config.items()}
+        for key, value in app.config.items():
+            if isinstance(value, bool):
+                setattr(app, key, Mock(get=Mock(return_value=value)))
+        app.vars["tts_volume"].get.return_value = "25"
+        app.vars["speaker_tts_volume"].get.return_value = "invalid"
+        app.vars["segment_seconds"].get.return_value = "100"
+
+        config = app._config_from_vars()
+
+        self.assertIs(config["translation_cache_enabled"], False)
+        self.assertIs(config["ai_auto_optimize"], False)
+        self.assertEqual(config["tts_volume"], 25)
+        self.assertEqual(config["speaker_tts_volume"], 100)
+        self.assertEqual(config["segment_seconds"], 3.0)
+
+    def test_save_failure_does_not_apply_unpersisted_settings(self):
+        app = TranslatorApp.__new__(TranslatorApp)
+        app.config = DEFAULT_CONFIG.copy()
+        app._config_from_vars = lambda: DEFAULT_CONFIG | {"model": "tiny"}
+        app._log_consent_granted = False
+        app.status = Mock()
+        app.mode_text = Mock()
+        app.engine = Mock()
+        with patch("realtime_audio_translator.gui.save_config", side_effect=OSError("disk full")):
+            self.assertFalse(app._save())
+        self.assertEqual(app.config, DEFAULT_CONFIG)
+        app.engine.update_config.assert_not_called()
+        self.assertIn("disk full", app.status.set.call_args.args[0])
+
+    def test_engine_config_failure_restores_persisted_settings(self):
+        app = TranslatorApp.__new__(TranslatorApp)
+        app.config = DEFAULT_CONFIG.copy()
+        candidate = DEFAULT_CONFIG | {"model": "tiny"}
+        app._config_from_vars = lambda: candidate
+        app._log_consent_granted = False
+        app.status = Mock()
+        app.mode_text = Mock()
+        app.engine = Mock(update_config=Mock(side_effect=OSError("log unavailable")))
+        with patch("realtime_audio_translator.gui.save_config") as save:
+            self.assertFalse(app._save())
+        self.assertEqual(save.call_args_list[0].args[1]["model"], "tiny")
+        self.assertEqual(save.call_args_list[1].args[1], DEFAULT_CONFIG)
+        self.assertEqual(app.config, DEFAULT_CONFIG)
+
     def test_callback_failure_does_not_stop_future_ui_updates(self):
         app = TranslatorApp.__new__(TranslatorApp)
         app._engine_events = queue.Queue()
@@ -77,21 +126,37 @@ class GuiLogicTests(unittest.TestCase):
     def test_export_aborts_when_settings_are_invalid(self):
         app = TranslatorApp.__new__(TranslatorApp)
         app._save = Mock(return_value=False)
-        with patch("realtime_audio_translator.gui.export_jsonl_to_srt") as export:
+        with patch("realtime_audio_translator.gui.export_subtitles") as export:
             app._export_subtitles()
         export.assert_not_called()
 
-    def test_export_reports_corrupt_log_without_crashing(self):
+    def test_export_uses_selected_log_in_background(self):
         app = TranslatorApp.__new__(TranslatorApp)
         app._save = Mock(return_value=True)
         app.status = Mock()
+        app._submit = Mock()
         with tempfile.TemporaryDirectory() as tmp:
             directory = Path(tmp)
-            (directory / "session.jsonl").write_text("{bad json", encoding="utf-8")
+            source = directory / "older-session.jsonl"
             app.config = DEFAULT_CONFIG | {"log_dir": tmp}
-            with patch("realtime_audio_translator.gui.APP_DIR", directory):
+            with patch("realtime_audio_translator.gui.APP_DIR", directory), patch("realtime_audio_translator.gui.filedialog.askopenfilename", return_value=str(source)), patch("realtime_audio_translator.gui.export_subtitles", return_value=(directory / "out.srt", directory / "out.txt")) as export, patch("realtime_audio_translator.gui.append_app_log"):
                 app._export_subtitles()
-        self.assertIn("字幕匯出失敗", app.status.set.call_args.args[0])
+                export.assert_not_called()
+                args, kwargs = app._submit.call_args
+                self.assertEqual(kwargs["task_name"], "subtitle_export")
+                paths = args[1]()
+                args[2](paths)
+                export.assert_called_once_with(source, directory / "exports" / "subtitles")
+                self.assertIn("out.srt", app.status.set.call_args.args[0])
+
+    def test_export_cancel_does_not_start_work(self):
+        app = TranslatorApp.__new__(TranslatorApp)
+        app.config = DEFAULT_CONFIG.copy()
+        app._save = Mock(return_value=True)
+        app._submit = Mock()
+        with patch("realtime_audio_translator.gui.filedialog.askopenfilename", return_value=""):
+            app._export_subtitles()
+        app._submit.assert_not_called()
 
     def test_window_position_is_clamped_to_visible_work_area(self):
         area = (0, 0, 1366, 728)
@@ -251,8 +316,7 @@ class GuiLogicTests(unittest.TestCase):
         self.assertIn('("匯出字幕", self._export_subtitles)', gui_source)
         self.assertIn('def _open_logs(self) -> None:', gui_source)
         self.assertIn('def _export_subtitles(self) -> None:', gui_source)
-        self.assertIn("export_jsonl_to_srt", gui_source)
-        self.assertIn("export_jsonl_to_txt", gui_source)
+        self.assertIn("export_subtitles", gui_source)
         self.assertIn("append_app_log", gui_source)
         self.assertIn("save_audio_devices", gui_source)
         self.assertIn('subprocess.Popen(["explorer", str(path)])', gui_source)

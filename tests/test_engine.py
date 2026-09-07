@@ -55,6 +55,29 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(pipeline.config["provider"], "google")
         self.assertIsNone(engine.offline_translation_registry)
 
+    def test_log_update_failure_preserves_config_pipeline_and_active_writer(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = DEFAULT_CONFIG | {"provider": "google", "record_logs": True, "log_dir": tmp}
+            engine = RealtimeEngine(Path("."), config, lambda *_args: None, lambda *_args: None)
+            pipeline = engine._pipeline("speaker")
+            old_log = engine.log
+            candidate = config | {"log_dir": str(Path(tmp) / "denied"), "tts_rate": 5}
+            try:
+                with patch.object(engine, "_new_conversation_log", side_effect=OSError("denied")):
+                    with self.assertRaisesRegex(OSError, "denied"):
+                        engine.update_config(candidate)
+
+                self.assertIs(engine.config, config)
+                self.assertIs(engine.log, old_log)
+                self.assertEqual(pipeline.config["tts_rate"], config["tts_rate"])
+                self.assertFalse(old_log._closed)
+                self.assertTrue(old_log._thread.is_alive())
+                old_log.append("me", "zh", "en", "hello", "world", "google")
+                self.assertTrue(old_log.close())
+                self.assertIn("hello", old_log.jsonl_path.read_text(encoding="utf-8"))
+            finally:
+                old_log.close()
+
     def test_engine_updates_existing_pipeline_translation_cache_inputs(self):
         engine = RealtimeEngine(Path("."), DEFAULT_CONFIG.copy(), lambda speaker, mine: None, lambda status: None)
         pipeline = engine._pipeline("speaker")

@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest.mock import patch
 from realtime_audio_translator.engine import RealtimeEngine, audio_devices_overlap, direction_label, drain_queue, overlay_text_from_config, safe_target_language
 from realtime_audio_translator.logbook import ConversationLog, conversation_log_usage, enforce_log_retention
+from realtime_audio_translator import subtitle_export
 from realtime_audio_translator.subtitle_export import export_jsonl_to_srt, export_jsonl_to_txt, srt_timestamp
 
 
@@ -192,6 +193,98 @@ class SubtitleExportTests(unittest.TestCase):
             text = export_jsonl_to_srt(jsonl, root).read_text(encoding="utf-8")
 
             self.assertIn("00:00:05,000 --> 00:00:07,500", text)
+
+    def test_invalid_records_report_source_line_and_preserve_output(self):
+        for raw in ('null', '[]', '{broken', '{"text": "bad", "audio_start_seconds": NaN}',
+                    '{"text": "bad", "audio_end_seconds": Infinity}', '{"text": ["bad"]}'):
+            for exporter in (export_jsonl_to_srt, export_jsonl_to_txt):
+                with self.subTest(raw=raw, exporter=exporter.__name__), tempfile.TemporaryDirectory() as tmp:
+                    root = Path(tmp)
+                    source = root / "session.jsonl"
+                    source.write_text('{"text": "valid"}\n\n' + raw, encoding="utf-8")
+                    for suffix in ("srt", "txt"):
+                        (root / f"session.{suffix}").write_text("previous", encoding="utf-8")
+                    with self.assertRaisesRegex(ValueError, r"line 3"):
+                        exporter(source, root)
+                    self.assertEqual((root / "session.srt").read_text(), "previous")
+                    self.assertEqual((root / "session.txt").read_text(), "previous")
+
+    def test_empty_and_metadata_only_logs_are_not_exported(self):
+        for contents in ("", "{}\n", '{"text": "  "}\n'):
+            with self.subTest(contents=contents), tempfile.TemporaryDirectory() as tmp:
+                source = Path(tmp) / "session.jsonl"
+                source.write_text(contents, encoding="utf-8")
+                with self.assertRaises(ValueError):
+                    export_jsonl_to_srt(source, Path(tmp) / "exports")
+
+    def test_exports_share_order_and_keep_legacy_mixed_time_fallback(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "session.jsonl"
+            source.write_text('{}\n{"text": "later", "audio_start_seconds": 5}\n'
+                              '{"text": "first", "audio_start_seconds": 1}\n', encoding="utf-8")
+            self.assertEqual(export_jsonl_to_txt(source, root).read_text(), "audio: first\naudio: later\n")
+            source.write_text('{"text": "one", "audio_start_seconds": 5}\n'
+                              '{"text": "two"}\n', encoding="utf-8")
+            text = export_jsonl_to_srt(source, root).read_text()
+            self.assertIn("00:00:00,000 --> 00:00:03,000", text)
+            self.assertIn("00:00:03,000 --> 00:00:06,000", text)
+
+    def test_bundle_reads_once_and_preserves_previous_exports(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "session.jsonl"
+            source.write_text('{"text": "later", "audio_start_seconds": 5}\n'
+                              '{"text": "first", "audio_start_seconds": 1}\n', encoding="utf-8")
+            original_read = Path.read_text
+            with patch.object(Path, "read_text", autospec=True, side_effect=original_read) as read:
+                srt, txt = subtitle_export.export_subtitles(source, root / "exports")
+                self.assertEqual(read.call_count, 1)
+            self.assertEqual(srt.parent, txt.parent)
+            self.assertEqual(txt.read_text(), "audio: first\naudio: later\n")
+            self.assertLess(srt.read_text().index("first"), srt.read_text().index("later"))
+            before = {path: path.read_bytes() for path in (srt, txt)}
+            second = subtitle_export.export_subtitles(source, root / "exports")
+            self.assertNotEqual(srt.parent, second[0].parent)
+            self.assertEqual(before, {path: path.read_bytes() for path in before})
+
+    def test_failed_legacy_export_does_not_truncate_existing_file(self):
+        for exporter, suffix in ((export_jsonl_to_srt, "srt"), (export_jsonl_to_txt, "txt")):
+            with self.subTest(suffix=suffix), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                source = root / "session.jsonl"
+                source.write_text('{"text": "hello"}\n', encoding="utf-8")
+                destination = root / f"session.{suffix}"
+                destination.write_text("previous", encoding="utf-8")
+                def fail_write(path, *args, **kwargs):
+                    path.write_bytes(b"partial")
+                    raise OSError("disk full")
+                with patch.object(Path, "write_text", fail_write):
+                    with self.assertRaises(OSError):
+                        exporter(source, root)
+                self.assertEqual(destination.read_text(), "previous")
+                self.assertEqual(set(root.iterdir()), {source, destination})
+
+    def test_failed_bundle_write_or_publish_leaves_no_partial_export(self):
+        for failure in ("write", "rename"):
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                source = root / "session.jsonl"
+                source.write_text('{"text": "hello"}\n', encoding="utf-8")
+                exports = root / "exports"
+                previous = subtitle_export.export_subtitles(source, exports)
+                before = {path: path.read_bytes() for path in previous}
+                original_write = Path.write_text
+                def write(path, *args, **kwargs):
+                    if path.suffix == ".txt":
+                        path.write_bytes(b"partial")
+                        raise OSError("disk full")
+                    return original_write(path, *args, **kwargs)
+                with patch.object(Path, "write_text", write) if failure == "write" else patch.object(Path, "rename", side_effect=OSError("denied")):
+                    with self.assertRaises(OSError):
+                        subtitle_export.export_subtitles(source, exports)
+                self.assertEqual(list(exports.iterdir()), [previous[0].parent])
+                self.assertEqual(before, {path: path.read_bytes() for path in before})
 
     def test_pause_discards_stale_audio_segments(self):
         segments = queue.Queue()

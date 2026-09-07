@@ -21,6 +21,13 @@ SETUP_GUIDES = {
 
 
 ENGLISH = {
+    "選擇要匯出的對話紀錄": "Choose a conversation log to export",
+    "對話紀錄": "Conversation logs",
+    "正在匯出字幕": "Exporting subtitles",
+    "字幕匯出失敗": "Subtitle export failed",
+    "開啟匯出資料夾": "Open exports",
+    "設定儲存失敗：{error}": "Failed to save settings: {error}",
+    "設定套用失敗：{error}；設定檔還原失敗：{rollback_error}": "Failed to apply settings: {error}; failed to restore settings file: {rollback_error}",
     "暫停": "Pause",
     "繼續": "Resume",
     "翻譯設定": "Translation",

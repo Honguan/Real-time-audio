@@ -1,4 +1,5 @@
 import queue
+import math
 import sys
 import subprocess
 import threading
@@ -17,7 +18,7 @@ from .ai_memory import add_glossary_term
 from .ai_orchestrator import plan_session
 from .app_log import append_app_log
 from .commands import command_choices
-from .config import APP_DIR, clear_cache, clear_logs, ensure_glossary_file, load_config, log_files_to_clear, save_audio_devices, save_config, save_config_state, validate_language_pair
+from .config import APP_DIR, DEFAULT_CONFIG, SETTING_RANGES, clear_cache, clear_logs, ensure_glossary_file, load_config, log_files_to_clear, normalize_config, save_audio_devices, save_config, save_config_state, validate_language_pair
 from .engine import RealtimeEngine
 from .logbook import conversation_log_usage
 from .localization import SUPPORTED_LANGUAGES, setup_guide_text, translate, translate_known
@@ -25,7 +26,7 @@ from .models import MODEL_INVALID, MODEL_READY, cuda_hardware_from_check_output,
 from .paths import resource_root
 from .runtime import DEFAULT_RUNTIME_DIR, UPSTREAM_RUNTIME_RELEASE_URL, runtime_dir, runtime_install_message, runtime_status
 from .scenarios import SCENARIO_CHOICES, apply_scenario, scenario_key, scenario_label
-from .subtitle_export import export_jsonl_to_srt, export_jsonl_to_txt
+from .subtitle_export import export_subtitles
 from .tts import list_windows_sapi_voices
 
 
@@ -98,7 +99,7 @@ BASIC_SETTING_KEYS = {
 }
 ADVANCED_SETTING_KEYS = {key for _label, key in SETTING_ROWS} - BASIC_SETTING_KEYS
 BASIC_BUTTON_TEXTS = {
-    "重新整理", "交換語言", "複製字幕", "匯出字幕", "開啟紀錄",
+    "重新整理", "交換語言", "複製字幕", "匯出字幕", "開啟紀錄", "開啟匯出資料夾",
     "設定精靈",
     "一鍵診斷",
     "開始",
@@ -730,6 +731,7 @@ class TranslatorApp(tk.Tk):
             ("清除快取", self._clear_cache),
             ("開啟紀錄", self._open_logs),
             ("匯出字幕", self._export_subtitles),
+            ("開啟匯出資料夾", self._open_exports),
             ("清除紀錄", self._clear_logs),
             ("清除本機資料", self._clear_local_data),
         ):
@@ -887,8 +889,9 @@ class TranslatorApp(tk.Tk):
 
     def _config_from_vars(self) -> dict:
         config = self.config.copy()
+        editable_keys = {key for _label, key in SETTING_ROWS}
         for key, variable in self.vars.items():
-            if key.startswith("last_") or key in {"overlay_x", "overlay_y"}:
+            if key not in editable_keys:
                 continue
             config[key] = self._device_id_by_label.get(variable.get(), self.config.get(key, "")) if key in AUDIO_DEVICE_KEYS else variable.get()
         config["scenario"] = next((key for key in SCENARIO_CHOICES if config["scenario"] == self._t(scenario_label(key))), scenario_key(config["scenario"]))
@@ -908,33 +911,12 @@ class TranslatorApp(tk.Tk):
         config["setup_guide_shown"] = str(config.get("setup_guide_shown", False)).lower() == "true"
         if config.get("performance_mode") not in PERFORMANCE_CHOICES:
             config["performance_mode"] = "balanced"
-        config["overlay_opacity"] = overlay_opacity_value(config["overlay_opacity"])
-        config["overlay_font_size"] = overlay_font_size_value(config["overlay_font_size"])
-        config["overlay_hold_seconds"] = overlay_hold_seconds_value(config["overlay_hold_seconds"])
-        try:
-            config["segment_seconds"] = float(config["segment_seconds"])
-        except Exception:
-            config["segment_seconds"] = 2.0
-        try:
-            config["speech_threshold"] = min(1.0, max(0.0, float(config["speech_threshold"])))
-        except Exception:
-            config["speech_threshold"] = 0.01
-        try:
-            config["tts_rate"] = max(-10, min(10, int(config["tts_rate"])))
-        except Exception:
-            config["tts_rate"] = 0
-        try:
-            config["tts_volume"] = max(0, min(100, int(config["tts_volume"])))
-            config["speaker_tts_volume"] = max(0, min(100, int(config["speaker_tts_volume"])))
-        except Exception:
-            config["tts_volume"] = 100
-            config["speaker_tts_volume"] = 100
-        try:
-            config["conversation_log_retention_days"] = max(0, min(3650, int(config["conversation_log_retention_days"])))
-            config["conversation_log_max_mb"] = max(0, min(10240, int(config["conversation_log_max_mb"])))
-        except Exception:
-            config["conversation_log_retention_days"] = 7
-            config["conversation_log_max_mb"] = 100
+        for key, (minimum, maximum) in SETTING_RANGES.items():
+            try:
+                value = type(DEFAULT_CONFIG[key])(config[key])
+                config[key] = max(minimum, min(maximum, value)) if math.isfinite(value) else DEFAULT_CONFIG[key]
+            except (TypeError, ValueError, OverflowError):
+                config[key] = DEFAULT_CONFIG[key]
         return config
 
     def _save(self) -> bool:
@@ -962,15 +944,28 @@ class TranslatorApp(tk.Tk):
         elif not config["record_logs"]:
             self._log_consent_granted = False
         config["cloud_api_enabled"] = cloud_enabled
+        config = normalize_config(config, repair_pair=False)
+        try:
+            save_config(APP_DIR, config)
+        except (OSError, ValueError) as exc:
+            self.status.set(self._t("設定儲存失敗：{error}", error=exc))
+            return False
         if self.engine:
             try:
                 self.engine.update_config(config)
             except Exception as exc:
-                self.status.set(self._t("設定套用失敗：{error}", error=exc))
+                try:
+                    save_config(APP_DIR, self.config)
+                except (OSError, ValueError) as rollback_error:
+                    self.status.set(self._t("設定套用失敗：{error}；設定檔還原失敗：{rollback_error}", error=exc, rollback_error=rollback_error))
+                else:
+                    self.status.set(self._t("設定套用失敗：{error}", error=exc))
                 return False
         self.config = config
+        for key, variable in self.__dict__.get("vars", {}).items():
+            if key in {name for _label, name in SETTING_ROWS} - set(AUDIO_DEVICE_KEYS) - {"scenario"}:
+                variable.set(str(config[key]))
         self.mode_text.set(self._mode_text())
-        save_config(APP_DIR, self.config)
         if language_changed:
             self.status.set(self._t("介面語言已變更；請重新啟動程式以完整套用"))
         return True
@@ -1765,20 +1760,22 @@ class TranslatorApp(tk.Tk):
         if not self._save():
             return
         log_dir = Path(self.config.get("log_dir") or APP_DIR / "logs")
-        logs = sorted(log_dir.glob("*.jsonl"), key=lambda path: path.stat().st_mtime, reverse=True)
-        if not logs:
-            self.status.set(self._t("沒有可匯出的紀錄"))
-            append_app_log(APP_DIR, "subtitle_export_empty")
+        selected = filedialog.askopenfilename(title=self._t("選擇要匯出的對話紀錄"), initialdir=log_dir, filetypes=((self._t("對話紀錄"), "*.jsonl"),))
+        if not selected:
             return
+        source = Path(selected)
         output_dir = APP_DIR / "exports" / "subtitles"
-        try:
-            srt = export_jsonl_to_srt(logs[0], output_dir)
-            txt = export_jsonl_to_txt(logs[0], output_dir)
-        except (OSError, ValueError) as exc:
-            self.status.set(self._t("字幕匯出失敗：{error}", error=exc))
-            return
-        append_app_log(APP_DIR, "subtitle_export", source=logs[0], output=srt, text_output=txt)
+        self._submit("正在匯出字幕", lambda: export_subtitles(source, output_dir), lambda paths: self._subtitles_exported(source, paths), "字幕匯出失敗", task_name="subtitle_export")
+
+    def _subtitles_exported(self, source: Path, paths: tuple[Path, Path]) -> None:
+        srt, txt = paths
         self.status.set(self._t("字幕已匯出：{path}", path=srt))
+        append_app_log(APP_DIR, "subtitle_export", source=source, output=srt, text_output=txt)
+
+    def _open_exports(self) -> None:
+        path = APP_DIR / "exports" / "subtitles"
+        path.mkdir(parents=True, exist_ok=True)
+        subprocess.Popen(["explorer", str(path)])
 
     def _clear_logs(self) -> None:
         target = self._confirm_log_cleanup()

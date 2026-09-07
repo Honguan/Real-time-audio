@@ -189,6 +189,37 @@ class ConfigTests(unittest.TestCase):
             self.assertEqual(config["conversation_log_content"], DEFAULT_CONFIG["conversation_log_content"])
             self.assertEqual(config["last_ffmpeg_failed"], DEFAULT_CONFIG["last_ffmpeg_failed"])
 
+    def test_legacy_boolean_aliases_use_validated_values(self):
+        for value in ("false", "", 1, None, False, True):
+            with self.subTest(value=value), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                (root / "config.json").write_text(json.dumps({
+                    "save_conversation_history": value, "subtitle_always_on_top": value,
+                }), encoding="utf-8")
+
+                config = load_config(root)
+
+                self.assertEqual(config["record_logs"], value if isinstance(value, bool) else False)
+                self.assertEqual(config["overlay_topmost"], value if isinstance(value, bool) else True)
+
+    def test_initial_settings_creation_normalizes_existing_state(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ensure_app_dirs(root)
+            (root / "config" / "state.json").write_text(json.dumps({
+                "schema_version": 1,
+                "session_metrics": {"last_cuda_devices": "invalid", "obsolete_metric": 42},
+                "diagnostics": {"last_ffmpeg_failed": "yes"},
+            }), encoding="utf-8")
+
+            first = load_config(root)
+            second = load_config(root)
+
+            self.assertEqual(first, second)
+            self.assertEqual(first["last_cuda_devices"], "")
+            self.assertFalse(first["last_ffmpeg_failed"])
+            self.assertNotIn("obsolete_metric", first)
+
     def test_load_config_rejects_future_schema(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
