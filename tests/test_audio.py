@@ -15,6 +15,91 @@ from tests.helpers import write_wav
 
 
 class AudioTests(unittest.TestCase):
+    def test_cancellable_whisper_exe_reaps_process_and_cleans_files(self):
+        import realtime_audio_translator.asr as asr_module
+
+        for mode in ("success", "failure", "cancel"):
+            with self.subTest(mode=mode):
+                transcriber = AudioTranscriber.__new__(AudioTranscriber)
+                transcriber._inference_lock = threading.Lock()
+                transcriber.cancel_event = threading.Event()
+                transcriber.model = None
+                transcriber.exe_path = Path("fw.exe")
+                transcriber.model_name = "small"
+                transcriber.model_dir = Path("models")
+                transcriber.device = "cpu"
+                transcriber.compute_type = "float32"
+                processes, directories, results, errors = [], [], [], []
+                popen = asr_module.subprocess.Popen
+                script = (
+                    "import sys, time\nfrom pathlib import Path\n"
+                    "out = Path(sys.argv[sys.argv.index('--output_dir') + 1])\n"
+                    "sys.stdout.write('x' * 131072); sys.stdout.flush()\n"
+                    "sys.stderr.write('y' * 131072); sys.stderr.flush()\n"
+                    "(out / 'ready').touch()\n"
+                ) + {
+                    "success": "(out / 'result.json').write_text('{\"text\":\"hello\",\"language\":\"en\"}')\n",
+                    "failure": "sys.stderr.write('failed marker'); sys.exit(7)\n",
+                    "cancel": "time.sleep(60)\n",
+                }[mode]
+
+                def launch(command, **kwargs):
+                    directories.append(Path(command[command.index("--output_dir") + 1]))
+                    process = popen([sys.executable, "-c", script, *command[1:]], **kwargs)
+                    processes.append(process)
+                    return process
+
+                def transcribe():
+                    try:
+                        results.append(transcriber.transcribe(AudioSegment(b"\0\0" * 1600, 16000), "en"))
+                    except Exception as exc:
+                        errors.append(exc)
+
+                thread = threading.Thread(target=transcribe)
+                try:
+                    with patch.object(asr_module.subprocess, "Popen", side_effect=launch):
+                        thread.start()
+                        if mode == "cancel":
+                            deadline = time.monotonic() + 5
+                            while time.monotonic() < deadline and not (directories and (directories[0] / "ready").exists()):
+                                time.sleep(0.01)
+                            self.assertTrue(directories and (directories[0] / "ready").exists())
+                            transcriber.cancel_event.set()
+                        thread.join(5)
+                    self.assertFalse(thread.is_alive())
+                    self.assertEqual(len(processes), 1)
+                    self.assertIsNotNone(processes[0].poll())
+                    self.assertFalse(directories[0].exists())
+                    if mode == "failure":
+                        self.assertEqual(len(errors), 1)
+                        self.assertIsInstance(errors[0], RuntimeError)
+                        self.assertIn("failed marker", str(errors[0]))
+                    else:
+                        self.assertEqual(errors, [])
+                        self.assertEqual(results[0].text, "hello" if mode == "success" else "")
+                finally:
+                    transcriber.cancel_event.set()
+                    for process in processes:
+                        if process.poll() is None:
+                            process.kill()
+                            process.wait()
+                    thread.join(5)
+
+    def test_waiting_whisper_call_does_not_launch_after_cancel(self):
+        transcriber = AudioTranscriber.__new__(AudioTranscriber)
+        transcriber._inference_lock = threading.Lock()
+        transcriber.cancel_event = threading.Event()
+        transcriber.model = None
+        results = []
+        with transcriber._inference_lock, patch.object(transcriber, "_transcribe_with_exe") as run:
+            thread = threading.Thread(target=lambda: results.append(transcriber.transcribe(Path("clip.wav"), "en")))
+            thread.start()
+            transcriber.cancel_event.set()
+        thread.join(2)
+        self.assertFalse(thread.is_alive())
+        self.assertEqual(results[0].text, "")
+        run.assert_not_called()
+
     def test_whisper_exe_fallback_preserves_selected_hardware(self):
         import sys
         import realtime_audio_translator.asr as asr_module
@@ -647,6 +732,7 @@ class AudioTests(unittest.TestCase):
     def test_whisper_model_records_language_probability_and_uncalibrated_model_score(self):
         transcriber = AudioTranscriber.__new__(AudioTranscriber)
         transcriber._inference_lock = threading.Lock()
+        transcriber.cancel_event = None
 
         class Model:
             def transcribe(self, *_args, **_kwargs):
@@ -668,6 +754,7 @@ class AudioTests(unittest.TestCase):
     def test_whisper_model_receives_resampled_float32_pcm(self):
         transcriber = AudioTranscriber.__new__(AudioTranscriber)
         transcriber._inference_lock = threading.Lock()
+        transcriber.cancel_event = None
         received = []
 
         class Model:
@@ -710,6 +797,7 @@ class AudioTests(unittest.TestCase):
     def test_shared_whisper_model_serializes_inference_and_returns_isolated_results(self):
         transcriber = AudioTranscriber.__new__(AudioTranscriber)
         transcriber._inference_lock = threading.Lock()
+        transcriber.cancel_event = None
         active = 0
         max_active = 0
 
@@ -788,6 +876,7 @@ class AudioTests(unittest.TestCase):
     def test_whisper_model_stores_detected_language(self):
         transcriber = AudioTranscriber.__new__(AudioTranscriber)
         transcriber._inference_lock = threading.Lock()
+        transcriber.cancel_event = None
         transcriber.model_name = "medium"
         transcriber.model_dir = Path("models")
         transcriber.device = "cpu"

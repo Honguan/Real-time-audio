@@ -34,7 +34,7 @@ def add_xxl_data(repo_root: Path, runtime_root: Path | None = None) -> None:
 
 
 class AudioTranscriber:
-    def __init__(self, repo_root: Path, model_name: str, model_dir: Path, device: str = "cuda", compute_type: str = "auto", config: dict | None = None):
+    def __init__(self, repo_root: Path, model_name: str, model_dir: Path, device: str = "cuda", compute_type: str = "auto", config: dict | None = None, cancel_event: threading.Event | None = None):
         runtime_root = runtime_dir(config)
         if runtime_root.exists() and any(runtime_root.iterdir()) and not runtime_status(runtime_root, device, compute_type, verify_hashes=True)["ready"]:
             raise RuntimeError(f"runtime 未通過完整性驗證：{runtime_root}")
@@ -47,6 +47,7 @@ class AudioTranscriber:
         self.exe_path = whisper_exe(runtime_root)
         self.model = None
         self._inference_lock = threading.Lock()
+        self.cancel_event = cancel_event
         try:
             from faster_whisper import WhisperModel
 
@@ -66,8 +67,10 @@ class AudioTranscriber:
         if language == "auto":
             language = None
         with self._inference_lock:
+            if self.cancel_event is not None and self.cancel_event.is_set():
+                return TranscriptionResult("", language)
             if self.model is None:
-                return self._transcribe_with_exe(audio, language)
+                return self._transcribe_with_exe(audio, language, self.cancel_event)
             model_audio = str(audio) if isinstance(audio, Path) else self._model_audio(audio)
             segments, info = self.model.transcribe(
                 model_audio,
@@ -105,9 +108,11 @@ class AudioTranscriber:
             samples = np.interp(positions, np.arange(samples.size), samples).astype(np.float32)
         return samples / 32768.0
 
-    def _transcribe_with_exe(self, audio: AudioSegment | Path, language: str | None = None) -> TranscriptionResult:
+    def _transcribe_with_exe(self, audio: AudioSegment | Path, language: str | None = None, cancel_event: threading.Event | None = None) -> TranscriptionResult:
         if language == "auto":
             language = None
+        if cancel_event is not None and cancel_event.is_set():
+            return TranscriptionResult("", language)
         with tempfile.TemporaryDirectory(prefix="realtime-audio-asr-") as tmp:
             out_dir = Path(tmp)
             wav_path = audio if isinstance(audio, Path) else write_audio_segment(out_dir / "segment.wav", audio)
@@ -130,7 +135,25 @@ class AudioTranscriber:
             ]
             if language:
                 command.extend(["--language", language])
-            result = subprocess.run(command, check=False, capture_output=True, text=True, encoding="utf-8", errors="replace")
+            if cancel_event is None:
+                result = subprocess.run(command, check=False, capture_output=True, text=True, encoding="utf-8", errors="replace")
+            else:
+                # File-backed output cannot block cancellation on a full pipe.
+                with tempfile.TemporaryFile(mode="w+", encoding="utf-8", errors="replace") as stdout, tempfile.TemporaryFile(mode="w+", encoding="utf-8", errors="replace") as stderr:
+                    with subprocess.Popen(command, stdout=stdout, stderr=stderr, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)) as process:
+                        try:
+                            while process.poll() is None:
+                                if cancel_event.wait(0.05):
+                                    return TranscriptionResult("", language)
+                        finally:
+                            if process.poll() is None:
+                                process.kill()
+                            process.wait()
+                    if cancel_event.is_set():
+                        return TranscriptionResult("", language)
+                    stdout.seek(0)
+                    stderr.seek(0)
+                    result = subprocess.CompletedProcess(command, process.returncode, stdout.read(), stderr.read())
             if result.returncode != 0:
                 raise RuntimeError((result.stderr or result.stdout).strip())
             json_files = list(out_dir.glob("*.json"))

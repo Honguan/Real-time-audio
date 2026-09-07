@@ -1575,7 +1575,7 @@ class EngineTests(unittest.TestCase):
 
         class Transcriber:
             def __init__(self, *args, **kwargs):
-                return None
+                self.cancel_event = kwargs["cancel_event"]
 
         original_transcriber = engine_module.AudioTranscriber
         original_find_device = engine_module.find_device
@@ -1592,6 +1592,9 @@ class EngineTests(unittest.TestCase):
 
         self.assertFalse(engine.running)
         self.assertEqual(statuses[-1], "沒有可用音訊裝置")
+        self.assertIs(engine.transcriber.cancel_event, engine._cancel)
+        engine.stop()
+        self.assertTrue(engine.transcriber.cancel_event.is_set())
 
     def test_engine_default_microphone_capture_uses_microphone_not_cable_output(self):
         import realtime_audio_translator.engine as engine_module

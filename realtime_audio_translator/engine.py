@@ -175,6 +175,7 @@ class RealtimeEngine:
                 self.config["device"],
                 self.config["compute_type"],
                 self.config,
+                cancel_event=self._cancel,
             )
         except Exception as exc:
             if not self._session_active(session):
