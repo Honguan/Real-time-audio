@@ -284,13 +284,59 @@ class GuiLogicTests(unittest.TestCase):
             thread.start()
         for thread in threads:
             thread.join()
-        app._drain_ui_events()
+        while not app._engine_events.empty():
+            app._drain_ui_events()
         self.assertEqual(len(overlays), 1000)
 
         app._closing = True
         app._post_ui("overlay", "stale", "", engine=engine)
         app._drain_ui_events()
         self.assertEqual(len(overlays), 1000)
+
+    def test_ui_event_pump_yields_between_slow_callbacks_without_reordering(self):
+        app = TranslatorApp.__new__(TranslatorApp)
+        app._engine_events = queue.Queue()
+        app._closing = False
+        app.engine = None
+        app.after = Mock()
+        calls = []
+        clock = [0.0]
+
+        def slow_callback(index):
+            calls.append(index)
+            clock[0] += 0.005
+
+        for index in range(5):
+            app._post_ui("callback", slow_callback, index)
+        with patch("realtime_audio_translator.gui.time.perf_counter", side_effect=lambda: clock[0]):
+            app._drain_ui_events()
+            self.assertEqual(calls, [0, 1])
+            app.after.assert_called_with(1, app._drain_ui_events)
+            calls.append("Tk timer")
+            app._drain_ui_events()
+            app._drain_ui_events()
+        self.assertEqual(calls, [0, 1, "Tk timer", 2, 3, 4])
+        app.after.assert_called_with(50, app._drain_ui_events)
+
+    def test_ui_event_pump_yields_when_callbacks_keep_posting_events(self):
+        app = TranslatorApp.__new__(TranslatorApp)
+        app._engine_events = queue.Queue()
+        app._closing = False
+        app.engine = None
+        app.after = Mock()
+        calls = []
+
+        def callback():
+            calls.append(True)
+            if len(calls) < 1000:
+                app._post_ui("callback", callback)
+
+        app._post_ui("callback", callback)
+        with patch("realtime_audio_translator.gui.time.perf_counter", return_value=0):
+            app._drain_ui_events()
+        self.assertEqual(len(calls), 100)
+        self.assertEqual(app._engine_events.qsize(), 1)
+        app.after.assert_called_with(1, app._drain_ui_events)
 
     def test_config_from_vars_preserves_runtime_state_and_overlay_position(self):
         app = TranslatorApp.__new__(TranslatorApp)

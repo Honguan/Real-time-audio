@@ -3,6 +3,7 @@ import math
 import sys
 import subprocess
 import threading
+import time
 import tkinter as tk
 import webbrowser
 from dataclasses import dataclass
@@ -1007,7 +1008,10 @@ class TranslatorApp(tk.Tk):
 
     def _drain_ui_events(self) -> None:
         assert threading.current_thread() is threading.main_thread(), "Tk event pump must run on the main thread"
-        while True:
+        deadline = time.perf_counter() + 0.008
+        for _ in range(100):
+            if time.perf_counter() >= deadline:
+                break
             try:
                 event = self._engine_events.get_nowait()
             except queue.Empty:
@@ -1024,7 +1028,7 @@ class TranslatorApp(tk.Tk):
             except Exception:
                 self.report_callback_exception(*sys.exc_info())
         if not self._closing or self.engine is not None:
-            self.after(50, self._drain_ui_events)
+            self.after(1 if not self._engine_events.empty() else 50, self._drain_ui_events)
 
     def _submit(self, status: str, work, done, error_title: str, task_name: str | None = None) -> None:
         status = translate_known(self.config.get("app_language"), status)
