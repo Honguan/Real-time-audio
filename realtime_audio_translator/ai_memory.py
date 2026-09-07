@@ -56,7 +56,8 @@ def _ensure_cache(db_path: Path) -> None:
                     ],
                 )
                 db.execute("DROP TABLE translations_v1")
-            db.execute(f"PRAGMA user_version = {CACHE_SCHEMA_VERSION}")
+            if version < CACHE_SCHEMA_VERSION:
+                db.execute(f"PRAGMA user_version = {CACHE_SCHEMA_VERSION}")
 
 
 def cached_translation(db_path: Path, request_fingerprint: str) -> str | None:

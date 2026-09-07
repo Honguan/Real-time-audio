@@ -117,6 +117,21 @@ class TranslationCacheTests(unittest.TestCase):
             self.assertEqual(cached_translation(db, "openai-request"), "你好")
             self.assertIsNone(cached_translation(db, "different-request"))
 
+    def test_cache_hit_does_not_require_writer_lock(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "translation_cache.db"
+            cache_translation(path, "request", "local", "en", "zh", "hello", "你好")
+            connect = sqlite3.connect
+            writer = connect(path)
+            try:
+                writer.execute("BEGIN IMMEDIATE")
+                with patch("realtime_audio_translator.ai_memory.sqlite3.connect", side_effect=lambda path: connect(path, timeout=0.05)):
+                    self.assertEqual(cached_translation(path, "request"), "你好")
+                    self.assertIsNone(cached_translation(path, "missing"))
+            finally:
+                writer.rollback()
+                writer.close()
+
     def test_cache_migration_preserves_legacy_rows_without_unsafe_hits(self):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "translation_cache.db"
