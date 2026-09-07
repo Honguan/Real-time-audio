@@ -521,7 +521,6 @@ class GuiLogicTests(unittest.TestCase):
         self.assertIn('tts.synthesize_openai_linear16("翻譯語音輸出測試")', service_source)
         self.assertIn('tts.synthesize_google_linear16("翻譯語音輸出測試", config["target_language"])', service_source)
         self.assertIn('device = find_device(config["virtual_mic_input_device"], want_output=False)', service_source)
-        self.assertIn('target=capture_wav, args=(path, device, 2.0)', service_source)
         self.assertIn('return audio_segment_active(path, float(config["speech_threshold"]))', service_source)
 
     def test_setup_guide_button_shows_first_run_steps(self):

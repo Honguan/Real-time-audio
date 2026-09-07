@@ -2,10 +2,12 @@ import math
 import subprocess
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
 
-from .audio import DeviceResolutionError, audio_segment_active, capture_audio, capture_wav, find_device
+from .audio import DeviceResolutionError, audio_frame_stream, audio_segment_active, capture_audio, capture_wav, find_device
 from .commands import refresh_commands
 from .diagnostics import DiagnosticIssue, collect_diagnostics
 from .localization import translate
@@ -104,15 +106,24 @@ class AudioDiagnosticsService:
         if not config["virtual_mic_input_device"]:
             raise DeviceResolutionError("請先選擇虛擬麥克風檢查輸入")
         device = find_device(config["virtual_mic_input_device"], want_output=False)
-        path = self.cache_dir / "virtual-mic-test.wav"
-        capture = threading.Thread(target=capture_wav, args=(path, device, 2.0))
-        capture.start()
-        try:
-            time.sleep(0.15)
-            self.test_tts(config)
-        finally:
-            capture.join()
-        return audio_segment_active(path, float(config["speech_threshold"]))
+        threshold = float(config["speech_threshold"])
+        cancel = threading.Event()
+        with closing(audio_frame_stream(device, False, cancel, 0.05)) as frames, ThreadPoolExecutor(max_workers=1) as executor:
+            next(frames)  # Confirm capture has started before generating speech.
+
+            def detect():
+                active = False
+                for frame in frames:
+                    active = audio_segment_active(frame, threshold) or active
+                return active
+
+            capture = executor.submit(detect)
+            try:
+                self.test_tts(config)
+                time.sleep(0.15)  # Allow the virtual cable's buffered audio to arrive.
+            finally:
+                cancel.set()
+            return capture.result()
 
     def test_speaker(self, config: dict) -> bool:
         device = find_device(config["speaker_device"], want_output=True)

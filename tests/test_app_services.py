@@ -250,6 +250,79 @@ class RuntimeServiceTests(unittest.TestCase):
 
 
 class AudioDiagnosticsServiceTests(unittest.TestCase):
+    def test_virtual_microphone_propagates_capture_errors_instead_of_reading_old_wav(self):
+        from realtime_audio_translator.audio import AudioSegment
+        from tests.helpers import write_wav
+
+        for after_start in (False, True):
+            with self.subTest(after_start=after_start), TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                stale = root / "virtual-mic-test.wav"
+                write_wav(stale, 20000)
+                previous = stale.read_bytes()
+                service = AudioDiagnosticsService(root)
+                error = OSError("capture disconnected")
+
+                def frames(*args):
+                    if after_start:
+                        yield AudioSegment(b"\0\0" * 800, 16000)
+                    raise error
+
+                with patch("realtime_audio_translator.app_services.find_device", return_value=3), patch("realtime_audio_translator.app_services.audio_frame_stream", side_effect=frames), patch.object(service, "test_tts") as speak:
+                    with self.assertRaises(OSError) as raised:
+                        service.test_virtual_microphone({"virtual_mic_input_device": "cable", "speech_threshold": 0.01})
+                self.assertIs(raised.exception, error)
+                self.assertEqual(speak.call_count, int(after_start))
+                self.assertEqual(stale.read_bytes(), previous)
+
+    def test_virtual_microphone_uses_current_frames_and_closes_capture(self):
+        from realtime_audio_translator.audio import AudioSegment
+
+        for audible in (False, True):
+            with self.subTest(audible=audible), TemporaryDirectory() as tmp:
+                service = AudioDiagnosticsService(Path(tmp))
+                ready, playback, closed = threading.Event(), threading.Event(), threading.Event()
+
+                def frames(device, loopback, cancel, seconds):
+                    try:
+                        self.assertEqual(device, 3)
+                        self.assertFalse(loopback)
+                        ready.set()
+                        yield AudioSegment(b"\0\0" * 800, 16000)
+                        while not cancel.wait(0.001):
+                            sample = 16000 if audible and playback.is_set() else 0
+                            yield AudioSegment(sample.to_bytes(2, "little", signed=True) * 800, 16000)
+                    finally:
+                        closed.set()
+
+                def speak(config):
+                    self.assertTrue(ready.is_set())
+                    playback.set()
+
+                with patch("realtime_audio_translator.app_services.find_device", return_value=3), patch("realtime_audio_translator.app_services.audio_frame_stream", side_effect=frames), patch.object(service, "test_tts", side_effect=speak):
+                    self.assertEqual(service.test_virtual_microphone({"virtual_mic_input_device": "cable", "speech_threshold": 0.01}), audible)
+                self.assertTrue(closed.is_set())
+                self.assertEqual(list(Path(tmp).iterdir()), [])
+
+    def test_virtual_microphone_closes_capture_when_tts_fails(self):
+        from realtime_audio_translator.audio import AudioSegment
+
+        service = AudioDiagnosticsService(Path("cache"))
+        closed = threading.Event()
+
+        def frames(device, loopback, cancel, seconds):
+            try:
+                yield AudioSegment(b"\0\0" * 800, 16000)
+                while not cancel.wait(0.001):
+                    yield AudioSegment(b"\0\0" * 800, 16000)
+            finally:
+                closed.set()
+
+        with patch("realtime_audio_translator.app_services.find_device", return_value=3), patch("realtime_audio_translator.app_services.audio_frame_stream", side_effect=frames), patch.object(service, "test_tts", side_effect=RuntimeError("TTS failed")):
+            with self.assertRaisesRegex(RuntimeError, "TTS failed"):
+                service.test_virtual_microphone({"virtual_mic_input_device": "cable", "speech_threshold": 0.01})
+        self.assertTrue(closed.is_set())
+
     def test_microphone_uses_shared_capture_and_reports_normalized_rms(self):
         from realtime_audio_translator.audio import AudioSegment
 
