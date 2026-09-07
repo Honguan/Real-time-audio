@@ -12,6 +12,87 @@ from realtime_audio_translator.gui import LANGUAGE_CHOICES, PERFORMANCE_CHOICES,
 
 
 class GuiLogicTests(unittest.TestCase):
+    def test_callback_failure_does_not_stop_future_ui_updates(self):
+        app = TranslatorApp.__new__(TranslatorApp)
+        app._engine_events = queue.Queue()
+        app._closing = False
+        app.engine = None
+        app.after = Mock()
+        app.report_callback_exception = Mock()
+        completed = Mock()
+        app._post_ui("callback", Mock(side_effect=ValueError("bad result")))
+        app._post_ui("callback", completed)
+
+        app._drain_ui_events()
+
+        app.report_callback_exception.assert_called_once()
+        completed.assert_called_once()
+        app.after.assert_called_once()
+
+    def test_push_to_talk_repeat_and_extra_release_preserve_mute(self):
+        app = TranslatorApp.__new__(TranslatorApp)
+        app.engine = SimpleNamespace(virtual_mic_muted=True)
+        app.engine.set_virtual_mic_muted = lambda value: setattr(app.engine, "virtual_mic_muted", value)
+        app._push_to_talk(True)
+        app._push_to_talk(True)
+        self.assertFalse(app.engine.virtual_mic_muted)
+        app._push_to_talk(False)
+        app._push_to_talk(False)
+        self.assertTrue(app.engine.virtual_mic_muted)
+
+    def test_device_choices_match_route_direction(self):
+        from realtime_audio_translator.app_controller import TaskResult
+        from realtime_audio_translator.audio import device_identity, format_device_label
+        from realtime_audio_translator.gui import AUDIO_DEVICE_KEYS
+
+        app = TranslatorApp.__new__(TranslatorApp)
+        app.config = DEFAULT_CONFIG.copy()
+        app._list_generation = 1
+        app.vars = {key: Mock() for key in AUDIO_DEVICE_KEYS}
+        for variable in app.vars.values():
+            variable.get.return_value = "系統預設"
+        app.comboboxes = {key: Mock() for key in AUDIO_DEVICE_KEYS}
+        app.status = Mock()
+        app._refresh_runtime_status = Mock()
+        common = {"hostapi": "WASAPI", "default_samplerate": 48000}
+        mic = common | {"index": 0, "name": "Mic", "input_channels": 1, "output_channels": 0}
+        speaker = common | {"index": 1, "name": "Speaker", "input_channels": 0, "output_channels": 2}
+
+        app._lists_ready(1, TaskResult(value=([mic, speaker], [], [], [])))
+
+        self.assertEqual(app.comboboxes["microphone_device"].configure.call_args.kwargs["values"], ["系統預設", format_device_label(mic)])
+        self.assertEqual(app.comboboxes["tts_output_device"].configure.call_args.kwargs["values"], ["系統預設", format_device_label(speaker)])
+        self.assertEqual(app._device_id_by_label[format_device_label(mic)], device_identity(mic))
+
+    def test_stop_cancels_pending_start_check(self):
+        app = TranslatorApp.__new__(TranslatorApp)
+        app.config = DEFAULT_CONFIG.copy()
+        app.status = Mock()
+        app.controller = SimpleNamespace(engine=None, cancel=Mock(return_value=1), stop_engine=Mock())
+        app._stop()
+        app.controller.cancel.assert_called_once_with("start_check")
+        app.controller.stop_engine.assert_called_once()
+        app.status.set.assert_called_once_with("已停止")
+
+    def test_export_aborts_when_settings_are_invalid(self):
+        app = TranslatorApp.__new__(TranslatorApp)
+        app._save = Mock(return_value=False)
+        with patch("realtime_audio_translator.gui.export_jsonl_to_srt") as export:
+            app._export_subtitles()
+        export.assert_not_called()
+
+    def test_export_reports_corrupt_log_without_crashing(self):
+        app = TranslatorApp.__new__(TranslatorApp)
+        app._save = Mock(return_value=True)
+        app.status = Mock()
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            (directory / "session.jsonl").write_text("{bad json", encoding="utf-8")
+            app.config = DEFAULT_CONFIG | {"log_dir": tmp}
+            with patch("realtime_audio_translator.gui.APP_DIR", directory):
+                app._export_subtitles()
+        self.assertIn("字幕匯出失敗", app.status.set.call_args.args[0])
+
     def test_window_position_is_clamped_to_visible_work_area(self):
         area = (0, 0, 1366, 728)
 
@@ -105,9 +186,14 @@ class GuiLogicTests(unittest.TestCase):
         app.config = DEFAULT_CONFIG.copy()
         app.config["last_error"] = "new runtime error"
         app.config.update({"overlay_x": 420, "overlay_y": 315})
+        app.config["microphone_device"] = "saved-device-identity"
+        app._device_id_by_label = {"系統預設": ""}
         stale = Mock()
         stale.get.return_value = "old widget error"
         app.vars = {"last_error": stale, "overlay_x": stale, "overlay_y": stale}
+        pending_device = Mock()
+        pending_device.get.return_value = "saved-device-identity"
+        app.vars["microphone_device"] = pending_device
         for name in (
             "overlay_visible", "overlay_topmost", "show_language_labels", "show_original_text",
             "show_translated_text", "tts_enabled", "speaker_tts_enabled", "start_virtual_mic_muted",
@@ -121,6 +207,7 @@ class GuiLogicTests(unittest.TestCase):
 
         self.assertEqual(config["last_error"], "new runtime error")
         self.assertEqual((config["overlay_x"], config["overlay_y"]), (420, 315))
+        self.assertEqual(config["microphone_device"], "saved-device-identity")
 
     def test_conversation_logs_are_off_by_default(self):
         self.assertFalse(DEFAULT_CONFIG["record_logs"])
@@ -195,7 +282,7 @@ class GuiLogicTests(unittest.TestCase):
         self.assertIn('self.start_virtual_mic_muted = tk.BooleanVar(value=bool(self.config.get("start_virtual_mic_muted", False)))', gui_source)
         self.assertIn('ttk.Checkbutton(frame, text=self._t("虛擬麥克風啟動時靜音"), variable=self.start_virtual_mic_muted, command=self._save)', gui_source)
         self.assertIn('config["start_virtual_mic_muted"] = self.start_virtual_mic_muted.get()', gui_source)
-        self.assertIn('ptt_button = ttk.Button(buttons, text=self._t("按住說話"))', gui_source)
+        self.assertIn('ptt_button = ttk.Button(self._session_frame, text=self._t("按住說話"))', gui_source)
         self.assertIn('ptt_button.bind("<ButtonPress-1>", lambda _event: self._push_to_talk(True))', gui_source)
         self.assertIn('ptt_button.bind("<ButtonRelease-1>", lambda _event: self._push_to_talk(False))', gui_source)
         self.assertIn('self.engine.set_virtual_mic_muted(False)', gui_source)
@@ -405,7 +492,7 @@ class GuiLogicTests(unittest.TestCase):
         class Controller:
             engine = Engine()
 
-            def cancel(self):
+            def cancel(self, name=None):
                 return 0
 
             def stop_engine(self, done):
@@ -427,6 +514,7 @@ class GuiLogicTests(unittest.TestCase):
         engine = type("Engine", (), {"stop": lambda self: "已停止"})()
         app.controller = SimpleNamespace(
             engine=engine,
+            cancel=Mock(),
             stop_engine=lambda done: done(SimpleNamespace(value=engine.stop(), error=None)),
         )
         app._engine_events = queue.Queue()
@@ -620,8 +708,8 @@ class GuiLogicTests(unittest.TestCase):
         simple = visible_button_texts(buttons, False)
         advanced = visible_button_texts(buttons, True)
 
-        self.assertEqual(simple, ["設定精靈", "一鍵診斷", "測試虛擬麥克風", "測試麥克風", "開始", "停止"])
-        self.assertNotIn("重新整理", simple)
+        self.assertEqual(simple, ["設定精靈", "重新整理", "一鍵診斷", "測試虛擬麥克風", "測試麥克風", "開始", "停止", "開啟紀錄"])
+        self.assertIn("重新整理", simple)
         self.assertNotIn("套用場景", simple)
         self.assertNotIn("自動優化", simple)
         self.assertNotIn("下載模型", simple)
@@ -632,7 +720,7 @@ class GuiLogicTests(unittest.TestCase):
         self.assertNotIn("開啟程式資料夾", simple)
         self.assertNotIn("修復本機翻譯", simple)
         self.assertNotIn("清除快取", simple)
-        self.assertNotIn("開啟紀錄", simple)
+        self.assertIn("開啟紀錄", simple)
         self.assertNotIn("清除紀錄", simple)
         self.assertNotIn("清除本機資料", simple)
         self.assertNotIn("按住說話", simple)

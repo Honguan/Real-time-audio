@@ -225,7 +225,7 @@ class RealtimeEngine:
             if not self._cancel.is_set():
                 self.status(self._t("沒有可用音訊裝置") + (f"；{'；'.join(skips)}" if skips and self.config.get("app_language") != "en" else ""))
 
-    def stop(self, join_timeout: float = 5.0) -> str:
+    def stop(self, join_timeout: float = 5.0, *, report_status: bool = True) -> str:
         deadline = time.monotonic() + max(0.0, join_timeout)
         with self._lifecycle_lock:
             self.running = False
@@ -254,7 +254,8 @@ class RealtimeEngine:
                 self.workers = [worker for worker in self.workers if worker not in workers]
         pending = len(alive) + (not callback_stopped) + (not log_closed)
         message = self._t("停止逾時：仍有 {count} 個背景工作", count=pending) if pending else self._t("已停止")
-        self.status(message)
+        if report_status:
+            self.status(message)
         return message
 
     def set_paused(self, paused: bool) -> None:

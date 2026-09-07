@@ -1,4 +1,5 @@
 import queue
+import sys
 import subprocess
 import threading
 import tkinter as tk
@@ -97,6 +98,7 @@ BASIC_SETTING_KEYS = {
 }
 ADVANCED_SETTING_KEYS = {key for _label, key in SETTING_ROWS} - BASIC_SETTING_KEYS
 BASIC_BUTTON_TEXTS = {
+    "重新整理", "交換語言", "複製字幕", "匯出字幕", "開啟紀錄",
     "設定精靈",
     "一鍵診斷",
     "開始",
@@ -105,6 +107,13 @@ BASIC_BUTTON_TEXTS = {
     "測試虛擬麥克風",
     "取消背景工作",
 }
+SESSION_BUTTON_TEXTS = {"開始", "停止", "暫停/繼續", "按住說話"}
+SETTING_GROUPS = (
+    ("翻譯設定", {"app_language", "source_language", "target_language", "provider", "translation_style", "scenario", "local_translate_url", "translation_backend_revision", "openai_model", "google_project_id", "google_service_account_json", "glossary_path"}),
+    ("音訊與語音", set(AUDIO_DEVICE_KEYS) | {"tts_provider", "tts_rate", "tts_volume", "speaker_tts_volume", "tts_voice_name", "google_tts_voice", "openai_tts_model", "openai_tts_voice"}),
+    ("模型與效能", {"model", "device", "compute_type", "performance_mode", "segment_seconds", "speech_threshold", "runtime_dir"}),
+    ("字幕與紀錄", {"overlay_opacity", "overlay_font_size", "overlay_hold_seconds", "conversation_log_content", "conversation_log_retention_days", "conversation_log_max_mb", "log_dir"}),
+)
 FIRST_RUN_ISSUE_CODES = {
     "runtime_missing",
     "model_missing",
@@ -456,6 +465,7 @@ class TranslatorApp(tk.Tk):
         self.runtime_text = tk.StringVar(value="")
         self.mode_text = tk.StringVar(value=self._mode_text())
         self.overlay_generation = 0
+        self._latest_subtitle = ""
         self._push_to_talk_previous_virtual_mic_muted = None
         self.overlay = Overlay(
             self,
@@ -491,9 +501,38 @@ class TranslatorApp(tk.Tk):
         return translate(self.config.get("app_language"), message, **values)
 
     def _build(self) -> None:
+        style = ttk.Style(self)
+        style.theme_use("clam")
+        style.configure(".", font=("Microsoft JhengHei UI", 10), background="#141516", foreground="#f7f8f8", bordercolor="#34343a", lightcolor="#34343a", darkcolor="#34343a")
+        style.configure("TButton", padding=(12, 7), background="#23252a", borderwidth=1)
+        style.map("TButton", background=[("active", "#34343a")], foreground=[("disabled", "#8a8f98")])
+        style.configure("Accent.TButton", background="#5e6ad2", foreground="#ffffff")
+        style.map("Accent.TButton", background=[("active", "#505bb8"), ("disabled", "#34343a")])
+        style.configure("TEntry", fieldbackground="#23252a", insertcolor="#f7f8f8", padding=5)
+        style.configure("TCombobox", fieldbackground="#23252a", padding=5, arrowsize=14)
+        style.map("TCombobox", fieldbackground=[("readonly", "#23252a")], foreground=[("readonly", "#f7f8f8")])
+        style.configure("TNotebook.Tab", padding=(14, 8))
+        style.map("TNotebook.Tab", background=[("selected", "#34343a")])
+        style.configure("Title.TLabel", font=("Segoe UI", 18, "bold"))
+        style.configure("Muted.TLabel", foreground="#b6bdc9")
+        self.option_add("*TCombobox*Listbox.background", "#23252a")
+        self.option_add("*TCombobox*Listbox.foreground", "#f7f8f8")
+        header = ttk.Frame(self, padding=(20, 12))
+        header.pack(fill="x")
+        heading = ttk.Frame(header)
+        heading.pack(fill="x")
+        ttk.Label(heading, text="Realtime Audio Translator", style="Title.TLabel").pack(side="left")
+        ttk.Label(header, text=self._t("選擇場景與音訊來源，開始即時翻譯。"), style="Muted.TLabel").pack(anchor="w", pady=(2, 8))
+        self._session_frame = ttk.Frame(header)
+        self._session_frame.pack(fill="x")
+        footer = ttk.Frame(self, padding=(20, 8))
+        footer.pack(side="bottom", fill="x")
+        status_label = ttk.Label(footer, textvariable=self.status, wraplength=650)
+        status_label.pack(fill="x")
+        footer.bind("<Configure>", lambda event: status_label.configure(wraplength=max(200, event.width - 40)))
         container = ttk.Frame(self)
         container.pack(fill="both", expand=True)
-        canvas = tk.Canvas(container, highlightthickness=0)
+        canvas = tk.Canvas(container, highlightthickness=0, background="#141516")
         scrollbar = ttk.Scrollbar(container, orient="vertical", command=canvas.yview)
         canvas.configure(yscrollcommand=scrollbar.set)
         scrollbar.pack(side="right", fill="y")
@@ -519,10 +558,25 @@ class TranslatorApp(tk.Tk):
         self.microphone_enabled = tk.BooleanVar(value=bool(self.config.get("microphone_enabled", True)))
         self.record_logs = tk.BooleanVar(value=bool(self.config["record_logs"]))
         self.advanced_mode = tk.BooleanVar(value=bool(self.config.get("advanced_mode", False)))
+        ttk.Checkbutton(heading, text=self._t("進階設定"), variable=self.advanced_mode, command=self._apply_mode).pack(side="right")
         self.comboboxes: dict[str, ttk.Combobox] = {}
         self.setting_widgets: dict[str, list[tk.Widget]] = {}
 
+        content = frame
+        notebook = ttk.Notebook(content)
+        notebook.grid(row=0, column=0, columnspan=3, sticky="ew", pady=(0, 12))
+        notebook.enable_traversal()
+        self._settings_notebook = notebook
+        self._setting_panels = {}
+        for title, keys in SETTING_GROUPS:
+            panel = ttk.Frame(notebook, padding=12)
+            panel.grid_columnconfigure(1, weight=1)
+            notebook.add(panel, text=self._t(title))
+            for key in keys:
+                self._setting_panels[key] = panel
+
         for row, (label, key) in enumerate(SETTING_ROWS):
+            frame = self._setting_panels[key]
             row_widgets: list[tk.Widget] = []
             label_widget = ttk.Label(frame, text=self._t(label))
             label_widget.grid(row=row, column=0, sticky="w", pady=4)
@@ -569,9 +623,13 @@ class TranslatorApp(tk.Tk):
                 row_widgets.append(button)
             self.setting_widgets[key] = row_widgets
 
-        next_row = len(SETTING_ROWS)
-        ttk.Label(frame, textvariable=self.runtime_text, foreground="#a94442").grid(row=next_row, column=0, columnspan=3, sticky="ew", pady=4)
-        ttk.Label(frame, textvariable=self.mode_text, foreground="#7a4b00").grid(row=next_row + 1, column=0, columnspan=3, sticky="ew", pady=4)
+        frame = content
+        next_row = 2
+        runtime_label = ttk.Label(frame, textvariable=self.runtime_text, style="Muted.TLabel", wraplength=650)
+        runtime_label.grid(row=next_row, column=0, columnspan=3, sticky="ew", pady=4)
+        mode_label = ttk.Label(frame, textvariable=self.mode_text, style="Muted.TLabel", wraplength=650)
+        mode_label.grid(row=next_row + 1, column=0, columnspan=3, sticky="ew", pady=4)
+        self._detail_labels = [runtime_label, mode_label]
 
         runtime_buttons_widget = ttk.Frame(frame)
         runtime_buttons_widget.grid(row=next_row + 2, column=0, columnspan=3, sticky="ew", pady=4)
@@ -579,6 +637,10 @@ class TranslatorApp(tk.Tk):
         ttk.Button(runtime_buttons_widget, text=self._t("匯入已解壓 runtime"), command=self._import_runtime).pack(side="left", padx=3)
         ttk.Button(runtime_buttons_widget, text=self._t("下載上游 runtime"), command=lambda: webbrowser.open(UPSTREAM_RUNTIME_RELEASE_URL)).pack(side="left", padx=3)
 
+        options = ttk.Frame(content)
+        options.grid(row=next_row + 3, column=0, columnspan=3, sticky="ew", pady=8)
+        options.grid_columnconfigure((0, 1), weight=1)
+        frame = options
         ttk.Checkbutton(frame, text=self._t("顯示字幕"), variable=self.overlay_visible, command=self._apply_overlay).grid(row=next_row + 3, column=0, sticky="w")
         overlay_topmost_widget = ttk.Checkbutton(frame, text=self._t("字幕最上層"), variable=self.overlay_topmost, command=self._apply_overlay)
         overlay_topmost_widget.grid(row=next_row + 3, column=1, sticky="w")
@@ -593,7 +655,6 @@ class TranslatorApp(tk.Tk):
         speaker_capture_widget.grid(row=next_row + 5, column=0, sticky="w")
         microphone_capture_widget = ttk.Checkbutton(frame, text=self._t("擷取麥克風"), variable=self.microphone_enabled, command=self._save)
         microphone_capture_widget.grid(row=next_row + 5, column=1, sticky="w")
-        ttk.Checkbutton(frame, text=self._t("進階設定"), variable=self.advanced_mode, command=self._apply_mode).grid(row=next_row + 5, column=2, sticky="w")
         record_logs_widget = ttk.Checkbutton(frame, text=self._t("儲存對話紀錄"), variable=self.record_logs, command=self._save)
         record_logs_widget.grid(row=next_row + 6, column=0, sticky="w")
         speaker_tts_widget = ttk.Checkbutton(frame, text=self._t("播放對方翻譯"), variable=self.speaker_tts_enabled, command=self._save)
@@ -602,13 +663,22 @@ class TranslatorApp(tk.Tk):
         start_virtual_mic_muted_widget.grid(row=next_row + 7, column=0, sticky="w")
         self.advanced_mode_widgets = [runtime_buttons_widget, overlay_topmost_widget, language_labels_widget, original_text_widget, translated_text_widget, speaker_capture_widget, microphone_capture_widget, record_logs_widget, speaker_tts_widget, start_virtual_mic_muted_widget]
         ttk.Checkbutton(frame, text=self._t("輸出到虛擬麥克風"), variable=self.virtual_mic_enabled, command=self._save).grid(row=next_row + 6, column=1, sticky="w")
+        self._option_widgets = options.winfo_children()
+        frame = content
 
         buttons = ttk.Frame(frame)
         self._buttons_frame = buttons
         buttons.grid(row=next_row + 8, column=0, columnspan=3, sticky="ew", pady=12)
+        self._tool_search = tk.StringVar()
+        search = ttk.Frame(frame)
+        search.grid(row=next_row + 8, column=0, columnspan=3, sticky="ew")
+        ttk.Label(search, text=self._t("搜尋工具")).pack(side="left", padx=(0, 8))
+        ttk.Entry(search, textvariable=self._tool_search).pack(side="left", fill="x", expand=True)
+        self._tool_search.trace_add("write", lambda *_args: self._layout_buttons())
+        buttons.grid(row=next_row + 9)
         self.button_widgets: list[tuple[str, ttk.Button]] = []
         def copy_overlay() -> None:
-            text = overlay_clipboard_text(self.overlay.speaker.get(), self.overlay.mine.get())
+            text = self._latest_subtitle or overlay_clipboard_text(self.overlay.speaker.get(), self.overlay.mine.get())
             if not text:
                 self.status.set(self._t("沒有字幕可複製"))
                 return
@@ -663,23 +733,47 @@ class TranslatorApp(tk.Tk):
             ("清除紀錄", self._clear_logs),
             ("清除本機資料", self._clear_local_data),
         ):
-            button = ttk.Button(buttons, text=self._t(text), command=command)
+            parent = self._session_frame if text in SESSION_BUTTON_TEXTS else buttons
+            button = ttk.Button(parent, text=self._t(text), command=command, style="Accent.TButton" if text == "開始" else "TButton")
             self.button_widgets.append((text, button))
-        ptt_button = ttk.Button(buttons, text=self._t("按住說話"))
+        ptt_button = ttk.Button(self._session_frame, text=self._t("按住說話"))
         ptt_button.bind("<ButtonPress-1>", lambda _event: self._push_to_talk(True))
         ptt_button.bind("<ButtonRelease-1>", lambda _event: self._push_to_talk(False))
+        ptt_button.bind("<KeyPress-space>", lambda _event: self._push_to_talk(True))
+        ptt_button.bind("<KeyRelease-space>", lambda _event: self._push_to_talk(False))
+        ptt_button.bind("<FocusOut>", lambda _event: self._push_to_talk(False))
         self.button_widgets.append(("按住說話", ptt_button))
-
-        ttk.Label(frame, textvariable=self.status).grid(row=next_row + 9, column=0, columnspan=3, sticky="ew")
+        ttk.Button(self._session_frame, text=self._t("儲存設定"), command=self._save_settings).grid(row=0, column=4, padx=3, sticky="ew")
+        for column in range(5):
+            self._session_frame.grid_columnconfigure(column, weight=1)
+        self.bind("<Control-s>", lambda _event: self._save_settings())
+        preview = ttk.LabelFrame(frame, text=self._t("即時字幕預覽"), padding=12)
+        preview.grid(row=1, column=0, columnspan=3, sticky="ew", pady=8)
+        self._preview_text = tk.StringVar(value=self._t("尚無字幕；開始翻譯或使用「測試字幕」。"))
+        preview_label = ttk.Label(preview, textvariable=self._preview_text, wraplength=650)
+        preview_label.pack(fill="x")
+        self._detail_labels.append(preview_label)
         frame.grid_columnconfigure(1, weight=1)
         self._apply_mode(save=False)
+        self._task_state_changed(TaskState("ui", "completed"))
+
+    def _save_settings(self) -> None:
+        if self._save():
+            self.status.set(self._t("設定已儲存；介面語言變更於重新啟動後完整套用。"))
 
     def _resize_content(self, event) -> None:
         self._content_canvas.itemconfigure(self._content_window, width=event.width)
+        for label in self._detail_labels:
+            label.configure(wraplength=max(200, event.width - 64))
         self._layout_buttons(event.width)
 
     def _scroll_content(self, event):
-        if self._content_canvas.winfo_containing(event.x_root, event.y_root) is not None:
+        widget = self._content_canvas.winfo_containing(event.x_root, event.y_root)
+        if isinstance(widget, (ttk.Combobox, tk.Text)) or not event.delta:
+            return
+        while widget is not None and widget is not self._content_canvas:
+            widget = widget.master
+        if widget is self._content_canvas and self._content_canvas.yview() != (0.0, 1.0):
             self._content_canvas.yview_scroll(-1 if event.delta > 0 else 1, "units")
             return "break"
 
@@ -689,8 +783,13 @@ class TranslatorApp(tk.Tk):
         visible = set(visible_button_texts([text for text, _button in self.button_widgets], self.advanced_mode.get()))
         columns = responsive_button_columns(width or self._buttons_frame.winfo_width())
         index = 0
+        session_index = 0
+        query = self._tool_search.get().strip().casefold()
         for text, button in self.button_widgets:
-            if text in visible:
+            if text in SESSION_BUTTON_TEXTS:
+                button.grid(row=0, column=session_index, sticky="ew", padx=3)
+                session_index += 1
+            elif text in visible and query in self._t(text).casefold():
                 button.grid(row=index // columns, column=index % columns, sticky="ew", padx=3, pady=3)
                 index += 1
         for column in range(5):
@@ -753,7 +852,6 @@ class TranslatorApp(tk.Tk):
                 self.vars[key].set(label)
         if config_changed:
             save_config(APP_DIR, self.config)
-        devices = list(self._device_id_by_label)
         for key, widget in self.comboboxes.items():
             if key == "model":
                 widget.configure(values=models)
@@ -762,6 +860,11 @@ class TranslatorApp(tk.Tk):
             elif key == "compute_type":
                 widget.configure(values=compute_types)
             elif key != "tts_voice_name":
+                channel = "output_channels" if key in {"speaker_device", "tts_output_device", "speaker_tts_output_device"} else "input_channels"
+                devices = [default_device] + [format_device_label(device) for device in raw_devices if device[channel] > 0]
+                current_label = self.vars[key].get()
+                if current_label not in devices:
+                    devices.append(current_label)
                 widget.configure(values=devices)
         self.status.set(self._t("裝置與模型已更新"))
         self._refresh_runtime_status()
@@ -787,7 +890,7 @@ class TranslatorApp(tk.Tk):
         for key, variable in self.vars.items():
             if key.startswith("last_") or key in {"overlay_x", "overlay_y"}:
                 continue
-            config[key] = self._device_id_by_label.get(variable.get(), "") if key in AUDIO_DEVICE_KEYS else variable.get()
+            config[key] = self._device_id_by_label.get(variable.get(), self.config.get(key, "")) if key in AUDIO_DEVICE_KEYS else variable.get()
         config["scenario"] = next((key for key in SCENARIO_CHOICES if config["scenario"] == self._t(scenario_label(key))), scenario_key(config["scenario"]))
         config["overlay_visible"] = self.overlay_visible.get()
         config["overlay_topmost"] = self.overlay_topmost.get()
@@ -896,12 +999,15 @@ class TranslatorApp(tk.Tk):
                 break
             if self._closing or (event.engine is not None and event.engine is not self.engine):
                 continue
-            if event.kind == "status":
-                self._engine_status(*event.args)
-            elif event.kind == "overlay":
-                self._overlay_update(*event.args)
-            else:
-                event.args[0](*event.args[1:])
+            try:
+                if event.kind == "status":
+                    self._engine_status(*event.args)
+                elif event.kind == "overlay":
+                    self._overlay_update(*event.args)
+                else:
+                    event.args[0](*event.args[1:])
+            except Exception:
+                self.report_callback_exception(*sys.exc_info())
         if not self._closing:
             self.after(50, self._drain_ui_events)
 
@@ -923,7 +1029,15 @@ class TranslatorApp(tk.Tk):
     def _task_state_changed(self, _state: TaskState) -> None:
         disabled = self.controller.busy
         for text, button in getattr(self, "button_widgets", []):
-            button.configure(state="normal" if not disabled or text in {"停止", "離開", "取消背景工作", "取消模型下載"} else "disabled")
+            running = self.engine is not None and self.engine.running
+            enabled = not disabled or text in {"停止", "離開", "取消背景工作", "取消模型下載"}
+            if text == "開始":
+                enabled = enabled and self.engine is None
+            elif text in {"暫停/繼續", "按住說話"}:
+                enabled = running
+            if text == "暫停/繼續":
+                button.configure(text=self._t("繼續" if running and self.engine.paused else "暫停"))
+            button.configure(state="normal" if enabled else "disabled")
 
     def _cancel_background_tasks(self) -> None:
         model_cancel = self.__dict__.get("_model_download_cancel")
@@ -934,7 +1048,7 @@ class TranslatorApp(tk.Tk):
         self.status.set(self._t("已取消 {count} 個背景工作", count=count) if count else self._t("目前沒有可取消的背景工作"))
 
     def _mode_text(self) -> str:
-        if self.config.get("app_language") == "en":
+        if self.config.get("app_language") == "en" or not self.config.get("advanced_mode", False):
             return "\n".join((
                 self._t("模式：翻譯 {provider}；TTS {tts_provider}", provider=self.config["provider"], tts_provider=self.config["tts_provider"]),
                 self._t("對話紀錄：{state}", state=self._t("開啟" if self.config["record_logs"] else "關閉")),
@@ -954,7 +1068,20 @@ class TranslatorApp(tk.Tk):
                 widget.grid()
             else:
                 widget.grid_remove()
+        option_index = 0
+        for widget in self.__dict__.get("_option_widgets", []):
+            if self.advanced_mode.get() or widget not in self.advanced_mode_widgets:
+                widget.grid(row=option_index // 2, column=option_index % 2, sticky="w", pady=3)
+                option_index += 1
         self._layout_buttons()
+        notebook = self.__dict__.get("_settings_notebook")
+        if notebook is not None:
+            for title, keys in SETTING_GROUPS:
+                panel = self._setting_panels[next(iter(keys))]
+                if self.advanced_mode.get() or keys & BASIC_SETTING_KEYS:
+                    notebook.add(panel, text=self._t(title))
+                else:
+                    notebook.hide(panel)
         if save:
             self._save()
 
@@ -1502,6 +1629,7 @@ class TranslatorApp(tk.Tk):
             ),
             lambda result: self._start_checked(config, app_models, result),
             "啟動檢查失敗",
+            task_name="start_check",
         )
 
     def _start_checked(self, config: dict, app_models: Path, result: tuple[RuntimeCheckResult, str]) -> None:
@@ -1553,6 +1681,10 @@ class TranslatorApp(tk.Tk):
             self._engine_status(self._t("啟動失敗：{error}", error=result.error))
 
     def _stop(self) -> None:
+        cancelled = self.controller.cancel("start_check")
+        if cancelled and self.engine is None:
+            self.status.set(self._t("已停止"))
+        self._push_to_talk(False)
         if self.controller.stop_engine(self._engine_stopped) is False:
             self.status.set(self._t("停止工作已在進行"))
 
@@ -1581,6 +1713,7 @@ class TranslatorApp(tk.Tk):
     def _toggle_pause(self) -> None:
         if self.engine:
             self.engine.set_paused(not self.engine.paused)
+            self._task_state_changed(TaskState("pause", "completed"))
 
     def _toggle_virtual_mic_mute(self) -> None:
         if self.engine:
@@ -1609,10 +1742,12 @@ class TranslatorApp(tk.Tk):
     def _push_to_talk(self, active: bool) -> None:
         if self.engine:
             if active:
+                if self.__dict__.get("_push_to_talk_previous_virtual_mic_muted") is not None:
+                    return
                 self._push_to_talk_previous_virtual_mic_muted = self.engine.virtual_mic_muted
                 self.engine.set_virtual_mic_muted(False)
-            else:
-                self.engine.set_virtual_mic_muted(bool(getattr(self, "_push_to_talk_previous_virtual_mic_muted", True)))
+            elif self.__dict__.get("_push_to_talk_previous_virtual_mic_muted") is not None:
+                self.engine.set_virtual_mic_muted(self._push_to_talk_previous_virtual_mic_muted)
                 self._push_to_talk_previous_virtual_mic_muted = None
 
     def _clear_cache(self) -> None:
@@ -1627,7 +1762,8 @@ class TranslatorApp(tk.Tk):
         subprocess.Popen(["explorer", str(path)])
 
     def _export_subtitles(self) -> None:
-        self._save()
+        if not self._save():
+            return
         log_dir = Path(self.config.get("log_dir") or APP_DIR / "logs")
         logs = sorted(log_dir.glob("*.jsonl"), key=lambda path: path.stat().st_mtime, reverse=True)
         if not logs:
@@ -1635,8 +1771,12 @@ class TranslatorApp(tk.Tk):
             append_app_log(APP_DIR, "subtitle_export_empty")
             return
         output_dir = APP_DIR / "exports" / "subtitles"
-        srt = export_jsonl_to_srt(logs[0], output_dir)
-        txt = export_jsonl_to_txt(logs[0], output_dir)
+        try:
+            srt = export_jsonl_to_srt(logs[0], output_dir)
+            txt = export_jsonl_to_txt(logs[0], output_dir)
+        except (OSError, ValueError) as exc:
+            self.status.set(self._t("字幕匯出失敗：{error}", error=exc))
+            return
         append_app_log(APP_DIR, "subtitle_export", source=logs[0], output=srt, text_output=txt)
         self.status.set(self._t("字幕已匯出：{path}", path=srt))
 
@@ -1674,6 +1814,10 @@ class TranslatorApp(tk.Tk):
         if self.engine and not subtitle_updates_allowed(self.engine.paused):
             return
         self.overlay_generation += 1
+        self._latest_subtitle = overlay_clipboard_text(speaker, mine)
+        preview = self.__dict__.get("_preview_text")
+        if preview is not None:
+            preview.set(self._latest_subtitle)
         generation = self.overlay_generation
         self.after(0, self.overlay.update_lines, speaker, mine)
         hold_ms = int(overlay_hold_seconds_value(self.config.get("overlay_hold_seconds", 8.0)) * 1000)

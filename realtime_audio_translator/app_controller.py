@@ -40,11 +40,7 @@ class AppController:
                 self._tasks[name] = token
             self._notify(TaskState(name, "started"))
 
-        def run() -> None:
-            try:
-                result = TaskResult(value=work())
-            except Exception as exc:
-                result = TaskResult[T](error=exc)
+        def deliver(result: TaskResult[T]) -> None:
             if name:
                 with self._tasks_lock:
                     if self._tasks.get(name) is not token:
@@ -54,7 +50,14 @@ class AppController:
                         self._cancelled.remove(token)
                         return
                 self._notify(TaskState(name, "failed" if result.error else "completed"))
-            self._post("callback", done, result)
+            done(result)
+
+        def run() -> None:
+            try:
+                result = TaskResult(value=work())
+            except Exception as exc:
+                result = TaskResult[T](error=exc)
+            self._post("callback", deliver, result)
 
         threading.Thread(target=run, daemon=True).start()
         return True
@@ -88,18 +91,28 @@ class AppController:
             self.engine = engine
             self._engine_starting = True
         self._notify(TaskState("engine_start", "started"))
+        started = False
 
         def finish(result: TaskResult[None]) -> None:
             with self._tasks_lock:
                 self._engine_starting = False
-                if result.error is not None or not engine.running:
+                if result.error is not None or not started:
                     if self.engine is engine:
                         self.engine = None
             self._notify(TaskState("engine_start", "failed" if result.error else "completed"))
             if done is not None:
                 done(result)
 
-        self.submit(engine.start, finish)
+        def start() -> None:
+            nonlocal started
+            try:
+                engine.start()
+                started = engine.running
+            finally:
+                if not started:
+                    engine.stop(report_status=False)
+
+        self.submit(start, finish)
         return True
 
     def stop_engine(self, done: Callable[[TaskResult[str]], None]) -> bool:

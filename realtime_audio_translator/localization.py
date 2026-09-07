@@ -21,6 +21,19 @@ SETUP_GUIDES = {
 
 
 ENGLISH = {
+    "暫停": "Pause",
+    "繼續": "Resume",
+    "翻譯設定": "Translation",
+    "音訊與語音": "Audio & speech",
+    "模型與效能": "Models & performance",
+    "字幕與紀錄": "Subtitles & logs",
+    "選擇場景與音訊來源，開始即時翻譯。": "Choose a scenario and audio sources to start translating.",
+    "搜尋工具": "Find a tool",
+    "儲存設定": "Save settings",
+    "即時字幕預覽": "Live subtitle preview",
+    "尚無字幕；開始翻譯或使用「測試字幕」。": "No subtitles yet. Start translating or use Test subtitles.",
+    "設定已儲存；介面語言變更於重新啟動後完整套用。": "Settings saved. Restart to fully apply interface language changes.",
+    "字幕匯出失敗：{error}": "Subtitle export failed: {error}",
     "介面語言": "Interface language",
     "來源語言": "Source language",
     "目標語言": "Target language",

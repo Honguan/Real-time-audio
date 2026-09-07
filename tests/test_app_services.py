@@ -1,3 +1,4 @@
+import queue
 import threading
 import time
 import unittest
@@ -42,6 +43,84 @@ class AppControllerTests(unittest.TestCase):
         done.assert_not_called()
         self.assertEqual([state.status for state in states], ["started", "cancelled"])
         self.assertFalse(controller.busy)
+
+    def test_cancel_suppresses_result_already_queued_for_ui(self):
+        callbacks = queue.Queue()
+        done = Mock()
+        controller = AppController(lambda _kind, callback, value: callbacks.put((callback, value)))
+        self.assertTrue(controller.submit(lambda: 42, done, name="api"))
+        callback, result = callbacks.get(timeout=1)
+
+        self.assertTrue(controller.busy)
+        self.assertEqual(controller.cancel("api"), 1)
+        callback(result)
+
+        done.assert_not_called()
+        self.assertFalse(controller.busy)
+        self.assertTrue(controller.submit(lambda: 43, done, name="api"))
+        callback, result = callbacks.get(timeout=1)
+        callback(result)
+        self.assertEqual(done.call_args.args[0].value, 43)
+
+    def test_failed_start_releases_engine_resources_before_ui_completion(self):
+        for raises in (False, True):
+            with self.subTest(raises=raises):
+                callbacks = queue.Queue()
+                controller = AppController(lambda _kind, callback, value: callbacks.put((callback, value)))
+                engine = Mock(running=raises)
+                failure = RuntimeError("startup failed")
+                if raises:
+                    engine.start.side_effect = failure
+                done = Mock()
+
+                self.assertTrue(controller.start_engine(engine, done))
+                callback, result = callbacks.get(timeout=1)
+                engine.stop.assert_called_once_with(report_status=False)
+                callback(result)
+
+                self.assertIsNone(controller.engine)
+                self.assertFalse(controller.busy)
+                self.assertIs(done.call_args.args[0].error, failure if raises else None)
+
+    def test_capture_failure_after_start_keeps_engine_available_for_cleanup(self):
+        callbacks = queue.Queue()
+        controller = AppController(lambda _kind, callback, value: callbacks.put((callback, value)))
+        engine = Mock(running=True)
+        self.assertTrue(controller.start_engine(engine))
+        callback, result = callbacks.get(timeout=1)
+        engine.running = False
+        callback(result)
+
+        self.assertIs(controller.engine, engine)
+        self.assertTrue(controller.stop_engine(Mock()))
+        callback, result = callbacks.get(timeout=1)
+        callback(result)
+        engine.stop.assert_called_once_with()
+        self.assertIsNone(controller.engine)
+
+    def test_rejected_engine_start_closes_log_without_overwriting_failure_status(self):
+        from realtime_audio_translator.config import DEFAULT_CONFIG
+        from realtime_audio_translator.engine import RealtimeEngine
+
+        callbacks = queue.Queue()
+        controller = AppController(lambda _kind, callback, value: callbacks.put((callback, value)))
+        statuses = []
+        with TemporaryDirectory() as temp:
+            config = {**DEFAULT_CONFIG, "record_logs": True, "log_dir": temp,
+                      "source_language": "en", "target_language": "en"}
+            engine = RealtimeEngine(Path(temp), config, Mock(), statuses.append)
+            try:
+                self.assertTrue(engine.log._thread.is_alive())
+                self.assertTrue(controller.start_engine(engine))
+                callback, result = callbacks.get(timeout=1)
+                callback(result)
+
+                self.assertFalse(engine.log._thread.is_alive())
+                self.assertIsNone(controller.engine)
+                self.assertEqual(len(statuses), 1)
+                self.assertNotEqual(statuses[0], "已停止")
+            finally:
+                engine.stop(report_status=False)
 
     def test_submit_returns_typed_result_through_ui_dispatcher(self):
         posted = threading.Event()
