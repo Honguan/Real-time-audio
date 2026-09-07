@@ -123,6 +123,8 @@ class RealtimeEngine:
         self._starting_directions = False
         self.log = self._new_conversation_log(config)
         self._retired_logs: list[ConversationLog] = []
+        self._retired_log_drops = 0
+        self._retired_log_error: str | None = None
         self.pipelines: dict[str, PipelineContext] = {}
         self.offline_translation_registry: OfflineTranslationRegistry | None = None
         self.transcriber: AudioTranscriber | None = None
@@ -252,13 +254,14 @@ class RealtimeEngine:
         alive = [thread for thread in threads if thread.is_alive()]
         pending_logs = [log for log in logs if not log.close(max(0.0, deadline - time.monotonic()))]
         with self._lifecycle_lock:
-            self._retired_logs = [log for log in self._retired_logs if log in pending_logs]
+            self._retain_pending_logs(pending_logs)
             self.threads = [thread for thread in self.threads if thread not in threads or thread in alive]
             if not alive:
                 self.workers = [worker for worker in self.workers if worker not in workers]
         pending = len(alive) + (not callback_stopped) + len(pending_logs)
         self.stop_pending = bool(pending)
         message = self._t("停止逾時：仍有 {count} 個背景工作", count=pending) if pending else self._t("已停止")
+        message += self._log_warning()
         if report_status:
             self.status(message)
         return message
@@ -416,7 +419,31 @@ class RealtimeEngine:
                     pipeline.translator.offline_registry = registry
             if old_log:
                 self._retired_logs.append(old_log)
-            self._retired_logs = [log for log in self._retired_logs if not log.close(0)]
+            self._retain_pending_logs([log for log in self._retired_logs if not log.close(0)])
+
+    def _retain_pending_logs(self, pending: list[ConversationLog]) -> None:
+        # Called with the lifecycle lock held; keep diagnostics after releasing writers.
+        for log in self._retired_logs:
+            if log not in pending:
+                self._retired_log_drops += log.dropped_records
+                if log.error is not None:
+                    self._retired_log_error = str(log.error)
+        self._retired_logs = [log for log in self._retired_logs if log in pending]
+
+    def _log_warning(self) -> str:
+        with self._lifecycle_lock:
+            logs = self._retired_logs + ([self.log] if self.log else [])
+            dropped = self._retired_log_drops + sum(getattr(log, "dropped_records", 0) for log in logs)
+            error = self._retired_log_error
+            for log in logs:
+                error = getattr(log, "error", None) or error
+        warnings = []
+        if dropped:
+            warnings.append(self._t("對話紀錄佇列已滿，累計遺失 {count} 筆紀錄", count=dropped))
+        if error is not None:
+            warnings.append(self._t("對話紀錄寫入或清理失敗：{error}", error=error))
+        separator = "; " if self.config.get("app_language") == "en" else "；"
+        return separator + separator.join(warnings) if warnings else ""
 
     @staticmethod
     def _log_policy(config: dict) -> tuple:
@@ -645,7 +672,7 @@ class RealtimeEngine:
                     )
                     separator = "; " if config.get("app_language") == "en" else "；"
                     quality = separator + format_quality_status(snapshot, bool(config.get("advanced_mode")), config.get("app_language", "zh-TW"))
-                    self._publish(session, self.status, self._t("{source}延遲 {latency:.2f} 秒", source=direction_label(direction, config.get("app_language", "zh-TW")), latency=latency) + quality)
+                    self._publish(session, self.status, self._t("{source}延遲 {latency:.2f} 秒", source=direction_label(direction, config.get("app_language", "zh-TW")), latency=latency) + quality + self._log_warning())
             except Exception as exc:
                 self._publish(session, self.status, self._t("{source}：{error}", source=direction_label(direction, config.get("app_language", "zh-TW")), error=exc))
             finally:

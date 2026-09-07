@@ -309,6 +309,8 @@ ENGLISH = {
     "沒有可用音訊裝置": "No audio device is available",
     "停止逾時：仍有 {count} 個背景工作": "Stop timed out; {count} background tasks are still running",
     "已停止": "Stopped",
+    "對話紀錄佇列已滿，累計遺失 {count} 筆紀錄": "Conversation log queue full; {count} records lost in total",
+    "對話紀錄寫入或清理失敗：{error}": "Conversation log write or cleanup failed: {error}",
     "已暫停": "Paused",
     "執行中": "Running",
     "虛擬麥克風已靜音": "Virtual microphone muted",

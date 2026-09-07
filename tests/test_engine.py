@@ -236,6 +236,76 @@ class EngineTests(unittest.TestCase):
             self.assertEqual(engine.stop(join_timeout=1), "已停止")
             self.assertFalse(log._thread.is_alive())
 
+    def test_stop_reports_log_write_failure_even_without_another_segment(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = DEFAULT_CONFIG | {"record_logs": True, "log_dir": tmp}
+            statuses = []
+            engine = RealtimeEngine(Path("."), config, lambda *args: None, statuses.append)
+            try:
+                with patch.object(engine.log, "_write", side_effect=OSError("disk full")):
+                    engine.log.append("me", "zh", "en", "hello", "hello", "local")
+                    message = engine.stop()
+                self.assertFalse(engine.stop_pending)
+                self.assertIn("對話紀錄寫入或清理失敗：disk full", message)
+                self.assertEqual(statuses[-1], message)
+                self.assertEqual(engine.stop(report_status=False), message)
+            finally:
+                engine.stop(report_status=False)
+
+    def test_log_drops_survive_policy_change_and_stop_retries(self):
+        from realtime_audio_translator.logbook import ConversationLog
+
+        with tempfile.TemporaryDirectory() as tmp:
+            config = DEFAULT_CONFIG | {"provider": "google", "record_logs": True, "log_dir": tmp, "app_language": "en"}
+            log = ConversationLog(Path(tmp), queue_size=1)
+            entered, release = threading.Event(), threading.Event()
+            with patch.object(RealtimeEngine, "_new_conversation_log", return_value=log):
+                engine = RealtimeEngine(Path("."), config, lambda *args: None, lambda status: None)
+            original_write = log._write
+
+            def blocked_write(row):
+                entered.set()
+                if not release.wait(5):
+                    raise TimeoutError("test writer was not released")
+                original_write(row)
+
+            try:
+                with patch.object(log, "_write", side_effect=blocked_write):
+                    log.append("me", "zh", "en", "first", "one", "local")
+                    self.assertTrue(entered.wait(2))
+                    for text in ("second", "third", "fourth"):
+                        log.append("me", "zh", "en", text, text, "local")
+                    self.assertEqual(log.dropped_records, 2)
+                    self.assertIn("2 records lost in total", engine._log_warning())
+                    engine.update_config(config | {"record_logs": False})
+                    self.assertIn("2 records lost in total", engine.stop(join_timeout=0))
+                    self.assertTrue(engine.stop_pending)
+                    release.set()
+                    message = engine.stop()
+                self.assertFalse(engine.stop_pending)
+                self.assertEqual(engine._retired_logs, [])
+                self.assertEqual(message, "Stopped; Conversation log queue full; 2 records lost in total")
+                self.assertEqual(engine.stop(), message)
+                self.assertEqual(len(log.jsonl_path.read_text(encoding="utf-8").splitlines()), 2)
+            finally:
+                release.set()
+                engine.stop(report_status=False)
+
+    def test_retired_log_error_survives_successful_policy_change(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = DEFAULT_CONFIG | {"provider": "google", "record_logs": True, "log_dir": tmp}
+            engine = RealtimeEngine(Path("."), config, lambda *args: None, lambda status: None)
+            try:
+                with patch.object(engine.log, "_write", side_effect=OSError("read only")):
+                    engine.log.append("me", "zh", "en", "hello", "hello", "local")
+                    self.assertTrue(engine.log.close())
+                engine.update_config(config | {"conversation_log_content": "original"})
+                self.assertEqual(engine._retired_logs, [])
+                self.assertIn("read only", engine._log_warning())
+                self.assertIn("read only", engine.stop())
+            finally:
+                engine.stop(report_status=False)
+
     def test_stop_retries_retired_log_when_blocked_writer_prevents_close(self):
         from realtime_audio_translator.logbook import ConversationLog
 
