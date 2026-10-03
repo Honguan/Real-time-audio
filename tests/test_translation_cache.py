@@ -12,6 +12,18 @@ from realtime_audio_translator.providers import HttpClient, TRANSLATION_MEMORY_C
 
 
 class TranslationCacheTests(unittest.TestCase):
+    def test_empty_translation_does_not_block_later_success(self):
+        for empty in ("", "   "):
+            with self.subTest(empty=empty):
+                translator = Translator(DEFAULT_CONFIG | {"provider": "local", "local_translate_url": "http://localhost",
+                                                          "translation_cache_enabled": False})
+                with patch.object(translator, "_local_translate", side_effect=[empty, "你好"]) as backend:
+                    self.assertEqual(translator.translate("hello", "en", "zh").text, empty)
+                    self.assertEqual(translator.translate("hello", "en", "zh").text, "你好")
+                    self.assertEqual(translator.translate("hello", "en", "zh").text, "你好")
+                self.assertEqual(backend.call_count, 2)
+
+
     def test_unavailable_persistent_cache_keeps_translation_and_memory_cache(self):
         with tempfile.TemporaryDirectory() as tmp:
             for failure in ("corrupt", "parent_file", "newer_schema"):

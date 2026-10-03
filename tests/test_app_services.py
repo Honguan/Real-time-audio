@@ -23,43 +23,69 @@ class AppControllerTests(unittest.TestCase):
 
     def test_named_task_rejects_duplicates_and_cancel_ignores_late_result(self):
         release = threading.Event()
+        callbacks = queue.Queue()
         done = Mock()
         states = []
+        controller = AppController(lambda _kind, callback, value: callbacks.put((callback, value)), states.append)
+        try:
+            self.assertTrue(controller.submit(release.wait, done, name="api"))
+            callback, state = callbacks.get(timeout=1)
+            callback(state)
+            self.assertFalse(controller.submit(lambda: None, done, name="api"))
 
-        def post(_kind, callback, value):
-            callback(value)
+            started = time.perf_counter()
+            self.assertEqual(controller.cancel("api"), 1)
+            self.assertLess(time.perf_counter() - started, 0.2)
+            self.assertTrue(controller.busy)
+            self.assertEqual(controller.cancel("api"), 0)
+            self.assertFalse(controller.submit(lambda: None, done, name="api"))
+            callback, state = callbacks.get(timeout=1)
+            callback(state)
+            self.assertEqual([state.status for state in states], ["started", "cancelling"])
+            release.set()
+            callback, result = callbacks.get(timeout=1)
+            self.assertTrue(controller.busy)
+            callback(result)
+            callback, state = callbacks.get(timeout=1)
+            callback(state)
 
-        controller = AppController(post, states.append)
-        self.assertTrue(controller.submit(lambda: release.wait(1), done, name="api"))
-        self.assertFalse(controller.submit(lambda: None, done, name="api"))
-
-        started = time.perf_counter()
-        self.assertEqual(controller.cancel("api"), 1)
-        self.assertLess(time.perf_counter() - started, 0.2)
-        self.assertFalse(controller.submit(lambda: None, done, name="api"))
-        release.set()
-        time.sleep(0.05)
-
-        done.assert_not_called()
-        self.assertEqual([state.status for state in states], ["started", "cancelled"])
-        self.assertFalse(controller.busy)
+            done.assert_not_called()
+            self.assertEqual([state.status for state in states], ["started", "cancelling", "cancelled"])
+            self.assertFalse(controller.busy)
+        finally:
+            release.set()
 
     def test_cancel_suppresses_result_already_queued_for_ui(self):
         callbacks = queue.Queue()
         done = Mock()
-        controller = AppController(lambda _kind, callback, value: callbacks.put((callback, value)))
+        states = []
+        controller = AppController(lambda _kind, callback, value: callbacks.put((callback, value)), states.append)
         self.assertTrue(controller.submit(lambda: 42, done, name="api"))
+        callback, state = callbacks.get(timeout=1)
+        callback(state)
         callback, result = callbacks.get(timeout=1)
 
         self.assertTrue(controller.busy)
         self.assertEqual(controller.cancel("api"), 1)
+        self.assertTrue(controller.busy)
+        self.assertEqual(controller.cancel("api"), 0)
+        state_callback, state = callbacks.get(timeout=1)
+        state_callback(state)
+        self.assertEqual([state.status for state in states], ["started", "cancelling"])
         callback(result)
+        callback, state = callbacks.get(timeout=1)
+        callback(state)
 
         done.assert_not_called()
+        self.assertEqual([state.status for state in states], ["started", "cancelling", "cancelled"])
         self.assertFalse(controller.busy)
         self.assertTrue(controller.submit(lambda: 43, done, name="api"))
+        callback, state = callbacks.get(timeout=1)
+        callback(state)
         callback, result = callbacks.get(timeout=1)
         callback(result)
+        callback, state = callbacks.get(timeout=1)
+        callback(state)
         self.assertEqual(done.call_args.args[0].value, 43)
 
     def test_failed_start_releases_engine_resources_before_ui_completion(self):
@@ -250,6 +276,28 @@ class RuntimeServiceTests(unittest.TestCase):
 
 
 class AudioDiagnosticsServiceTests(unittest.TestCase):
+    def test_api_bypasses_persistent_cache_and_preserves_settings(self):
+        from realtime_audio_translator.providers import Translator
+
+        with TemporaryDirectory() as tmp:
+            config = {"provider": "local", "local_translate_url": "http://localhost/translate",
+                      "translation_cache_enabled": True,
+                      "translation_cache_path": str(Path(tmp) / "cache.db")}
+            service = AudioDiagnosticsService(Path(tmp))
+            with patch.object(Translator, "_local_translate", return_value="你好"):
+                Translator(config).translate("hello", "en", "zh")
+            with patch.object(Translator, "_local_translate", side_effect=RuntimeError("service unavailable")):
+                with self.assertRaisesRegex(RuntimeError, "service unavailable"):
+                    service.test_api(config)
+            with patch.object(Translator, "_local_translate", return_value="新的結果") as request:
+                self.assertEqual(service.test_api(config), "新的結果")
+                request.assert_called_once()
+            self.assertTrue(config["translation_cache_enabled"])
+            with patch.object(Translator, "_local_translate") as request:
+                self.assertEqual(Translator(config).translate("hello", "en", "zh").text, "你好")
+                request.assert_not_called()
+
+
     def test_virtual_microphone_propagates_capture_errors_instead_of_reading_old_wav(self):
         from realtime_audio_translator.audio import AudioSegment
         from tests.helpers import write_wav

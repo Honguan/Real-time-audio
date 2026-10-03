@@ -1030,7 +1030,7 @@ class TranslatorApp(tk.Tk):
                     event.args[0](*event.args[1:])
             except Exception:
                 self.report_callback_exception(*sys.exc_info())
-        if not self._closing or self.engine is not None:
+        if not self._closing or self.engine is not None or self.controller.busy:
             self.after(1 if not self._engine_events.empty() else 50, self._drain_ui_events)
 
     def _submit(self, status: str, work, done, error_title: str, task_name: str | None = None) -> None:
@@ -1067,7 +1067,7 @@ class TranslatorApp(tk.Tk):
             model_cancel.set()
             self._model_download_cancel = None
         count = self.controller.cancel()
-        self.status.set(self._t("已取消 {count} 個背景工作", count=count) if count else self._t("目前沒有可取消的背景工作"))
+        self.status.set(self._t("正在取消 {count} 個背景工作", count=count) if count else self._t("目前沒有可取消的背景工作"))
 
     def _mode_text(self) -> str:
         if self.config.get("app_language") == "en" or not self.config.get("advanced_mode", False):
@@ -1740,7 +1740,7 @@ class TranslatorApp(tk.Tk):
     def _destroy_when_stopped(self) -> None:
         if not self._closing:
             return
-        if self.engine is None:
+        if self.engine is None and not self.controller.busy:
             self.destroy()
         else:
             self.after(50, self._destroy_when_stopped)

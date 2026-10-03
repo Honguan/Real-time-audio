@@ -283,6 +283,8 @@ class Translator:
         return translated
 
     def _remember_cached(self, request_fingerprint: str, translated: str) -> None:
+        if not translated.strip():
+            return
         self.cache.pop(request_fingerprint, None)
         self.cache[request_fingerprint] = translated
         if len(self.cache) > TRANSLATION_MEMORY_CACHE_SIZE:

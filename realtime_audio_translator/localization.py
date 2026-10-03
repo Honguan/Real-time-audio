@@ -192,7 +192,7 @@ ENGLISH = {
     "本次執行是否允許儲存設定中指定的對話內容？": "Allow this session to save the conversation content selected in settings?",
     "設定套用失敗：{error}": "Failed to apply settings: {error}",
     "{status}；相同工作已在進行": "{status}; the same task is already running",
-    "已取消 {count} 個背景工作": "Cancelled {count} background tasks",
+    "正在取消 {count} 個背景工作": "Cancelling {count} background tasks",
     "目前沒有可取消的背景工作": "There are no background tasks to cancel",
     "詞彙已加入": "Glossary term added",
     "沒有可修正的近期翻譯": "There is no recent translation to correct",

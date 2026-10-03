@@ -37,6 +37,63 @@ class GuiLogicTests(unittest.TestCase):
         finally:
             root.destroy()
 
+    def test_closing_without_engine_waits_for_cancelled_background_task(self):
+        from realtime_audio_translator.app_controller import AppController
+
+        release = threading.Event()
+        posted = threading.Event()
+        app = TranslatorApp.__new__(TranslatorApp)
+        app.config = DEFAULT_CONFIG.copy()
+        app._closing = False
+        app._engine_events = queue.Queue()
+        app.status = Mock()
+        app.after = Mock()
+        app.destroy = Mock()
+        app.report_callback_exception = Mock()
+        app._engine_stopped = Mock()
+
+        def post(kind, callback, result):
+            app._post_ui(kind, callback, result)
+            posted.set()
+
+        app.controller = AppController(post)
+        done = Mock()
+        try:
+            self.assertTrue(app.controller.submit(release.wait, done, name="api"))
+            app._quit()
+            self.assertTrue(app._closing)
+            self.assertEqual(app.controller.cancel("api"), 0)
+            app._destroy_when_stopped()
+            app.destroy.assert_not_called()
+            app.after.reset_mock()
+            app._drain_ui_events()
+            app.after.assert_called_once_with(50, app._drain_ui_events)
+            posted.clear()
+
+            release.set()
+            self.assertTrue(posted.wait(1))
+            self.assertTrue(app.controller.busy)
+            app._destroy_when_stopped()
+            app.destroy.assert_not_called()
+            app._drain_ui_events()
+            done.assert_not_called()
+            app.report_callback_exception.assert_not_called()
+            self.assertFalse(app.controller.busy)
+            app._destroy_when_stopped()
+            app.destroy.assert_called_once()
+        finally:
+            release.set()
+
+    def test_cancel_background_tasks_reports_request_in_both_languages(self):
+        for language, expected in (("zh-TW", "正在取消 2 個背景工作"), ("en", "Cancelling 2 background tasks")):
+            with self.subTest(language=language):
+                app = TranslatorApp.__new__(TranslatorApp)
+                app.config = DEFAULT_CONFIG | {"app_language": language}
+                app.controller = SimpleNamespace(cancel=Mock(return_value=2))
+                app.status = Mock()
+                app._cancel_background_tasks()
+                app.status.set.assert_called_once_with(expected)
+
     def test_pending_shutdown_keeps_window_and_delivers_completion(self):
         from realtime_audio_translator.app_controller import TaskResult
         for result, status_error in ((TaskResult(value="停止逾時"), None), (TaskResult(error=OSError("writer failed")), None), (TaskResult(error=OSError("writer failed")), OSError("state disk full"))):
@@ -671,6 +728,7 @@ class GuiLogicTests(unittest.TestCase):
 
         class Controller:
             engine = Engine()
+            busy = False
 
             def cancel(self, name=None):
                 return 0

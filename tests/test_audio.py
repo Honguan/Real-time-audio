@@ -304,6 +304,35 @@ class AudioTests(unittest.TestCase):
             with self.assertRaises(audio_module.CaptureOverflowError):
                 next(audio_module._loopback_frame_stream(output, threading.Event(), 0.05))
 
+    def test_capture_retry_preserves_pending_speech_without_crossing_gaps(self):
+        import realtime_audio_translator.audio as audio_module
+
+        for cancelled in (False, True):
+            with self.subTest(cancelled=cancelled):
+                worker = SegmentWorker(1, False, 0.01, segmentation_policy("balanced"))
+                before = AudioSegment((12000).to_bytes(2, "little", signed=True) * 800, 16000)
+                after = AudioSegment((24000).to_bytes(2, "little", signed=True) * 800, 16000)
+                attempts = 0
+
+                def capture(*_args):
+                    nonlocal attempts
+                    attempts += 1
+                    if attempts == 1:
+                        yield before
+                        yield before
+                        if cancelled:
+                            worker.stop()
+                        raise OSError("temporary capture error")
+                    yield after
+                    yield after
+
+                with patch.object(audio_module, "CAPTURE_RETRY_DELAYS", (0,)), patch.object(audio_module, "audio_frame_stream", side_effect=capture):
+                    worker.run("me")
+                queued = [worker.queue.get_nowait().pcm for _ in range(worker.queue.qsize())]
+                self.assertEqual(queued, [] if cancelled else [before.pcm * 2, after.pcm * 2])
+                self.assertEqual(attempts, 1 if cancelled else 2)
+
+
     def test_segment_worker_recovers_from_temporary_capture_errors(self):
         import realtime_audio_translator.audio as audio_module
 

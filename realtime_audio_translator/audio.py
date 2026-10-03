@@ -558,6 +558,9 @@ class SegmentWorker:
                 recoverable = isinstance(exc, OSError) or type(exc).__name__ == "PortAudioError"
                 if recoverable and failures <= len(CAPTURE_RETRY_DELAYS):
                     self._emit_health(prefix, "degraded", exc, failures)
+                    trailing = segmenter.flush()
+                    if trailing is not None:
+                        self._enqueue(trailing, trailing.timing)
                     if self._cancel.wait(CAPTURE_RETRY_DELAYS[failures - 1]):
                         return
                     self._emit_health(prefix, "recovering", exc, failures)

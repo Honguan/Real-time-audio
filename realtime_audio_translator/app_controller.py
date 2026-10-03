@@ -15,7 +15,7 @@ class TaskResult(Generic[T]):
 @dataclass(frozen=True)
 class TaskState:
     name: str
-    status: Literal["started", "completed", "failed", "cancelled"]
+    status: Literal["started", "completed", "failed", "cancelling", "cancelled"]
 
 
 class AppController:
@@ -46,10 +46,12 @@ class AppController:
                     if self._tasks.get(name) is not token:
                         return
                     del self._tasks[name]
-                    if token in self._cancelled:
+                    cancelled = token in self._cancelled
+                    if cancelled:
                         self._cancelled.remove(token)
-                        return
-                self._notify(TaskState(name, "failed" if result.error else "completed"))
+                self._notify(TaskState(name, "cancelled" if cancelled else "failed" if result.error else "completed"))
+                if cancelled:
+                    return
             done(result)
 
         def run() -> None:
@@ -72,13 +74,13 @@ class AppController:
             for task_name in names:
                 self._cancelled.add(self._tasks[task_name])
         for task_name in names:
-            self._notify(TaskState(task_name, "cancelled"))
+            self._notify(TaskState(task_name, "cancelling"))
         return len(names)
 
     @property
     def busy(self) -> bool:
         with self._tasks_lock:
-            return self._engine_starting or self._engine_stopping or any(token not in self._cancelled for token in self._tasks.values())
+            return self._engine_starting or self._engine_stopping or bool(self._tasks)
 
     def _notify(self, state: TaskState) -> None:
         if self._state_changed is not None:

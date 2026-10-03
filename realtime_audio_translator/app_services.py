@@ -82,7 +82,7 @@ class AudioDiagnosticsService:
         if config["provider"] == "google":
             google_access_token(config["google_service_account_json"])
             return translate(config.get("app_language"), "Google 驗證成功")
-        return Translator(config).translate("hello", "en", "zh").text[:80]
+        return Translator({**config, "translation_cache_enabled": False}).translate("hello", "en", "zh").text[:80]
 
     def test_tone(self, config: dict) -> None:
         import numpy as np
