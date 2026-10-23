@@ -55,6 +55,27 @@ class AppControllerTests(unittest.TestCase):
         finally:
             release.set()
 
+    def test_busy_except_ignores_only_named_long_tasks(self):
+        release = threading.Event()
+        callbacks = queue.Queue()
+        controller = AppController(lambda _kind, callback, value: callbacks.put((callback, value)))
+        try:
+            self.assertFalse(controller.busy_except(frozenset({"download"})))
+            controller.submit(release.wait, Mock(), name="download")
+            self.assertTrue(controller.has_task("download"))
+            self.assertTrue(controller.busy)
+            self.assertFalse(controller.busy_except(frozenset({"download"})))
+            controller.submit(release.wait, Mock(), name="api")
+            self.assertTrue(controller.busy_except(frozenset({"download"})))
+            release.set()
+            for _ in range(2):
+                callback, result = callbacks.get(timeout=1)
+                callback(result)
+            self.assertFalse(controller.has_task("download"))
+            self.assertFalse(controller.busy)
+        finally:
+            release.set()
+
     def test_cancel_suppresses_result_already_queued_for_ui(self):
         callbacks = queue.Queue()
         done = Mock()

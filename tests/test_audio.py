@@ -990,8 +990,7 @@ class AudioTests(unittest.TestCase):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
         service_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "app_services.py").read_text(encoding="utf-8")
 
-        self.assertIn('text=self._t("下載上游 runtime")', gui_source)
-        self.assertIn("UPSTREAM_RUNTIME_RELEASE_URL", gui_source)
+        self.assertIn('("下載上游 runtime", lambda: webbrowser.open(UPSTREAM_RUNTIME_RELEASE_URL))', gui_source)
         self.assertIn('subprocess.run([str(target / "ffmpeg.exe"), "-version"]', service_source)
         self.assertIn('config["last_ffmpeg_failed"]', gui_source)
         self.assertIn('self.runtime_service.check(target, "cuda", before.get("compute_type", "auto"), verify_hashes=True)', gui_source)

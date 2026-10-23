@@ -79,8 +79,15 @@ class AppController:
 
     @property
     def busy(self) -> bool:
+        return self.busy_except()
+
+    def busy_except(self, ignored: frozenset[str] = frozenset()) -> bool:
         with self._tasks_lock:
-            return self._engine_starting or self._engine_stopping or bool(self._tasks)
+            return self._engine_starting or self._engine_stopping or any(name not in ignored for name in self._tasks)
+
+    def has_task(self, name: str) -> bool:
+        with self._tasks_lock:
+            return name in self._tasks
 
     def _notify(self, state: TaskState) -> None:
         if self._state_changed is not None:

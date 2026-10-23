@@ -303,7 +303,7 @@ class GuiLogicTests(unittest.TestCase):
 
         self.assertIn("canvas = tk.Canvas(container", gui_source)
         self.assertIn('ttk.Scrollbar(container, orient="vertical", command=canvas.yview)', gui_source)
-        self.assertIn("button.grid(row=index // columns", gui_source)
+        self.assertIn("button.grid(row=counts[group] // columns", gui_source)
         self.assertIn("self.overlay.ensure_visible()", gui_source)
 
     def test_async_audio_result_does_not_restore_stale_settings(self):
@@ -479,7 +479,7 @@ class GuiLogicTests(unittest.TestCase):
         self.assertIn('overlay_topmost_widget = ttk.Checkbutton(frame, text=self._t("字幕最上層"), variable=self.overlay_topmost, command=self._apply_overlay)', gui_source)
         self.assertIn('language_labels_widget = ttk.Checkbutton(frame, text=self._t("顯示語言"), variable=self.show_language_labels, command=self._save)', gui_source)
         self.assertIn('speaker_capture_widget = ttk.Checkbutton(frame, text=self._t("擷取喇叭"), variable=self.speaker_enabled, command=self._save)', gui_source)
-        self.assertIn("self.advanced_mode_widgets = [runtime_buttons_widget, overlay_topmost_widget, language_labels_widget, original_text_widget, translated_text_widget, speaker_capture_widget, microphone_capture_widget, record_logs_widget, speaker_tts_widget, start_virtual_mic_muted_widget]", gui_source)
+        self.assertIn("self.advanced_mode_widgets = [overlay_topmost_widget, language_labels_widget, original_text_widget, translated_text_widget, speaker_capture_widget, microphone_capture_widget, record_logs_widget, speaker_tts_widget, start_virtual_mic_muted_widget]", gui_source)
         self.assertIn("for widget in self.advanced_mode_widgets:", gui_source)
         self.assertIn('translated_text_widget = ttk.Checkbutton(frame, text=self._t("顯示譯文"), variable=self.show_translated_text, command=self._save)', gui_source)
 
@@ -532,42 +532,19 @@ class GuiLogicTests(unittest.TestCase):
         self.assertIn('def _test_subtitles(self) -> None:', gui_source)
         self.assertIn('self.overlay.update_lines("字幕測試", "字幕測試")', gui_source)
 
-    def test_overlay_quick_toggle_switches_visibility(self):
-        import realtime_audio_translator.gui as gui_module
-
-        self.assertTrue(hasattr(gui_module, "toggle_overlay_visibility"))
-        self.assertFalse(gui_module.toggle_overlay_visibility(True))
-        self.assertTrue(gui_module.toggle_overlay_visibility(False))
-
+    def test_output_and_capture_switches_are_checkboxes_without_duplicate_toggle_buttons(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
-        self.assertIn('("切換字幕", self._toggle_subtitles)', gui_source)
-        self.assertIn("self.overlay_visible.set(toggle_overlay_visibility(self.overlay_visible.get()))", gui_source)
-
-    def test_speech_quick_toggle_switches_tts_output(self):
-        import realtime_audio_translator.gui as gui_module
-
-        self.assertTrue(hasattr(gui_module, "toggle_speech_enabled"))
-        self.assertFalse(gui_module.toggle_speech_enabled(True))
-        self.assertTrue(gui_module.toggle_speech_enabled(False))
-
-        gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
-        self.assertIn('("切換語音", self._toggle_speech)', gui_source)
-        self.assertIn("self.tts_enabled.set(toggle_speech_enabled(self.tts_enabled.get()))", gui_source)
-        self.assertIn("輸出到虛擬麥克風", gui_source)
-        self.assertIn('config["virtual_mic_enabled"] = self.virtual_mic_enabled.get()', gui_source)
-        self.assertIn('self.virtual_mic_enabled.set(bool(updated.get("virtual_mic_enabled", self.virtual_mic_enabled.get())))', gui_source)
-
-    def test_audio_source_quick_toggles_switch_capture_sources(self):
-        import realtime_audio_translator.gui as gui_module
 
         self.assertTrue(DEFAULT_CONFIG["speaker_enabled"])
         self.assertTrue(DEFAULT_CONFIG["microphone_enabled"])
-        self.assertFalse(gui_module.toggle_source_enabled(True))
-        self.assertTrue(gui_module.toggle_source_enabled(False))
-
-        gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
-        self.assertIn('("切換喇叭", self._toggle_speaker)', gui_source)
-        self.assertIn('("切換麥克風", self._toggle_microphone)', gui_source)
+        for duplicate in ("切換字幕", "切換語音", "切換喇叭", "切換麥克風"):
+            self.assertNotIn(duplicate, gui_source)
+        self.assertIn('ttk.Checkbutton(frame, text=self._t("顯示字幕"), variable=self.overlay_visible, command=self._apply_overlay)', gui_source)
+        self.assertIn('ttk.Checkbutton(frame, text=self._t("播放翻譯語音"), variable=self.tts_enabled, command=self._save)', gui_source)
+        self.assertIn('microphone_capture_widget = ttk.Checkbutton(frame, text=self._t("擷取麥克風"), variable=self.microphone_enabled, command=self._save)', gui_source)
+        self.assertIn("輸出到虛擬麥克風", gui_source)
+        self.assertIn('config["virtual_mic_enabled"] = self.virtual_mic_enabled.get()', gui_source)
+        self.assertIn('self.virtual_mic_enabled.set(bool(updated.get("virtual_mic_enabled", self.virtual_mic_enabled.get())))', gui_source)
 
     def test_mic_test_button_reports_input_level(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
@@ -713,6 +690,64 @@ class GuiLogicTests(unittest.TestCase):
         self.assertTrue(app.engine.virtual_mic_muted)
         self.assertFalse(app.engine.speaker_translation_muted)
 
+    def test_button_states_follow_session_and_blocking_tasks(self):
+        from realtime_audio_translator.app_controller import AppController, TaskState
+
+        class Button:
+            def __init__(self):
+                self.options = {}
+
+            def configure(self, **options):
+                self.options.update(options)
+
+        texts = ("開始", "停止", "暫停/繼續", "虛擬麥克風靜音/取消", "本機翻譯靜音/取消", "測試麥克風", "取消模型下載")
+        app = TranslatorApp.__new__(TranslatorApp)
+        app.config = DEFAULT_CONFIG.copy()
+        app.button_widgets = [(text, Button()) for text in texts]
+        app.controller = AppController(Mock())
+        buttons = dict(app.button_widgets)
+        release = threading.Event()
+        try:
+            app._task_state_changed(TaskState("ui", "completed"))
+            self.assertEqual({text: button.options["state"] for text, button in buttons.items()}, {"開始": "normal", "停止": "disabled", "暫停/繼續": "disabled", "虛擬麥克風靜音/取消": "disabled", "本機翻譯靜音/取消": "disabled", "測試麥克風": "normal", "取消模型下載": "normal"})
+            self.assertEqual(buttons["虛擬麥克風靜音/取消"].options["text"], "虛擬麥克風靜音")
+
+            app.controller.submit(release.wait, Mock(), name="model_download")
+            app._task_state_changed(TaskState("model_download", "started"))
+            self.assertEqual(buttons["開始"].options["state"], "normal")
+            self.assertEqual(buttons["測試麥克風"].options["state"], "normal")
+
+            app.controller.submit(release.wait, Mock(), name="start_check")
+            app._task_state_changed(TaskState("start_check", "started"))
+            self.assertEqual(buttons["開始"].options["state"], "disabled")
+            self.assertEqual(buttons["測試麥克風"].options["state"], "disabled")
+            self.assertEqual(buttons["停止"].options["state"], "normal")
+            self.assertEqual(buttons["取消模型下載"].options["state"], "normal")
+        finally:
+            release.set()
+
+        app.controller = AppController(Mock())
+        app.controller.engine = SimpleNamespace(running=True, paused=True, virtual_mic_muted=True, speaker_translation_muted=False)
+        app._task_state_changed(TaskState("engine_start", "completed"))
+        self.assertEqual(buttons["開始"].options["state"], "disabled")
+        self.assertEqual(buttons["停止"].options["state"], "normal")
+        self.assertEqual(buttons["虛擬麥克風靜音/取消"].options, {"text": "取消虛擬麥克風靜音", "state": "normal"})
+        self.assertEqual(buttons["本機翻譯靜音/取消"].options["text"], "本機翻譯靜音")
+        self.assertEqual(buttons["暫停/繼續"].options["text"], "繼續")
+
+    def test_every_tool_button_belongs_to_exactly_one_group(self):
+        import re
+        from realtime_audio_translator.gui import SESSION_BUTTON_TEXTS, TOOL_GROUP_BY_TEXT, TOOL_GROUPS
+
+        gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
+        build_source = gui_source[gui_source.index("        for text, command in ("):gui_source.index("            parent = self._session_frame")]
+        texts = re.findall(r'^\s+\("([^"]+)",', build_source, re.M)
+        grouped = [text for _title, group in TOOL_GROUPS for text in group]
+
+        self.assertEqual(len(grouped), len(set(grouped)))
+        self.assertEqual(set(grouped), set(texts) - SESSION_BUTTON_TEXTS)
+        self.assertTrue(all(text in TOOL_GROUP_BY_TEXT for text in grouped))
+
     def test_quit_button_stops_engine_and_closes_window(self):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
         self.assertIn('("離開", self._quit)', gui_source)
@@ -816,7 +851,7 @@ class GuiLogicTests(unittest.TestCase):
         gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
         service_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "app_services.py").read_text(encoding="utf-8")
 
-        self.assertIn('text=self._t("下載上游 runtime")', gui_source)
+        self.assertIn('("下載上游 runtime", lambda: webbrowser.open(UPSTREAM_RUNTIME_RELEASE_URL))', gui_source)
         self.assertIn("UPSTREAM_RUNTIME_RELEASE_URL", gui_source)
         self.assertIn("install_runtime_from", service_source)
         self.assertNotIn("download_runtime", gui_source)
