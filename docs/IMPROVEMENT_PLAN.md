@@ -17,7 +17,7 @@
 
 修改檔案：`realtime_audio_translator/app_controller.py`、`app_services.py`、`audio.py`、`gui.py`、`localization.py`、`providers.py`；`tests/test_app_services.py`、`test_audio.py`、`test_gui_logic.py`、`test_translation_cache.py`；本文件。
 
-使用者於 2026-10-03 指示先完成本機修正，暫時無法配合耳麥拔插或雲端驗收。這兩項仍待驗收；本輪未重新封裝或發布。取消仍是合作式請求，無法強制中斷已執行的 Python 工作；關閉會等工作返回。既有 `PurePath.is_reserved` 棄用警告與 runtime zip 略過提示不變。
+使用者於 2026-10-03 指示先完成本機修正，暫時無法配合耳麥拔插或雲端驗收。這兩項仍待驗收；本輪未重新封裝或發布。2026-10-23 介面重構（`9858a44`、`656eb64`）完成後再次確認：使用者仍無法配合，兩項維持待驗收，介面重構視為完成。取消仍是合作式請求，無法強制中斷已執行的 Python 工作；關閉會等工作返回。既有 `PurePath.is_reserved` 棄用警告與 runtime zip 略過提示不變。
 
 ## 2026-09-07 驗收摘要（歷史）
 
