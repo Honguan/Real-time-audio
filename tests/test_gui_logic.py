@@ -735,6 +735,26 @@ class GuiLogicTests(unittest.TestCase):
         self.assertEqual(buttons["本機翻譯靜音/取消"].options["text"], "本機翻譯靜音")
         self.assertEqual(buttons["暫停/繼續"].options["text"], "繼續")
 
+    def test_start_failures_offer_repair_actions(self):
+        from realtime_audio_translator.models import MODEL_READY
+
+        for ready, model_status, expected in ((False, MODEL_READY, ["匯入已解壓 runtime", "下載上游 runtime", "一鍵診斷"]), (True, "missing", ["下載模型", "一鍵診斷"])):
+            with self.subTest(ready=ready):
+                app = TranslatorApp.__new__(TranslatorApp)
+                app.config = DEFAULT_CONFIG.copy()
+                config = app.config.copy()
+                app._config_from_vars = Mock(return_value=config)
+                app._show_text_dialog = Mock()
+                app._set_last_error = Mock()
+                app.status = Mock()
+                check = SimpleNamespace(status={"ready": ready, "missing": ["faster-whisper-xxl.exe"], "cuda_probe_output": ""})
+                with patch("realtime_audio_translator.gui.append_app_log"), patch("realtime_audio_translator.gui.RealtimeEngine") as engine:
+                    app._start_checked(config, Path("models"), (check, model_status))
+                engine.assert_not_called()
+                labels = [label for label, _callback in app._show_text_dialog.call_args.args[2]]
+                self.assertEqual(labels, expected)
+                app._set_last_error.assert_called_once()
+
     def test_every_tool_button_belongs_to_exactly_one_group(self):
         import re
         from realtime_audio_translator.gui import SESSION_BUTTON_TEXTS, TOOL_GROUP_BY_TEXT, TOOL_GROUPS

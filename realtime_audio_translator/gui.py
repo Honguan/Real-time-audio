@@ -40,6 +40,23 @@ CLOUD_PROVIDERS = ("google", "openai")
 AUDIO_DEVICE_KEYS = ("speaker_device", "microphone_device", "tts_output_device", "virtual_mic_input_device", "speaker_tts_output_device")
 RESTART_SETTING_KEYS = {"model", "models_path", "device", "compute_type", "runtime_dir", "speaker_device", "microphone_device", "speech_threshold", "segment_seconds", "performance_mode"}
 SEVERITY_LABELS = {"error": "錯誤", "warning": "警告", "info": "提示"}
+UI_FONT = ("Microsoft JhengHei UI", 10)
+THEME = {
+    "bg": "#141516",
+    "bar": "#0f1011",
+    "control": "#23252a",
+    "hover": "#2c2e34",
+    "border": "#34343a",
+    "text": "#f7f8f8",
+    "muted": "#b6bdc9",
+    "disabled": "#8a8f98",
+    "accent": "#5e6ad2",
+    "accent_hover": "#6f7be0",
+    "accent_pressed": "#505bb8",
+    "warning": "#f5c26b",
+    "overlay": "#111111",
+    "overlay_mine": "#c9cefa",
+}
 
 
 @dataclass(frozen=True)
@@ -395,7 +412,7 @@ class Overlay(tk.Toplevel):
         self.overrideredirect(True)
         self.attributes("-topmost", topmost)
         self.attributes("-alpha", opacity)
-        self.configure(bg="#111111")
+        self.configure(bg=THEME["overlay"])
         self._moved = moved
         scale = self.winfo_fpixels("1i") / 96
         work_area = _work_area(self, x, y) if (x, y) != (-1, -1) else _work_area(self)
@@ -412,8 +429,8 @@ class Overlay(tk.Toplevel):
         self.mine = tk.StringVar(value="")
         self._drag = (0, 0)
         self.labels = []
-        for row, variable in enumerate((self.speaker, self.mine)):
-            label = tk.Label(self, textvariable=variable, fg="#f5f5f5", bg="#111111", font=("Microsoft JhengHei UI", font_size), anchor="w")
+        for row, (variable, color) in enumerate(((self.speaker, "#f5f5f5"), (self.mine, THEME["overlay_mine"]))):
+            label = tk.Label(self, textvariable=variable, fg=color, bg=THEME["overlay"], font=(UI_FONT[0], font_size), anchor="w")
             label.grid(row=row, column=0, sticky="ew", padx=round(18 * scale), pady=round(6 * scale))
             self.labels.append(label)
         self.grid_columnconfigure(0, weight=1)
@@ -530,51 +547,54 @@ class TranslatorApp(tk.Tk):
         return translate(self.config.get("app_language"), message, **values)
 
     def _build(self) -> None:
+        self._build_styles()
+        self._build_variables()
+        content = self._build_shell()
+        self._build_settings(content)
+        self._build_options(content)
+        self._build_summary(content)
+        self._build_tools(content)
+        content.grid_columnconfigure(1, weight=1)
+        self._apply_mode(save=False)
+        self._task_state_changed(TaskState("ui", "completed"))
+
+    def _build_styles(self) -> None:
+        c = THEME
         style = ttk.Style(self)
         style.theme_use("clam")
-        style.configure(".", font=("Microsoft JhengHei UI", 10), background="#141516", foreground="#f7f8f8", bordercolor="#34343a", lightcolor="#34343a", darkcolor="#34343a")
-        style.configure("TButton", padding=(self._px(12), self._px(7)), background="#23252a", borderwidth=1)
-        style.map("TButton", background=[("active", "#34343a")], foreground=[("disabled", "#8a8f98")])
-        style.configure("Accent.TButton", background="#5e6ad2", foreground="#ffffff")
-        style.map("Accent.TButton", background=[("active", "#505bb8"), ("disabled", "#34343a")])
-        style.configure("TEntry", fieldbackground="#23252a", insertcolor="#f7f8f8", padding=self._px(5))
-        style.configure("TCombobox", fieldbackground="#23252a", padding=self._px(5), arrowsize=self._px(14))
-        style.map("TCombobox", fieldbackground=[("readonly", "#23252a")], foreground=[("readonly", "#f7f8f8")])
-        style.configure("TNotebook.Tab", padding=(self._px(14), self._px(8)))
-        style.configure("TCheckbutton", indicatorsize=self._px(12))
-        style.map("TNotebook.Tab", background=[("selected", "#34343a")])
-        style.configure("Title.TLabel", font=("Segoe UI", 18, "bold"))
-        style.configure("Muted.TLabel", foreground="#b6bdc9")
-        self.option_add("*TCombobox*Listbox.background", "#23252a")
-        self.option_add("*TCombobox*Listbox.foreground", "#f7f8f8")
-        header = ttk.Frame(self, padding=(self._px(20), self._px(12)))
-        header.pack(fill="x")
-        heading = ttk.Frame(header)
-        heading.pack(fill="x")
-        ttk.Label(heading, text="Realtime Audio Translator", style="Title.TLabel").pack(side="left")
-        ttk.Label(header, text=self._t("選擇場景與音訊來源，開始即時翻譯。"), style="Muted.TLabel").pack(anchor="w", pady=(2, 8))
-        self._session_frame = ttk.Frame(header)
-        self._session_frame.pack(fill="x")
-        footer = ttk.Frame(self, padding=(self._px(20), self._px(8)))
-        footer.pack(side="bottom", fill="x")
-        status_label = ttk.Label(footer, textvariable=self.status, wraplength=self._px(650))
-        status_label.pack(fill="x")
-        restart_label = ttk.Label(footer, textvariable=self.restart_notice, wraplength=self._px(650), foreground="#f5c26b")
-        restart_label.pack(fill="x")
-        footer.bind("<Configure>", lambda event: [label.configure(wraplength=max(200, event.width - 40)) for label in (status_label, restart_label)])
-        container = ttk.Frame(self)
-        container.pack(fill="both", expand=True)
-        canvas = tk.Canvas(container, highlightthickness=0, background="#141516")
-        scrollbar = ttk.Scrollbar(container, orient="vertical", command=canvas.yview)
-        canvas.configure(yscrollcommand=scrollbar.set)
-        scrollbar.pack(side="right", fill="y")
-        canvas.pack(side="left", fill="both", expand=True)
-        frame = ttk.Frame(canvas, padding=self._px(12))
-        self._content_canvas = canvas
-        self._content_window = canvas.create_window((0, 0), window=frame, anchor="nw")
-        frame.bind("<Configure>", lambda _event: canvas.configure(scrollregion=canvas.bbox("all")))
-        canvas.bind("<Configure>", self._resize_content)
-        self.bind("<MouseWheel>", self._scroll_content, add="+")
+        style.configure(".", font=UI_FONT, background=c["bg"], foreground=c["text"], bordercolor=c["border"], lightcolor=c["border"], darkcolor=c["border"], troughcolor=c["bg"], focuscolor=c["accent"], selectbackground=c["accent"], selectforeground="#ffffff", insertcolor=c["text"], arrowcolor=c["muted"])
+        style.configure("TButton", padding=(self._px(12), self._px(7)), background=c["control"], borderwidth=1)
+        style.map("TButton", background=[("pressed", c["border"]), ("active", c["hover"])], foreground=[("disabled", c["disabled"])], bordercolor=[("focus", c["accent"])], lightcolor=[("active", c["hover"])], darkcolor=[("active", c["hover"])])
+        style.configure("Accent.TButton", background=c["accent"], foreground="#ffffff", bordercolor=c["accent"], lightcolor=c["accent"], darkcolor=c["accent"])
+        style.map("Accent.TButton", background=[("disabled", c["control"]), ("pressed", c["accent_pressed"]), ("active", c["accent_hover"])], lightcolor=[("active", c["accent_hover"])], darkcolor=[("active", c["accent_hover"])], bordercolor=[("disabled", c["border"])])
+        style.configure("TEntry", fieldbackground=c["control"], padding=self._px(5))
+        style.map("TEntry", bordercolor=[("focus", c["accent"])], lightcolor=[("focus", c["accent"])])
+        style.configure("TCombobox", fieldbackground=c["control"], background=c["control"], padding=self._px(5), arrowsize=self._px(14))
+        style.map("TCombobox", fieldbackground=[("readonly", c["control"])], foreground=[("readonly", c["text"])], background=[("active", c["hover"])], bordercolor=[("focus", c["accent"])], lightcolor=[("focus", c["accent"])], arrowcolor=[("active", c["text"])])
+        style.configure("TCheckbutton", indicatorsize=self._px(12), indicatorbackground=c["control"], indicatorforeground="#ffffff", upperbordercolor=c["border"], lowerbordercolor=c["border"])
+        style.map("TCheckbutton", indicatorbackground=[("selected", c["accent"]), ("active", c["hover"])], background=[("active", c["bg"])])
+        style.configure("Vertical.TScrollbar", background=c["control"], bordercolor=c["bg"], lightcolor=c["control"], darkcolor=c["control"], arrowsize=self._px(12))
+        style.map("Vertical.TScrollbar", background=[("active", c["border"])])
+        style.configure("TNotebook", background=c["bg"], bordercolor=c["border"], tabmargins=(0, 0, 0, 0))
+        style.configure("TNotebook.Tab", padding=(self._px(16), self._px(8)), background=c["bg"], foreground=c["muted"], bordercolor=c["border"], lightcolor=c["bg"])
+        style.map("TNotebook.Tab", background=[("selected", c["control"]), ("active", c["hover"])], foreground=[("selected", c["text"])], lightcolor=[("selected", c["accent"])], expand=[("selected", (0, 0, 0, 0))], padding=[("selected", (self._px(16), self._px(8)))])
+        style.configure("TLabelframe", background=c["bg"], bordercolor=c["border"])
+        style.configure("TLabelframe.Label", background=c["bg"], foreground=c["muted"], font=(UI_FONT[0], 10, "bold"))
+        style.configure("Muted.TLabel", foreground=c["muted"])
+        style.configure("Bar.TFrame", background=c["bar"])
+        style.configure("Bar.TLabel", background=c["bar"])
+        style.configure("BarMuted.TLabel", background=c["bar"], foreground=c["muted"])
+        style.configure("BarWarning.TLabel", background=c["bar"], foreground=c["warning"])
+        style.configure("Title.TLabel", background=c["bar"], font=("Segoe UI", 17, "bold"))
+        style.configure("Bar.TCheckbutton", background=c["bar"])
+        style.map("Bar.TCheckbutton", background=[("active", c["bar"])])
+        self.option_add("*TCombobox*Listbox.background", c["control"])
+        self.option_add("*TCombobox*Listbox.foreground", c["text"])
+        self.option_add("*TCombobox*Listbox.selectBackground", c["accent"])
+        self.option_add("*TCombobox*Listbox.selectForeground", "#ffffff")
+        self.configure(background=c["bg"])
+
+    def _build_variables(self) -> None:
         self.vars = {key: tk.StringVar(value=str(value)) for key, value in self.config.items()}
         self.vars["scenario"].set(self._t(scenario_label(self.config["scenario"])))
         self.overlay_visible = tk.BooleanVar(value=bool(self.config["overlay_visible"]))
@@ -590,11 +610,44 @@ class TranslatorApp(tk.Tk):
         self.microphone_enabled = tk.BooleanVar(value=bool(self.config.get("microphone_enabled", True)))
         self.record_logs = tk.BooleanVar(value=bool(self.config["record_logs"]))
         self.advanced_mode = tk.BooleanVar(value=bool(self.config.get("advanced_mode", False)))
-        ttk.Checkbutton(heading, text=self._t("進階設定"), variable=self.advanced_mode, command=self._apply_mode).pack(side="right")
+
+    def _build_shell(self) -> ttk.Frame:
+        header = ttk.Frame(self, padding=(self._px(20), self._px(14), self._px(20), self._px(12)), style="Bar.TFrame")
+        header.pack(fill="x")
+        tk.Frame(self, height=1, background=THEME["border"]).pack(fill="x")
+        heading = ttk.Frame(header, style="Bar.TFrame")
+        heading.pack(fill="x")
+        ttk.Label(heading, text="Realtime Audio Translator", style="Title.TLabel").pack(side="left")
+        ttk.Label(header, text=self._t("選擇場景與音訊來源，開始即時翻譯。"), style="BarMuted.TLabel").pack(anchor="w", pady=(2, 10))
+        self._session_frame = ttk.Frame(header, style="Bar.TFrame")
+        self._session_frame.pack(fill="x")
+        footer = ttk.Frame(self, padding=(self._px(20), self._px(8)), style="Bar.TFrame")
+        footer.pack(side="bottom", fill="x")
+        tk.Frame(self, height=1, background=THEME["border"]).pack(side="bottom", fill="x")
+        status_label = ttk.Label(footer, textvariable=self.status, wraplength=self._px(650), style="Bar.TLabel")
+        status_label.pack(fill="x")
+        restart_label = ttk.Label(footer, textvariable=self.restart_notice, wraplength=self._px(650), style="BarWarning.TLabel")
+        restart_label.pack(fill="x")
+        footer.bind("<Configure>", lambda event: [label.configure(wraplength=max(200, event.width - 40)) for label in (status_label, restart_label)])
+        container = ttk.Frame(self)
+        container.pack(fill="both", expand=True)
+        canvas = tk.Canvas(container, highlightthickness=0, background=THEME["bg"])
+        scrollbar = ttk.Scrollbar(container, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+        frame = ttk.Frame(canvas, padding=self._px(12))
+        self._content_canvas = canvas
+        self._content_window = canvas.create_window((0, 0), window=frame, anchor="nw")
+        frame.bind("<Configure>", lambda _event: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.bind("<Configure>", self._resize_content)
+        self.bind("<MouseWheel>", self._scroll_content, add="+")
+        ttk.Checkbutton(heading, text=self._t("進階設定"), variable=self.advanced_mode, command=self._apply_mode, style="Bar.TCheckbutton").pack(side="right")
+        return frame
+
+    def _build_settings(self, content: ttk.Frame) -> None:
         self.comboboxes: dict[str, ttk.Combobox] = {}
         self.setting_widgets: dict[str, list[tk.Widget]] = {}
-
-        content = frame
         notebook = ttk.Notebook(content)
         notebook.grid(row=0, column=0, columnspan=3, sticky="ew", pady=(0, 12))
         notebook.enable_traversal()
@@ -606,7 +659,6 @@ class TranslatorApp(tk.Tk):
             notebook.add(panel, text=self._t(title))
             for key in keys:
                 self._setting_panels[key] = panel
-
         for row, (label, key) in enumerate(SETTING_ROWS):
             frame = self._setting_panels[key]
             row_widgets: list[tk.Widget] = []
@@ -655,14 +707,8 @@ class TranslatorApp(tk.Tk):
                 row_widgets.append(button)
             self.setting_widgets[key] = row_widgets
 
-        frame = content
+    def _build_options(self, content: ttk.Frame) -> None:
         next_row = 2
-        runtime_label = ttk.Label(frame, textvariable=self.runtime_text, style="Muted.TLabel", wraplength=self._px(650))
-        runtime_label.grid(row=3, column=0, columnspan=3, sticky="ew", pady=4)
-        mode_label = ttk.Label(frame, textvariable=self.mode_text, style="Muted.TLabel", wraplength=self._px(650))
-        mode_label.grid(row=4, column=0, columnspan=3, sticky="ew", pady=4)
-        self._detail_labels = [runtime_label, mode_label]
-
         options = ttk.Frame(content)
         options.grid(row=1, column=0, columnspan=3, sticky="ew", pady=(0, 8))
         options.grid_columnconfigure((0, 1), weight=1)
@@ -690,8 +736,21 @@ class TranslatorApp(tk.Tk):
         self.advanced_mode_widgets = [overlay_topmost_widget, language_labels_widget, original_text_widget, translated_text_widget, speaker_capture_widget, microphone_capture_widget, record_logs_widget, speaker_tts_widget, start_virtual_mic_muted_widget]
         ttk.Checkbutton(frame, text=self._t("輸出到虛擬麥克風"), variable=self.virtual_mic_enabled, command=self._save).grid(row=next_row + 6, column=1, sticky="w")
         self._option_widgets = options.winfo_children()
-        frame = content
 
+    def _build_summary(self, frame: ttk.Frame) -> None:
+        runtime_label = ttk.Label(frame, textvariable=self.runtime_text, style="Muted.TLabel", wraplength=self._px(650))
+        runtime_label.grid(row=3, column=0, columnspan=3, sticky="ew", pady=4)
+        mode_label = ttk.Label(frame, textvariable=self.mode_text, style="Muted.TLabel", wraplength=self._px(650))
+        mode_label.grid(row=4, column=0, columnspan=3, sticky="ew", pady=4)
+        self._detail_labels = [runtime_label, mode_label]
+        preview = ttk.LabelFrame(frame, text=self._t("即時字幕預覽"), padding=self._px(12))
+        preview.grid(row=2, column=0, columnspan=3, sticky="ew", pady=8)
+        self._preview_text = tk.StringVar(value=self._t("尚無字幕；開始翻譯或使用「測試字幕」。"))
+        preview_label = ttk.Label(preview, textvariable=self._preview_text, wraplength=self._px(650))
+        preview_label.pack(fill="x")
+        self._detail_labels.append(preview_label)
+
+    def _build_tools(self, frame: ttk.Frame) -> None:
         tools = ttk.Frame(frame)
         tools.grid(row=5, column=0, columnspan=3, sticky="ew", pady=(12, 0))
         tools.grid_columnconfigure(0, weight=1)
@@ -774,15 +833,6 @@ class TranslatorApp(tk.Tk):
         for column in range(5):
             self._session_frame.grid_columnconfigure(column, weight=1)
         self.bind("<Control-s>", lambda _event: self._save_settings())
-        preview = ttk.LabelFrame(frame, text=self._t("即時字幕預覽"), padding=self._px(12))
-        preview.grid(row=2, column=0, columnspan=3, sticky="ew", pady=8)
-        self._preview_text = tk.StringVar(value=self._t("尚無字幕；開始翻譯或使用「測試字幕」。"))
-        preview_label = ttk.Label(preview, textvariable=self._preview_text, wraplength=self._px(650))
-        preview_label.pack(fill="x")
-        self._detail_labels.append(preview_label)
-        frame.grid_columnconfigure(1, weight=1)
-        self._apply_mode(save=False)
-        self._task_state_changed(TaskState("ui", "completed"))
 
     def _save_settings(self) -> None:
         if self._save():
@@ -1358,7 +1408,7 @@ class TranslatorApp(tk.Tk):
         body.pack(fill="both", expand=True, pady=(8, 0))
         scrollbar = ttk.Scrollbar(body)
         scrollbar.pack(side="right", fill="y")
-        text = tk.Text(body, wrap="word", yscrollcommand=scrollbar.set, height=20, background="#23252a", foreground="#f7f8f8", font=("Microsoft JhengHei UI", 10), relief="flat", padx=self._px(10), pady=self._px(8))
+        text = tk.Text(body, wrap="word", yscrollcommand=scrollbar.set, height=20, background=THEME["control"], foreground=THEME["text"], insertbackground=THEME["text"], selectbackground=THEME["accent"], font=UI_FONT, relief="flat", padx=self._px(10), pady=self._px(8))
         text.pack(side="left", fill="both", expand=True)
         scrollbar.configure(command=text.yview)
         text.insert("1.0", message)
@@ -1697,7 +1747,11 @@ class TranslatorApp(tk.Tk):
             if "CUDA --checkcuda probe" in status["missing"]:
                 error += "；CUDA probe：" + status["cuda_probe_output"]
             install_message = self._t("runtime 尚未就緒；請開啟 runtime 資料夾或匯入 runtime") if self.config.get("app_language") == "en" else runtime_install_message(runtime_dir(self.config), self.config.get("device", "auto"))
-            messagebox.showerror(self._t("runtime 不可用"), error + "\n\n" + install_message)
+            self._show_text_dialog(self._t("runtime 不可用"), error + "\n\n" + install_message, [
+                (self._t("匯入已解壓 runtime"), self._import_runtime),
+                (self._t("下載上游 runtime"), lambda: webbrowser.open(UPSTREAM_RUNTIME_RELEASE_URL)),
+                (self._t("一鍵診斷"), self._run_diagnostics),
+            ])
             self._set_last_error(error)
             self.status.set(error)
             return
@@ -1705,7 +1759,8 @@ class TranslatorApp(tk.Tk):
             corrupt = current_model_status == MODEL_INVALID
             title = self._t("模型不完整或損毀" if corrupt else "找不到模型")
             append_app_log(APP_DIR, "model_corrupt" if corrupt else "model_missing", model=config["model"])
-            messagebox.showerror(title, self._t("請下載或重新安裝模型：{model}", model=config["model"]) if self.config.get("app_language") == "en" else model_install_message(config["model"], app_models))
+            message = self._t("請下載或重新安裝模型：{model}", model=config["model"]) if self.config.get("app_language") == "en" else model_install_message(config["model"], app_models)
+            self._show_text_dialog(title, message, [(self._t("下載模型"), self._download_model), (self._t("一鍵診斷"), self._run_diagnostics)])
             error = f"{title}：{config['model']}"
             self._set_last_error(error)
             self.status.set(error)
