@@ -306,6 +306,21 @@ class GuiLogicTests(unittest.TestCase):
         self.assertIn("button.grid(row=counts[group] // columns", gui_source)
         self.assertIn("self.overlay.ensure_visible()", gui_source)
 
+    def test_main_window_configure_events_check_overlay_once_per_idle_pass(self):
+        app = TranslatorApp.__new__(TranslatorApp)
+        idle = []
+        app.after_idle = idle.append
+        app.overlay = Mock()
+        app._overlay_check_pending = False
+
+        for _ in range(20):
+            app._schedule_overlay_check()
+        self.assertEqual(len(idle), 1)
+        idle.pop()()
+        app.overlay.ensure_visible.assert_called_once_with()
+        app._schedule_overlay_check()
+        self.assertEqual(len(idle), 1)
+
     def test_async_audio_result_does_not_restore_stale_settings(self):
         app = TranslatorApp.__new__(TranslatorApp)
         app.config = {"provider": "openai"}
@@ -589,7 +604,7 @@ class GuiLogicTests(unittest.TestCase):
         self.assertIn('("設定精靈", self._show_setup_guide)', gui_source)
         self.assertIn('def _show_setup_guide(self) -> None:', gui_source)
         self.assertIn("一鍵診斷", gui_source)
-        self.assertIn("手動匯入 runtime", guide)
+        self.assertIn("匯入已解壓 runtime", guide)
         self.assertIn("下載模型", gui_source)
         self.assertIn("套用場景", gui_source)
         self.assertIn("自動優化", gui_source)

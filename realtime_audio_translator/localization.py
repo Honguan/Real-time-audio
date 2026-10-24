@@ -2,7 +2,7 @@ SUPPORTED_LANGUAGES = ("zh-TW", "en")
 
 SETUP_GUIDES = {
     "zh-TW": (
-        "1. 按「一鍵診斷」處理 runtime，進階模式也可手動匯入 runtime。\n"
+        "1. 按「一鍵診斷」處理 runtime，進階模式也可按「匯入已解壓 runtime」。\n"
         "2. 按「一鍵診斷」下載模型，或把模型 zip 解壓到 models 資料夾。\n"
         "3. 選擇「喇叭來源」、「麥克風來源」與「TTS 輸出」。\n"
         "4. 本工具「TTS 輸出」選虛擬音訊線輸出，通話軟體麥克風選對應的輸入。\n"
@@ -150,7 +150,7 @@ ENGLISH = {
     "裝置音測試失敗": "Device tone test failed",
     "正在測試麥克風": "Testing microphone",
     "麥克風測試失敗": "Microphone test failed",
-    "正在檢查啟動需求": "Checking startup requirements",
+    "正在驗證 runtime 與模型完整性（約 10–30 秒，可按停止取消）": "Verifying runtime and model integrity (about 10–30 seconds; press Stop to cancel)",
     "啟動檢查失敗": "Startup check failed",
     "正在測試 TTS": "Testing TTS",
     "TTS 測試已在進行": "A TTS test is already running",

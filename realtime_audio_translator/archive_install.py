@@ -24,7 +24,7 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _member_target(root: Path, name: str) -> Path:
+def _safe_member_parts(name: str) -> tuple[str, ...]:
     normalized = str(name).replace("\\", "/")
     posix = PurePosixPath(normalized)
     windows = PureWindowsPath(str(name))
@@ -32,7 +32,11 @@ def _member_target(root: Path, name: str) -> Path:
         raise RuntimeError(f"封存檔包含不安全路徑：{name}")
     if any(part in ("", ".", "..") or part.endswith((" ", ".")) for part in posix.parts):
         raise RuntimeError(f"封存檔包含不安全路徑：{name}")
-    target = root.joinpath(*posix.parts)
+    return posix.parts
+
+
+def _member_target(root: Path, name: str) -> Path:
+    target = root.joinpath(*_safe_member_parts(name))
     try:
         target.resolve(strict=False).relative_to(root.resolve())
     except ValueError as exc:
@@ -40,28 +44,34 @@ def _member_target(root: Path, name: str) -> Path:
     return target
 
 
-def _is_link_or_reparse(path: Path) -> bool:
-    info = path.lstat()
+def _is_link_or_reparse(path: Path, info: os.stat_result | None = None) -> bool:
+    info = info or path.lstat()
     attributes = getattr(info, "st_file_attributes", 0)
     reparse_flag = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
     return stat.S_ISLNK(info.st_mode) or bool(attributes & reparse_flag)
 
 
-def validate_tree(root: Path, max_files: int = MAX_ARCHIVE_FILES, max_total_size: int = MAX_TOTAL_SIZE) -> None:
+def validate_tree(root: Path, max_files: int = MAX_ARCHIVE_FILES, max_total_size: int = MAX_TOTAL_SIZE) -> dict[str, int]:
+    """Validate the tree and return regular files as {relative posix path: size}."""
     if not root.is_dir() or _is_link_or_reparse(root):
         raise RuntimeError(f"安裝根目錄不可為連結或 reparse point：{root}")
-    count = 0
+    files = {}
     total = 0
+    prefix = len(str(root / "x")) - 1  # handles ".", drive roots and trailing separators like rglob does
+    # rglob yields a directory before its contents and every entry is rejected if it is a link or
+    # reparse point, so lexical containment is enough here; resolving each path costs ~25 s on 5k files.
     for path in root.rglob("*"):
-        _member_target(root, path.relative_to(root).as_posix())
-        if _is_link_or_reparse(path):
+        relative = str(path)[prefix:].replace("\\", "/")
+        _safe_member_parts(relative)
+        info = path.lstat()
+        if _is_link_or_reparse(path, info):
             raise RuntimeError(f"安裝內容不可包含連結或 reparse point：{path.name}")
-        if path.is_file():
-            count += 1
-            size = path.stat().st_size
-            total += size
-            if size > MAX_MEMBER_SIZE or count > max_files or total > max_total_size:
+        if stat.S_ISREG(info.st_mode):
+            files[relative] = info.st_size
+            total += info.st_size
+            if info.st_size > MAX_MEMBER_SIZE or len(files) > max_files or total > max_total_size:
                 raise RuntimeError("封存檔超過允許的檔案數或容量")
+    return files
 
 
 def safe_extract_zip(archive_path: Path, destination: Path) -> None:
@@ -165,7 +175,8 @@ def write_install_manifest(root: Path) -> Path:
 
 def verify_install_manifest(root: Path, verify_hashes: bool = False) -> bool:
     try:
-        validate_tree(root)
+        actual = validate_tree(root)
+        actual.pop(INSTALL_MANIFEST, None)
         data = json.loads((root / INSTALL_MANIFEST).read_text(encoding="utf-8"))
         entries = data["files"]
         if data.get("version") != 1 or not isinstance(entries, list):
@@ -173,13 +184,14 @@ def verify_install_manifest(root: Path, verify_hashes: bool = False) -> bool:
         expected = set()
         hash_checks = []
         for entry in entries:
-            path = _member_target(root, entry["path"])
-            relative = path.relative_to(root).as_posix()
-            if relative in expected or not path.is_file() or _is_link_or_reparse(path) or path.stat().st_size != entry["size"]:
+            relative = "/".join(_safe_member_parts(entry["path"]))
+            if relative in expected or actual.get(relative) != entry["size"]:
                 return False
             expected.add(relative)
             if verify_hashes:
-                hash_checks.append((path, entry["sha256"]))
+                hash_checks.append((root / relative, entry["sha256"]))
+        if expected != actual.keys():
+            return False
         if verify_hashes:
             executor = ThreadPoolExecutor(max_workers=4)
             try:
@@ -188,9 +200,7 @@ def verify_install_manifest(root: Path, verify_hashes: bool = False) -> bool:
                     return False
             finally:
                 executor.shutdown(wait=True, cancel_futures=True)
-        manifest = root / INSTALL_MANIFEST
-        actual = {path.relative_to(root).as_posix() for path in root.rglob("*") if path.is_file() and path != manifest}
-        return expected == actual
+        return True
     except (KeyError, OSError, RuntimeError, TypeError, ValueError, json.JSONDecodeError):
         return False
 

@@ -8,7 +8,7 @@ import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
-from realtime_audio_translator.archive_install import atomic_replace_tree, safe_extract_archive, safe_extract_zip, verify_install_manifest, write_install_manifest
+from realtime_audio_translator.archive_install import atomic_replace_tree, safe_extract_archive, safe_extract_zip, validate_tree, verify_install_manifest, write_install_manifest
 
 
 class ArchiveInstallTests(unittest.TestCase):
@@ -132,6 +132,26 @@ class ArchiveInstallTests(unittest.TestCase):
             nested.parent.mkdir()
             nested.write_text("unexpected", encoding="utf-8")
             self.assertFalse(verify_install_manifest(root, verify_hashes=True))
+
+    def test_tree_validation_returns_relative_file_sizes_for_relative_and_absolute_roots(self):
+        import os
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "nested" / "deeper").mkdir(parents=True)
+            (root / "top.bin").write_bytes(b"12")
+            (root / "nested" / "deeper" / "leaf.bin").write_bytes(b"12345")
+            expected = {"top.bin": 2, "nested/deeper/leaf.bin": 5}
+
+            self.assertEqual(validate_tree(root), expected)
+            previous = Path.cwd()
+            os.chdir(root)
+            try:
+                self.assertEqual(validate_tree(Path(".")), expected)
+                write_install_manifest(Path("."))
+                self.assertTrue(verify_install_manifest(Path("."), verify_hashes=True))
+            finally:
+                os.chdir(previous)
 
     def test_manifest_hashes_detect_same_size_change_among_multiple_files(self):
         with tempfile.TemporaryDirectory() as tmp:

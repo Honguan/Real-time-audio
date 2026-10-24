@@ -454,7 +454,8 @@ class Overlay(tk.Toplevel):
         if not self.winfo_ismapped():
             return
         x, y = clamp_window_position(self.winfo_x(), self.winfo_y(), self.winfo_width(), self.winfo_height(), _work_area(self, self.winfo_x(), self.winfo_y()))
-        self.geometry(_geometry_offset(x, y))
+        if (x, y) != (self.winfo_x(), self.winfo_y()):
+            self.geometry(_geometry_offset(x, y))
 
     def _fit_height(self) -> None:
         self.update_idletasks()
@@ -475,7 +476,7 @@ class Overlay(tk.Toplevel):
 
     def set_font_size(self, font_size: int) -> None:
         for label in self.labels:
-            label.configure(font=("Microsoft JhengHei UI", font_size))
+            label.configure(font=(UI_FONT[0], font_size))
         self._fit_height()
 
 
@@ -522,7 +523,8 @@ class TranslatorApp(tk.Tk):
             int(self.config.get("overlay_y", -1)),
             self._overlay_moved,
         )
-        self.bind("<Configure>", lambda event: self.after_idle(self.overlay.ensure_visible) if event.widget is self else None, add="+")
+        self._overlay_check_pending = False
+        self.bind("<Configure>", lambda event: self._schedule_overlay_check() if event.widget is self else None, add="+")
         self._build()
         self._set_overlay_visible(bool(self.config.get("overlay_visible", True)))
         self._refresh_lists()
@@ -1078,6 +1080,18 @@ class TranslatorApp(tk.Tk):
 
     def _post_ui(self, kind: Literal["status", "overlay", "callback"], *args, engine: RealtimeEngine | None = None) -> None:
         self._engine_events.put(UiEvent(kind, args, engine))
+
+    def _schedule_overlay_check(self) -> None:
+        # Dragging the main window fires many Configure events; check the overlay once per idle pass.
+        if self._overlay_check_pending:
+            return
+        self._overlay_check_pending = True
+
+        def check() -> None:
+            self._overlay_check_pending = False
+            self.overlay.ensure_visible()
+
+        self.after_idle(check)
 
     def _drain_ui_events(self) -> None:
         assert threading.current_thread() is threading.main_thread(), "Tk event pump must run on the main thread"
@@ -1725,7 +1739,7 @@ class TranslatorApp(tk.Tk):
         target = runtime_dir(config)
         app_models = models_dir(config)
         self._submit(
-            "正在檢查啟動需求",
+            "正在驗證 runtime 與模型完整性（約 10–30 秒，可按停止取消）",
             lambda: (
                 self.runtime_service.check(target, config.get("device", "auto"), config.get("compute_type", "auto"), verify_hashes=True),
                 self.model_service.status(config["model"], self.repo_root / "_models", app_models),
