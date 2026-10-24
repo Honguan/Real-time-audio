@@ -33,6 +33,9 @@ from .tts import list_windows_sapi_voices
 
 LANGUAGE_CHOICES = ("auto", "zh", "en", "ja", "ko")
 TARGET_LANGUAGE_CHOICES = ("zh", "en", "ja", "ko")
+LANGUAGE_KEYS = ("app_language", "source_language", "target_language")
+# Endonyms read the same in every interface language; only "auto" is translated.
+LANGUAGE_NAMES = {"zh-TW": "繁體中文", "en": "English", "zh": "中文", "ja": "日本語", "ko": "한국어"}
 PROVIDER_CHOICES = ("local", "google", "openai")
 TTS_PROVIDER_CHOICES = ("local", "google", "openai")
 PERFORMANCE_CHOICES = ("low_latency", "balanced", "quality", "offline_light")
@@ -264,6 +267,13 @@ def clamp_window_position(x: int, y: int, width: int, height: int, work_area: tu
 
 def responsive_button_columns(width: int) -> int:
     return max(1, min(5, width // 180))
+
+
+def language_value(label: str) -> str:
+    """Return the code from a "Name (code)" label; plain codes pass through unchanged."""
+    label = str(label).strip()
+    name, separator, code = label.rpartition(" (")
+    return code[:-1] if separator and name and code.endswith(")") else label
 
 
 def _geometry_offset(x: int, y: int) -> str:
@@ -548,6 +558,10 @@ class TranslatorApp(tk.Tk):
     def _t(self, message: str, **values) -> str:
         return translate(self.config.get("app_language"), message, **values)
 
+    def _language_label(self, code: str) -> str:
+        name = self._t("自動偵測") if code == "auto" else LANGUAGE_NAMES.get(code)
+        return f"{name} ({code})" if name else str(code)
+
     def _build(self) -> None:
         self._build_styles()
         self._build_variables()
@@ -583,6 +597,7 @@ class TranslatorApp(tk.Tk):
         style.configure("TLabelframe", background=c["bg"], bordercolor=c["border"])
         style.configure("TLabelframe.Label", background=c["bg"], foreground=c["muted"], font=(UI_FONT[0], 10, "bold"))
         style.configure("Muted.TLabel", foreground=c["muted"])
+        style.configure("Warning.TLabel", foreground=c["warning"])
         style.configure("Bar.TFrame", background=c["bar"])
         style.configure("Bar.TLabel", background=c["bar"])
         style.configure("BarMuted.TLabel", background=c["bar"], foreground=c["muted"])
@@ -599,6 +614,8 @@ class TranslatorApp(tk.Tk):
     def _build_variables(self) -> None:
         self.vars = {key: tk.StringVar(value=str(value)) for key, value in self.config.items()}
         self.vars["scenario"].set(self._t(scenario_label(self.config["scenario"])))
+        for key in LANGUAGE_KEYS:
+            self.vars[key].set(self._language_label(self.config[key]))
         self.overlay_visible = tk.BooleanVar(value=bool(self.config["overlay_visible"]))
         self.overlay_topmost = tk.BooleanVar(value=bool(self.config["overlay_topmost"]))
         self.show_language_labels = tk.BooleanVar(value=bool(self.config["show_language_labels"]))
@@ -667,12 +684,12 @@ class TranslatorApp(tk.Tk):
             label_widget = ttk.Label(frame, text=self._t(label))
             label_widget.grid(row=row, column=0, sticky="w", pady=4)
             row_widgets.append(label_widget)
-            if key in ("source_language", "target_language"):
-                values = LANGUAGE_CHOICES if key == "source_language" else TARGET_LANGUAGE_CHOICES
-                widget = ttk.Combobox(frame, textvariable=self.vars[key], values=values)
+            if key in LANGUAGE_KEYS:
+                values = SUPPORTED_LANGUAGES if key == "app_language" else LANGUAGE_CHOICES if key == "source_language" else TARGET_LANGUAGE_CHOICES
+                widget = ttk.Combobox(frame, textvariable=self.vars[key], values=[self._language_label(code) for code in values], state="readonly")
                 widget.bind("<<ComboboxSelected>>", lambda _event: self._save())
-            elif key in ("app_language", "provider", "translation_style", "tts_provider", "performance_mode", "scenario", "conversation_log_content"):
-                values = SUPPORTED_LANGUAGES if key == "app_language" else sorted(SETTING_CHOICES[key]) if key == "translation_style" else tuple(self._t(scenario_label(key)) for key in SCENARIO_CHOICES) if key == "scenario" else ("both", "original", "translation", "none") if key == "conversation_log_content" else PERFORMANCE_CHOICES if key == "performance_mode" else TTS_PROVIDER_CHOICES if key == "tts_provider" else PROVIDER_CHOICES
+            elif key in ("provider", "translation_style", "tts_provider", "performance_mode", "scenario", "conversation_log_content"):
+                values = sorted(SETTING_CHOICES[key]) if key == "translation_style" else tuple(self._t(scenario_label(key)) for key in SCENARIO_CHOICES) if key == "scenario" else ("both", "original", "translation", "none") if key == "conversation_log_content" else PERFORMANCE_CHOICES if key == "performance_mode" else TTS_PROVIDER_CHOICES if key == "tts_provider" else PROVIDER_CHOICES
                 widget = ttk.Combobox(frame, textvariable=self.vars[key], values=values, state="readonly")
                 widget.bind("<<ComboboxSelected>>", lambda _event, name=key: self._apply_performance_mode() if name == "performance_mode" else self._apply_scenario() if name == "scenario" else self._save())
             elif key in AUDIO_DEVICE_KEYS or key in ("model", "device", "compute_type", "tts_voice_name"):
@@ -741,6 +758,7 @@ class TranslatorApp(tk.Tk):
 
     def _build_summary(self, frame: ttk.Frame) -> None:
         runtime_label = ttk.Label(frame, textvariable=self.runtime_text, style="Muted.TLabel", wraplength=self._px(650))
+        self._runtime_label = runtime_label
         runtime_label.grid(row=3, column=0, columnspan=3, sticky="ew", pady=4)
         mode_label = ttk.Label(frame, textvariable=self.mode_text, style="Muted.TLabel", wraplength=self._px(650))
         mode_label.grid(row=4, column=0, columnspan=3, sticky="ew", pady=4)
@@ -965,12 +983,12 @@ class TranslatorApp(tk.Tk):
         self.status.set("; ".join(voices) if voices else self._t("找不到 Windows TTS 聲音"))
 
     def _swap_languages(self) -> None:
-        if self.vars["source_language"].get() == "auto":
+        if language_value(self.vars["source_language"].get()) == "auto":
             self.status.set(self._t("自動偵測來源語言時無法交換；請先選擇固定來源語言"))
             return
-        source, target = swap_language_values(self.vars["source_language"].get(), self.vars["target_language"].get())
-        self.vars["source_language"].set(source)
-        self.vars["target_language"].set(target)
+        source, target = swap_language_values(language_value(self.vars["source_language"].get()), language_value(self.vars["target_language"].get()))
+        self.vars["source_language"].set(self._language_label(source))
+        self.vars["target_language"].set(self._language_label(target))
         self._save()
 
     def _config_from_vars(self) -> dict:
@@ -979,7 +997,7 @@ class TranslatorApp(tk.Tk):
         for key, variable in self.vars.items():
             if key not in editable_keys:
                 continue
-            config[key] = self._device_id_by_label.get(variable.get(), self.config.get(key, "")) if key in AUDIO_DEVICE_KEYS else variable.get()
+            config[key] = self._device_id_by_label.get(variable.get(), self.config.get(key, "")) if key in AUDIO_DEVICE_KEYS else language_value(variable.get()) if key in LANGUAGE_KEYS else variable.get()
         config["scenario"] = next((key for key in SCENARIO_CHOICES if config["scenario"] == self._t(scenario_label(key))), scenario_key(config["scenario"]))
         config["overlay_visible"] = self.overlay_visible.get()
         config["overlay_topmost"] = self.overlay_topmost.get()
@@ -1050,7 +1068,7 @@ class TranslatorApp(tk.Tk):
         self.config = config
         for key, variable in self.__dict__.get("vars", {}).items():
             if key in {name for _label, name in SETTING_ROWS} - set(AUDIO_DEVICE_KEYS) - {"scenario"}:
-                variable.set(str(config[key]))
+                variable.set(self._language_label(config[key]) if key in LANGUAGE_KEYS else str(config[key]))
         self.mode_text.set(self._mode_text())
         self._update_restart_notice()
         if language_changed:
@@ -1165,7 +1183,7 @@ class TranslatorApp(tk.Tk):
             return "\n".join((
                 self._t("模式：翻譯 {provider}；TTS {tts_provider}", provider=self.config["provider"], tts_provider=self.config["tts_provider"]),
                 self._t("對話紀錄：{state}", state=self._t("開啟" if self.config["record_logs"] else "關閉")),
-                self._t("場景：{scenario}；來源 {source}；目標 {target}", scenario=self._t(scenario_label(str(self.config.get("scenario", "")))), source=self.config["source_language"], target=self.config["target_language"]),
+                self._t("場景：{scenario}；來源 {source}；目標 {target}", scenario=self._t(scenario_label(str(self.config.get("scenario", "")))), source=self._language_label(self.config["source_language"]), target=self._language_label(self.config["target_language"])),
             ))
         return f"{mode_notice(self.config['provider'], self.config['tts_provider'], bool(self.config['record_logs']), self.config.get('local_translate_url', ''))}\n{conversation_log_notice(self.config)}\n{main_status_summary(self.config)}"
 
@@ -1330,16 +1348,19 @@ class TranslatorApp(tk.Tk):
             return
         if result.error is not None:
             self.runtime_text.set(self._t("runtime 檢查失敗：{error}", error=result.error))
+            self._runtime_label.configure(style="Warning.TLabel")
             return
         check = result.value
         assert check is not None
         status = check.status
+        ready = status["ready"] and model_available(config["model"], self.repo_root / "_models", models_dir(config))
+        self._runtime_label.configure(style="Muted.TLabel" if ready else "Warning.TLabel")
         if status["ready"]:
             self.config["last_ffmpeg_failed"] = check.ffmpeg_failed
             self.vars["last_ffmpeg_failed"].set(str(check.ffmpeg_failed))
             save_config_state(APP_DIR, self.config, {"last_ffmpeg_failed"})
             note = self._t("runtime 已就緒；CPU：{cpu}；CUDA：{cuda}", cpu=self._t("可用" if status["cpu_ready"] else "不可用"), cuda=self._t("可用" if status["cuda_ready"] else "不可用"))
-            if not model_available(config["model"], self.repo_root / "_models", models_dir(config)):
+            if not ready:
                 note += "; " + self._t("找不到模型：{model}", model=config["model"])
             self.runtime_text.set(note)
         elif not self.config.get("advanced_mode", False):
@@ -1462,15 +1483,16 @@ class TranslatorApp(tk.Tk):
             self._open_logs()
 
     def _lock_language(self) -> None:
+        source = language_value(self.vars["source_language"].get())
         locked = language_lock_value(
-            self.vars["source_language"].get(),
+            source,
             self.config.get("last_detected_language", ""),
-            self.vars["target_language"].get(),
+            language_value(self.vars["target_language"].get()),
         )
-        if locked == self.vars["source_language"].get():
+        if locked == source:
             self.status.set(self._t("沒有偵測到可鎖定的語言"))
             return
-        self.vars["source_language"].set(locked)
+        self.vars["source_language"].set(self._language_label(locked))
         self._save()
         self.status.set(self._t("來源語言已鎖定：{language}", language=locked))
 
@@ -1536,7 +1558,7 @@ class TranslatorApp(tk.Tk):
     def _load_config_into_widgets(self, updated: dict) -> None:
         for key, variable in self.vars.items():
             if key in updated:
-                value = self._device_label_by_id.get(str(updated[key]), self._t("系統預設")) if key in AUDIO_DEVICE_KEYS else self._t(scenario_label(str(updated[key]))) if key == "scenario" else str(updated[key])
+                value = self._device_label_by_id.get(str(updated[key]), self._t("系統預設")) if key in AUDIO_DEVICE_KEYS else self._t(scenario_label(str(updated[key]))) if key == "scenario" else self._language_label(str(updated[key])) if key in LANGUAGE_KEYS else str(updated[key])
                 variable.set(value)
         self.overlay_visible.set(bool(updated.get("overlay_visible", self.overlay_visible.get())))
         self.overlay_topmost.set(bool(updated.get("overlay_topmost", self.overlay_topmost.get())))

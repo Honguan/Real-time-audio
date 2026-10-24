@@ -8,7 +8,7 @@ from unittest.mock import Mock, patch
 from realtime_audio_translator.config import DEFAULT_CONFIG, _has_reparse_point, clear_cache, clear_logs, ensure_app_dirs, ensure_glossary_file, load_config, log_files_to_clear, save_audio_devices, save_config
 from realtime_audio_translator.diagnostics import DiagnosticIssue, collect_diagnostics
 from realtime_audio_translator.engine import RealtimeEngine, audio_devices_overlap, direction_label, drain_queue, overlay_text_from_config, safe_target_language
-from realtime_audio_translator.gui import LANGUAGE_CHOICES, PERFORMANCE_CHOICES, PROVIDER_CHOICES, TARGET_LANGUAGE_CHOICES, TTS_PROVIDER_CHOICES, TranslatorApp, _geometry_offset, clamp_window_position, conversation_log_notice, diagnostic_action_label, diagnostic_actions, first_diagnostic_action, first_run_setup_action, first_run_wizard_needed, format_overlay_line, language_lock_value, latency_seconds_value, main_status_summary, mode_notice, overlay_clipboard_text, overlay_font_size_value, overlay_hold_seconds_value, overlay_opacity_value, overlay_visibility_action, performance_segment_seconds, responsive_button_columns, setup_guide_actions, setup_guide_message, status_message_is_error, subtitle_updates_allowed, swap_language_values, troubleshooting_action, visible_button_texts, visible_setting_keys
+from realtime_audio_translator.gui import LANGUAGE_CHOICES, PERFORMANCE_CHOICES, PROVIDER_CHOICES, TARGET_LANGUAGE_CHOICES, TTS_PROVIDER_CHOICES, TranslatorApp, _geometry_offset, clamp_window_position, conversation_log_notice, diagnostic_action_label, diagnostic_actions, first_diagnostic_action, first_run_setup_action, first_run_wizard_needed, format_overlay_line, language_lock_value, language_value, latency_seconds_value, main_status_summary, mode_notice, overlay_clipboard_text, overlay_font_size_value, overlay_hold_seconds_value, overlay_opacity_value, overlay_visibility_action, performance_segment_seconds, responsive_button_columns, setup_guide_actions, setup_guide_message, status_message_is_error, subtitle_updates_allowed, swap_language_values, troubleshooting_action, visible_button_texts, visible_setting_keys
 
 
 class GuiLogicTests(unittest.TestCase):
@@ -1112,8 +1112,39 @@ class GuiLogicTests(unittest.TestCase):
     def test_language_choices_cover_mvp_languages(self):
         self.assertEqual(LANGUAGE_CHOICES, ("auto", "zh", "en", "ja", "ko"))
         self.assertEqual(TARGET_LANGUAGE_CHOICES, ("zh", "en", "ja", "ko"))
-        gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
-        self.assertIn('values = LANGUAGE_CHOICES if key == "source_language" else TARGET_LANGUAGE_CHOICES', gui_source)
+        app = TranslatorApp.__new__(TranslatorApp)
+        for language, auto_label in (("zh-TW", "自動偵測 (auto)"), ("en", "Auto detect (auto)")):
+            app.config = {"app_language": language}
+            self.assertEqual(app._language_label("auto"), auto_label)
+            self.assertEqual(app._language_label("ja"), "日本語 (ja)")
+        self.assertEqual(app._language_label("xx"), "xx")
+        for code in (*LANGUAGE_CHOICES, "zh-TW", "xx"):
+            self.assertEqual(language_value(app._language_label(code)), code)
+        self.assertEqual(language_value(" zh "), "zh")
+
+    def test_language_settings_show_names_but_store_codes(self):
+        import tkinter as tk
+
+        app = TranslatorApp.__new__(TranslatorApp)
+        app.config = dict(DEFAULT_CONFIG, app_language="en", source_language="ja", target_language="zh")
+        try:
+            root = tk.Tk()
+        except tk.TclError as exc:
+            self.skipTest(f"Tk display unavailable: {exc}")
+        try:
+            app._build_variables()
+            self.assertEqual(app.vars["source_language"].get(), "日本語 (ja)")
+            self.assertEqual(app.vars["app_language"].get(), "English (en)")
+            app._device_id_by_label = {}
+            config = app._config_from_vars()
+            self.assertEqual((config["app_language"], config["source_language"], config["target_language"]), ("en", "ja", "zh"))
+            app.status = Mock()
+            app._save = Mock(return_value=True)
+            app._swap_languages()
+            self.assertEqual((app.vars["source_language"].get(), app.vars["target_language"].get()), ("中文 (zh)", "日本語 (ja)"))
+        finally:
+            root.destroy()
+
 
     def test_troubleshooting_actions_cover_common_setup_issues(self):
         self.assertEqual(troubleshooting_action("speaker_audio"), ("open", "ms-settings:sound"))

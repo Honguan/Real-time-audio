@@ -88,6 +88,7 @@ ENGLISH = {
     "列出": "List",
     "開啟 runtime 資料夾": "Open runtime folder",
     "匯入已解壓 runtime": "Import extracted runtime",
+    "自動偵測": "Auto detect",
     "下載上游 runtime": "Download upstream runtime",
     "顯示字幕": "Show subtitles",
     "字幕最上層": "Keep subtitles on top",
