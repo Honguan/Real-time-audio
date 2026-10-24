@@ -101,6 +101,18 @@ function Compress-7ZipFolderContents($SourceDir, $DestinationArchive) {
   }
 }
 
+function Remove-StageFolders {
+  foreach ($Stage in "_stage_app", "_stage_runtime", "_stage_runtime_core", "_stage_runtime_dlls", "_stage_models") {
+    $StagePath = Join-Path $Out $Stage
+    if (Test-Path -LiteralPath $StagePath) {
+      Remove-Item -LiteralPath $StagePath -Recurse -Force
+    }
+  }
+}
+
+# A failed earlier run can leave stage folders behind, which breaks -AppendOutput.
+Remove-StageFolders
+
 if ($CreateApp) {
   $AppExe = Join-Path $DistDir "RealtimeAudioTranslator.exe"
   if (-not (Test-Path -LiteralPath $AppExe)) {
@@ -266,18 +278,4 @@ try {
   $Sha256.Dispose()
 }
 
-if (Test-Path -LiteralPath (Join-Path $Out "_stage_app")) {
-  Remove-Item -LiteralPath (Join-Path $Out "_stage_app") -Recurse -Force
-}
-if (Test-Path -LiteralPath (Join-Path $Out "_stage_runtime")) {
-  Remove-Item -LiteralPath (Join-Path $Out "_stage_runtime") -Recurse -Force
-}
-if (Test-Path -LiteralPath (Join-Path $Out "_stage_runtime_core")) {
-  Remove-Item -LiteralPath (Join-Path $Out "_stage_runtime_core") -Recurse -Force
-}
-if (Test-Path -LiteralPath (Join-Path $Out "_stage_runtime_dlls")) {
-  Remove-Item -LiteralPath (Join-Path $Out "_stage_runtime_dlls") -Recurse -Force
-}
-if (Test-Path -LiteralPath (Join-Path $Out "_stage_models")) {
-  Remove-Item -LiteralPath (Join-Path $Out "_stage_models") -Recurse -Force
-}
+Remove-StageFolders
