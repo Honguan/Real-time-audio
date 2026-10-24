@@ -18,6 +18,25 @@ def git_blob_digest(data: bytes) -> str:
 
 
 class DownloadResponse:
+    def test_asset_generation_keeps_pixel_identical_files(self):
+        import os
+        import tempfile
+        from PIL import Image
+
+        from realtime_audio_translator.tools.generate_assets import generate_icon
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            generate_icon(root)
+            png = root / "assets" / "icon.png"
+            os.utime(png, (1, 1))
+            generate_icon(root)
+            self.assertEqual(png.stat().st_mtime, 1)
+            png.write_bytes(b"stale")
+            generate_icon(root)
+            with Image.open(png) as regenerated:
+                self.assertEqual(regenerated.size, (512, 512))
+
     def __init__(self, data=b"", status_code=200, json_data=None, fail=False):
         self.data = data
         self.status_code = status_code

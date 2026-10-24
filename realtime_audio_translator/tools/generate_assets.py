@@ -17,8 +17,17 @@ def generate_icon(root: Path | None = None) -> None:
     draw.ellipse((360, 216, 408, 302), fill="#1f6feb")
     font = ImageFont.load_default()
     draw.text((205, 186), "RT", fill="#101418", font=font)
-    image.save(assets / "icon.png")
-    image.save(assets / "icon.ico", sizes=[(256, 256), (128, 128), (64, 64), (32, 32), (16, 16)])
+    png, ico = assets / "icon.png", assets / "icon.ico"
+    # Different Pillow versions encode identical pixels differently; keep tracked files untouched.
+    if png.exists() and ico.exists():
+        try:
+            with Image.open(png) as existing:
+                if existing.size == image.size and existing.convert("RGBA").tobytes() == image.tobytes():
+                    return
+        except OSError:
+            pass
+    image.save(png)
+    image.save(ico, sizes=[(256, 256), (128, 128), (64, 64), (32, 32), (16, 16)])
 
 
 if __name__ == "__main__":
