@@ -306,6 +306,26 @@ class GuiLogicTests(unittest.TestCase):
         self.assertIn("button.grid(row=counts[group] // columns", gui_source)
         self.assertIn("self.overlay.ensure_visible()", gui_source)
 
+    def test_check_indicator_draws_mark_only_when_selected(self):
+        import tkinter as tk
+        from realtime_audio_translator.gui import check_indicator_image
+
+        try:
+            root = tk.Tk()
+        except tk.TclError as exc:
+            self.skipTest(f"Tk display unavailable: {exc}")
+        try:
+            on = check_indicator_image(21, "#5e6ad2", "#5e6ad2", "#ffffff")
+            off = check_indicator_image(21, "#23252a", "#34343a", None)
+            self.assertEqual((on.width(), on.height()), (21, 21))
+            # (9, 15) lies on the check mark stroke; (16, 16) is plain fill.
+            self.assertEqual(on.get(9, 15), (255, 255, 255))
+            self.assertEqual(on.get(16, 16), (94, 106, 210))
+            self.assertEqual(off.get(9, 15), (35, 37, 42))
+            self.assertEqual(off.get(0, 0), (52, 52, 58))
+        finally:
+            root.destroy()
+
     def test_main_window_configure_events_check_overlay_once_per_idle_pass(self):
         app = TranslatorApp.__new__(TranslatorApp)
         idle = []
@@ -1121,6 +1141,16 @@ class GuiLogicTests(unittest.TestCase):
         for code in (*LANGUAGE_CHOICES, "zh-TW", "xx"):
             self.assertEqual(language_value(app._language_label(code)), code)
         self.assertEqual(language_value(" zh "), "zh")
+        from realtime_audio_translator.config import SETTING_CHOICES
+        from realtime_audio_translator.gui import CHOICE_NAMES
+
+        app.config = {"app_language": "en"}
+        self.assertEqual(app._choice_label("performance_mode", "low_latency"), "Low latency (low_latency)")
+        for key, names in CHOICE_NAMES.items():
+            self.assertEqual(set(names), SETTING_CHOICES[key])
+            for code in names:
+                self.assertEqual(language_value(app._choice_label(key, code)), code)
+
 
     def test_language_settings_show_names_but_store_codes(self):
         import tkinter as tk

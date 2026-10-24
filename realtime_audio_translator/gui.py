@@ -34,6 +34,14 @@ from .tts import list_windows_sapi_voices
 LANGUAGE_CHOICES = ("auto", "zh", "en", "ja", "ko")
 TARGET_LANGUAGE_CHOICES = ("zh", "en", "ja", "ko")
 LANGUAGE_KEYS = ("app_language", "source_language", "target_language")
+CHOICE_NAMES = {
+    "provider": {"local": "本機", "google": "Google", "openai": "OpenAI"},
+    "tts_provider": {"local": "本機", "google": "Google", "openai": "OpenAI"},
+    "performance_mode": {"low_latency": "低延遲", "balanced": "平衡", "quality": "高品質", "offline_light": "離線輕量"},
+    "conversation_log_content": {"both": "原文與翻譯", "original": "只有原文", "translation": "只有翻譯", "none": "不記錄內容"},
+    "translation_style": {"plain": "一般", "formal": "正式"},
+}
+LABELED_KEYS = (*LANGUAGE_KEYS, *CHOICE_NAMES)
 # Endonyms read the same in every interface language; only "auto" is translated.
 LANGUAGE_NAMES = {"zh-TW": "繁體中文", "en": "English", "zh": "中文", "ja": "日本語", "ko": "한국어"}
 PROVIDER_CHOICES = ("local", "google", "openai")
@@ -269,7 +277,23 @@ def responsive_button_columns(width: int) -> int:
     return max(1, min(5, width // 180))
 
 
-def language_value(label: str) -> str:
+def check_indicator_image(size: int, fill: str, border: str, mark: str | None) -> tk.PhotoImage:
+    image = tk.PhotoImage(width=size, height=size)
+    image.put(border, to=(0, 0, size, size))
+    image.put(fill, to=(1, 1, size - 1, size - 1))
+    if mark:
+        thickness = max(2, size // 7)
+        points = ((0.2, 0.5), (0.42, 0.72), (0.8, 0.28))
+        for (x1, y1), (x2, y2) in zip(points, points[1:]):
+            steps = size * 2
+            for step in range(steps + 1):
+                x = round((x1 + (x2 - x1) * step / steps) * size)
+                y = round((y1 + (y2 - y1) * step / steps) * size)
+                image.put(mark, to=(x - thickness // 2, y - thickness // 2, x - thickness // 2 + thickness, y - thickness // 2 + thickness))
+    return image
+
+
+def language_value(label: str) -> str:  # also used for other "Name (code)" choice labels
     """Return the code from a "Name (code)" label; plain codes pass through unchanged."""
     label = str(label).strip()
     name, separator, code = label.rpartition(" (")
@@ -562,6 +586,13 @@ class TranslatorApp(tk.Tk):
         name = self._t("自動偵測") if code == "auto" else LANGUAGE_NAMES.get(code)
         return f"{name} ({code})" if name else str(code)
 
+    def _choice_label(self, key: str, code: str) -> str:
+        if key in LANGUAGE_KEYS:
+            return self._language_label(code)
+        name = CHOICE_NAMES.get(key, {}).get(code)
+        # Brand names have no translation entry, so fall back to the name itself.
+        return f"{translate_known(self.config.get('app_language'), name)} ({code})" if name else str(code)
+
     def _build(self) -> None:
         self._build_styles()
         self._build_variables()
@@ -587,8 +618,17 @@ class TranslatorApp(tk.Tk):
         style.map("TEntry", bordercolor=[("focus", c["accent"])], lightcolor=[("focus", c["accent"])])
         style.configure("TCombobox", fieldbackground=c["control"], background=c["control"], padding=self._px(5), arrowsize=self._px(14))
         style.map("TCombobox", fieldbackground=[("readonly", c["control"])], foreground=[("readonly", c["text"])], background=[("active", c["hover"])], bordercolor=[("focus", c["accent"])], lightcolor=[("focus", c["accent"])], arrowcolor=[("active", c["text"])])
-        style.configure("TCheckbutton", indicatorsize=self._px(12), indicatorbackground=c["control"], indicatorforeground="#ffffff", upperbordercolor=c["border"], lowerbordercolor=c["border"])
-        style.map("TCheckbutton", indicatorbackground=[("selected", c["accent"]), ("active", c["hover"])], background=[("active", c["bg"])])
+        # clam draws a cross for "selected", which reads as "off"; use a drawn check mark instead.
+        self._check_images = {state: check_indicator_image(self._px(14), *colors) for state, colors in {
+            "off": (c["control"], c["border"], None),
+            "active": (c["hover"], c["muted"], None),
+            "on": (c["accent"], c["accent"], "#ffffff"),
+            "disabled": (c["bg"], c["border"], c["disabled"]),
+        }.items()}
+        if "Check.indicator" not in style.element_names():
+            style.element_create("Check.indicator", "image", self._check_images["off"], ("disabled", self._check_images["disabled"]), ("selected", self._check_images["on"]), ("active", self._check_images["active"]), width=self._px(14) + self._px(6), sticky="w")
+        style.layout("TCheckbutton", [("Checkbutton.padding", {"sticky": "nswe", "children": [("Check.indicator", {"side": "left", "sticky": ""}), ("Checkbutton.focus", {"side": "left", "sticky": "w", "children": [("Checkbutton.label", {"sticky": "nswe"})]})]})])
+        style.map("TCheckbutton", background=[("active", c["bg"])])
         style.configure("Vertical.TScrollbar", background=c["control"], bordercolor=c["bg"], lightcolor=c["control"], darkcolor=c["control"], arrowsize=self._px(12))
         style.map("Vertical.TScrollbar", background=[("active", c["border"])])
         style.configure("TNotebook", background=c["bg"], bordercolor=c["border"], tabmargins=(0, 0, 0, 0))
@@ -614,8 +654,8 @@ class TranslatorApp(tk.Tk):
     def _build_variables(self) -> None:
         self.vars = {key: tk.StringVar(value=str(value)) for key, value in self.config.items()}
         self.vars["scenario"].set(self._t(scenario_label(self.config["scenario"])))
-        for key in LANGUAGE_KEYS:
-            self.vars[key].set(self._language_label(self.config[key]))
+        for key in LABELED_KEYS:
+            self.vars[key].set(self._choice_label(key, self.config[key]))
         self.overlay_visible = tk.BooleanVar(value=bool(self.config["overlay_visible"]))
         self.overlay_topmost = tk.BooleanVar(value=bool(self.config["overlay_topmost"]))
         self.show_language_labels = tk.BooleanVar(value=bool(self.config["show_language_labels"]))
@@ -690,7 +730,7 @@ class TranslatorApp(tk.Tk):
                 widget.bind("<<ComboboxSelected>>", lambda _event: self._save())
             elif key in ("provider", "translation_style", "tts_provider", "performance_mode", "scenario", "conversation_log_content"):
                 values = sorted(SETTING_CHOICES[key]) if key == "translation_style" else tuple(self._t(scenario_label(key)) for key in SCENARIO_CHOICES) if key == "scenario" else ("both", "original", "translation", "none") if key == "conversation_log_content" else PERFORMANCE_CHOICES if key == "performance_mode" else TTS_PROVIDER_CHOICES if key == "tts_provider" else PROVIDER_CHOICES
-                widget = ttk.Combobox(frame, textvariable=self.vars[key], values=values, state="readonly")
+                widget = ttk.Combobox(frame, textvariable=self.vars[key], values=[self._choice_label(key, value) for value in values], state="readonly")
                 widget.bind("<<ComboboxSelected>>", lambda _event, name=key: self._apply_performance_mode() if name == "performance_mode" else self._apply_scenario() if name == "scenario" else self._save())
             elif key in AUDIO_DEVICE_KEYS or key in ("model", "device", "compute_type", "tts_voice_name"):
                 widget = ttk.Combobox(frame, textvariable=self.vars[key], values=[], state="readonly" if key in AUDIO_DEVICE_KEYS or key in {"device", "compute_type"} else "normal")
@@ -997,7 +1037,7 @@ class TranslatorApp(tk.Tk):
         for key, variable in self.vars.items():
             if key not in editable_keys:
                 continue
-            config[key] = self._device_id_by_label.get(variable.get(), self.config.get(key, "")) if key in AUDIO_DEVICE_KEYS else language_value(variable.get()) if key in LANGUAGE_KEYS else variable.get()
+            config[key] = self._device_id_by_label.get(variable.get(), self.config.get(key, "")) if key in AUDIO_DEVICE_KEYS else language_value(variable.get()) if key in LABELED_KEYS else variable.get()
         config["scenario"] = next((key for key in SCENARIO_CHOICES if config["scenario"] == self._t(scenario_label(key))), scenario_key(config["scenario"]))
         config["overlay_visible"] = self.overlay_visible.get()
         config["overlay_topmost"] = self.overlay_topmost.get()
@@ -1068,7 +1108,7 @@ class TranslatorApp(tk.Tk):
         self.config = config
         for key, variable in self.__dict__.get("vars", {}).items():
             if key in {name for _label, name in SETTING_ROWS} - set(AUDIO_DEVICE_KEYS) - {"scenario"}:
-                variable.set(self._language_label(config[key]) if key in LANGUAGE_KEYS else str(config[key]))
+                variable.set(self._choice_label(key, config[key]) if key in LABELED_KEYS else str(config[key]))
         self.mode_text.set(self._mode_text())
         self._update_restart_notice()
         if language_changed:
@@ -1218,7 +1258,7 @@ class TranslatorApp(tk.Tk):
             self._refresh_runtime_status()
 
     def _apply_performance_mode(self) -> None:
-        self.vars["segment_seconds"].set(str(performance_segment_seconds(self.vars["performance_mode"].get())))
+        self.vars["segment_seconds"].set(str(performance_segment_seconds(language_value(self.vars["performance_mode"].get()))))
         self._save()
 
     def _apply_overlay(self) -> None:
@@ -1540,7 +1580,7 @@ class TranslatorApp(tk.Tk):
         save_config_state(APP_DIR, config, {"last_cuda_devices", "last_vram_gb"})
         self.vars["last_cuda_devices"].set(str(devices))
         self.vars["last_vram_gb"].set(str(vram_gb))
-        prefer_quality = self.vars["performance_mode"].get() == "quality"
+        prefer_quality = language_value(self.vars["performance_mode"].get()) == "quality"
         self.vars["model"].set(recommend_model(devices, vram_gb, prefer_quality))
         self._apply_performance_mode()
 
@@ -1558,7 +1598,7 @@ class TranslatorApp(tk.Tk):
     def _load_config_into_widgets(self, updated: dict) -> None:
         for key, variable in self.vars.items():
             if key in updated:
-                value = self._device_label_by_id.get(str(updated[key]), self._t("系統預設")) if key in AUDIO_DEVICE_KEYS else self._t(scenario_label(str(updated[key]))) if key == "scenario" else self._language_label(str(updated[key])) if key in LANGUAGE_KEYS else str(updated[key])
+                value = self._device_label_by_id.get(str(updated[key]), self._t("系統預設")) if key in AUDIO_DEVICE_KEYS else self._t(scenario_label(str(updated[key]))) if key == "scenario" else self._choice_label(key, str(updated[key])) if key in LABELED_KEYS else str(updated[key])
                 variable.set(value)
         self.overlay_visible.set(bool(updated.get("overlay_visible", self.overlay_visible.get())))
         self.overlay_topmost.set(bool(updated.get("overlay_topmost", self.overlay_topmost.get())))
