@@ -12,7 +12,8 @@ if (Test-Path -LiteralPath $Iscc) {
   $Iscc
   exit 0
 }
-$Download = Join-Path $env:RUNNER_TEMP "innosetup-$($Tool.version)-x64.exe"
+$TempDir = if ($env:RUNNER_TEMP) { $env:RUNNER_TEMP } else { [IO.Path]::GetTempPath() }
+$Download = Join-Path $TempDir "innosetup-$($Tool.version)-x64.exe"
 Invoke-WebRequest -Uri $Tool.url -OutFile $Download
 $File = Get-Item -LiteralPath $Download
 $Hash = (Get-FileHash -LiteralPath $Download -Algorithm SHA256).Hash.ToLowerInvariant()

@@ -16,6 +16,11 @@ if ($Version -notmatch '^v\d+\.\d+\.\d+$') {
 if (-not (Test-Path -LiteralPath $IsccPath)) {
   throw "ISCC.exe not found: $IsccPath"
 }
+# Older or beta Inno Setup builds lack this file and ISCC then fails with only exit code 2.
+$ChineseMessages = Join-Path (Split-Path -Parent $IsccPath) "Languages\ChineseTraditional.isl"
+if (-not (Test-Path -LiteralPath $ChineseMessages)) {
+  throw "Inno Setup is missing $ChineseMessages. Install the pinned version with scripts\install_inno_setup.ps1."
+}
 $DistDir = if ($DistDir) { [IO.Path]::GetFullPath($DistDir) } else { Join-Path $Root "dist\RealtimeAudioTranslator" }
 $ReleaseDir = if ($ReleaseDir) { [IO.Path]::GetFullPath($ReleaseDir) } else { Join-Path $Root "dist-release" }
 $OutputDir = if ($OutputDir) { [IO.Path]::GetFullPath($OutputDir) } else { $ReleaseDir }
@@ -41,7 +46,7 @@ $Arguments = @(
   "/DRuntimeCudaHash=$($Cuda.sha256)",
   (Join-Path $Root "installer\RealtimeAudioTranslator.iss")
 )
-$CompilerOutput = & $IsccPath @Arguments
+$CompilerOutput = & $IsccPath @Arguments 2>&1
 $CompilerExitCode = $LASTEXITCODE
 $CompilerOutput | ForEach-Object { [Console]::Error.WriteLine($_) }
 if ($CompilerExitCode -ne 0) {
