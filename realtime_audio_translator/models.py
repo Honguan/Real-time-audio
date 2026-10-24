@@ -7,7 +7,6 @@ import time
 from pathlib import Path
 from urllib.parse import quote
 
-import requests
 
 from .archive_install import atomic_replace_tree, validate_tree
 from .config import APP_DIR
@@ -166,7 +165,9 @@ def cuda_hardware_from_check_output(text: str) -> tuple[int, int]:
     return devices, vram_gb
 
 
-def model_manifest(model: str, session=requests) -> dict:
+def model_manifest(model: str, session=None) -> dict:
+    if session is None:
+        import requests as session
     repository = MODEL_REPOSITORIES.get(model)
     if repository is None:
         raise RuntimeError(f"不支援自動下載模型：{model}")
@@ -246,7 +247,9 @@ def _download_file(model: str, entry: dict, staging: Path, downloaded_before: in
     return written
 
 
-def download_model(model: str, model_dir: Path, progress=None, cancel_event=None, session=requests, language: str = "zh-TW") -> Path:
+def download_model(model: str, model_dir: Path, progress=None, cancel_event=None, session=None, language: str = "zh-TW") -> Path:
+    if session is None:
+        import requests as session
     if cancel_event is not None and cancel_event.is_set():
         raise ModelDownloadCancelled("模型下載已取消；可稍後重試")
     if progress:

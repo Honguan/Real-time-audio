@@ -206,7 +206,7 @@ class ProvidersTests(unittest.TestCase):
             config["translation_cache_path"] = str(Path(tmp) / "translation_cache.db")
             translator = Translator(config)
 
-            with patch("realtime_audio_translator.providers.translate_offline", return_value=""), patch.object(translator, "_argos_translate", return_value=""), patch("realtime_audio_translator.providers.requests.post") as post:
+            with patch("realtime_audio_translator.providers.translate_offline", return_value=""), patch.object(translator, "_argos_translate", return_value=""), patch("requests.post") as post:
                 with self.assertRaisesRegex(RuntimeError, "找不到 zh→en 的本機翻譯模型"):
                     translator.translate("你好", "zh", "en")
 
@@ -526,7 +526,7 @@ class ProvidersTests(unittest.TestCase):
             marker = package / "working.txt"
             marker.write_text("working", encoding="utf-8")
 
-            with patch("realtime_audio_translator.offline_translation.requests.get", side_effect=[IndexResponse(), DownloadResponse()]):
+            with patch("requests.get", side_effect=[IndexResponse(), DownloadResponse()]):
                 with self.assertRaisesRegex(RuntimeError, "download failed"):
                     download_translation_models(config, "en", "zh")
 

@@ -306,6 +306,14 @@ class GuiLogicTests(unittest.TestCase):
         self.assertIn("button.grid(row=counts[group] // columns", gui_source)
         self.assertIn("self.overlay.ensure_visible()", gui_source)
 
+    def test_gui_import_does_not_load_requests(self):
+        import subprocess
+        import sys
+
+        code = "import sys, realtime_audio_translator.gui; print('requests' in sys.modules)"
+        result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, cwd=Path(__file__).parents[1], check=True)
+        self.assertEqual(result.stdout.strip(), "False")
+
     def test_check_indicator_draws_mark_only_when_selected(self):
         import tkinter as tk
         from realtime_audio_translator.gui import check_indicator_image

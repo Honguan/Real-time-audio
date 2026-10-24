@@ -13,9 +13,6 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-import requests
-from requests.adapters import HTTPAdapter
-
 from .ai_memory import cache_translation, cached_translation
 from .offline_translation import OfflineTranslationRegistry, translate_offline
 from .tts import speak_windows_sapi
@@ -48,15 +45,23 @@ class ProviderRequestError(RuntimeError):
 
 @dataclass
 class HttpClient:
-    session: requests.Session = field(default_factory=requests.Session)
+    # requests is imported on first use; it is most of the GUI's import time.
+    session: "requests.Session | None" = None
     cancel_event: threading.Event | None = None
 
     def __post_init__(self) -> None:
+        import requests
+        from requests.adapters import HTTPAdapter
+
+        if self.session is None:
+            self.session = requests.Session()
         adapter = HTTPAdapter(pool_connections=4, pool_maxsize=4, max_retries=0)
         self.session.mount("http://", adapter)
         self.session.mount("https://", adapter)
 
     def post(self, url: str, **kwargs):
+        import requests
+
         started = time.monotonic()
         for attempt in range(1, HTTP_ATTEMPTS + 1):
             self._raise_if_cancelled(attempt)

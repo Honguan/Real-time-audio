@@ -8,7 +8,6 @@ import time
 import zipfile
 from pathlib import Path, PurePosixPath
 
-import requests
 
 from .archive_install import atomic_replace_tree, safe_extract_zip, verify_install_manifest, write_install_manifest
 from .models import models_dir
@@ -259,6 +258,8 @@ def download_translation_models(
     pairs = translation_model_pairs(source_language, target_language)
     if not pairs:
         raise ValueError("請先選擇固定的來源語言與目標語言")
+    import requests
+
     index = requests.get(ARGOS_INDEX_URL, timeout=30)
     index.raise_for_status()
     available = index.json()
