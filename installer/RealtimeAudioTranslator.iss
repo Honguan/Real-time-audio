@@ -171,7 +171,7 @@ begin
       ' -Device ' + Device;
     if (not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'), Params, '', SW_HIDE,
       ewWaitUntilTerminated, ResultCode)) or (ResultCode <> 0) then
-      RaiseException('Runtime 安裝驗證失敗。請重試，或改用 App 的手動匯入功能。');
+      RaiseException('Runtime 安裝驗證失敗。請重試，或改用 App 的「匯入已解壓 runtime」。');
   end;
 end;
 

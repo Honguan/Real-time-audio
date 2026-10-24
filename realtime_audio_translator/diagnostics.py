@@ -67,7 +67,7 @@ def collect_diagnostics(config: dict, repo_root: Path) -> list[DiagnosticIssue]:
             f"缺少：{', '.join(status['missing'])}{probe}",
             "從 Faster-Whisper-XXL 上游下載 Windows runtime"
             + (" 與 CUDA DLL" if status["device"] == "cuda" else "")
-            + "，解壓後使用「手動匯入 runtime」安裝",
+            + "，解壓後使用「匯入已解壓 runtime」安裝",
             "open_runtime",
         ))
     if status["cpu_ready"]:

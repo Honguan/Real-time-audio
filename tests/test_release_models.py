@@ -419,7 +419,7 @@ class ReleaseModelsTests(unittest.TestCase):
 
         for path in (Path("README.md"), Path("docs/RELEASE_NOTES.md")):
             text = path.read_text(encoding="utf-8")
-            self.assertIn("手動匯入 runtime", text)
+            self.assertIn("匯入已解壓 runtime", text)
             self.assertIn("解壓到同一個暫存資料夾", text)
             self.assertNotIn("`Device`", text)
             self.assertIn("ASR 裝置", text)

@@ -87,7 +87,7 @@ class RuntimeTests(unittest.TestCase):
         message = runtime_install_message(Path("runtime"))
 
         self.assertIn("runtime", message)
-        self.assertIn("手動匯入 runtime", message)
+        self.assertIn("匯入已解壓 runtime", message)
         self.assertIn("驗證內容後安全替換", message)
         self.assertIn("Faster-Whisper-XXL Windows runtime", message)
         self.assertIn("https://github.com/Purfview/whisper-standalone-win/releases", message)

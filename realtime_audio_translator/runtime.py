@@ -85,7 +85,7 @@ def runtime_install_message(root: Path = DEFAULT_RUNTIME_DIR, device: str = "cud
         f"請到 {UPSTREAM_RUNTIME_RELEASE_URL} 下載 Faster-Whisper-XXL Windows runtime"
         + (f" 和 {CUDA_PACKAGE_NAME}" if cuda else "")
         + "。\n"
-        "下載後請用程式內的「手動匯入 runtime」安裝；程式會驗證內容後安全替換。\n"
+        "下載後請用程式內的「匯入已解壓 runtime」安裝；程式會驗證內容後安全替換。\n"
         f"安裝位置：\n{root}\n"
         f"資料夾需要直接包含：{', '.join(REQUIRED_RUNTIME_ITEMS)}。\n"
         + (f"CUDA 模式必須包含：{', '.join(REQUIRED_CUDA_ITEMS)}，並通過 `--checkcuda`。" if cuda else "CPU 模式不需要 CUDA DLL。")

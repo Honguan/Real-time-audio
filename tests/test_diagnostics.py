@@ -71,7 +71,7 @@ class DiagnosticsTests(unittest.TestCase):
         self.assertIn("Faster-Whisper-XXL 上游", runtime_issue.fix)
         self.assertIn("CUDA DLL", runtime_issue.fix)
         self.assertIn("專案 ID", cloud_issue.detail)
-        self.assertIn("手動匯入 runtime", runtime_issue.fix)
+        self.assertIn("匯入已解壓 runtime", runtime_issue.fix)
         self.assertTrue(all(isinstance(issue.title, str) for issue in issues))
         self.assertTrue(all(issue.action for issue in issues))
 

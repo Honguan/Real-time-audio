@@ -10,9 +10,9 @@ Windows x64 即時雙向語音翻譯工具。可擷取喇叭與麥克風聲音�
 2. 安裝程式會偵測 NVIDIA GPU／VRAM；CPU 模式只下載 runtime 核心，CUDA 模式才下載 CUDA DLL。Runtime 直接來自 Faster-Whisper-XXL 上游並驗證 SHA-256。
 3. 若未偵測到 VB-CABLE，安裝程式只提供官方下載指引，不會靜默安裝第三方驅動程式。
 
-需要免安裝版時，仍可下載 `RealtimeAudioTranslator-<tag>-win-x64.zip`，解壓後執行 `RealtimeAudioTranslator.exe`，再按「下載上游 runtime」並使用「手動匯入 runtime」。
+需要免安裝版時，仍可下載 `RealtimeAudioTranslator-<tag>-win-x64.zip`，解壓後執行 `RealtimeAudioTranslator.exe`，再按「下載上游 runtime」並使用「匯入已解壓 runtime」。
 
-把上游檔案解壓到同一個暫存資料夾，再於程式內按「手動匯入 runtime」並選擇該資料夾；程式會驗證內容後安全安裝到：
+把上游檔案解壓到同一個暫存資料夾，再於程式內按「匯入已解壓 runtime」並選擇該資料夾；程式會驗證內容後安全安裝到：
 
 ```text
 %USERPROFILE%\.realtime-audio\runtime\cuda12
@@ -119,7 +119,7 @@ http://127.0.0.1:5000/translate
 
 - 沒有字幕：確認「顯示字幕」已開啟，並按「測試字幕」。
 - 聽不到對方聲音：確認喇叭來源選的是 Discord 或遊戲正在播放的裝置，再按「測試喇叭」。
-- 找不到 runtime：把 core `.7z` 與 DLL `.zip` 解壓到同一暫存資料夾，再使用「手動匯入 runtime」完成驗證安裝。
+- 找不到 runtime：把 core `.7z` 與 DLL `.zip` 解壓到同一暫存資料夾，再使用「匯入已解壓 runtime」完成驗證安裝。
 - 找不到模型：在工具內下載模型，或解壓模型 zip 到 `%USERPROFILE%\.realtime-audio\models`。
 - 找不到離線翻譯模型：在進階模式按「下載離線翻譯模型」，或把翻譯模型 zip 解壓到 `%USERPROFILE%\.realtime-audio\models`。
 - 對方聽不到翻譯語音：確認「播放翻譯語音」與「輸出到虛擬麥克風」已開啟，且「TTS 輸出」選 `CABLE Input`。

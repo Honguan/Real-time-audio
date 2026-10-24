@@ -55,7 +55,7 @@
 8. 可按「匯出字幕」把最新 JSONL 對話紀錄匯出成 SRT 與 TXT；schema v2 會依實際音訊起訖產生字幕，舊紀錄沒有音訊時間時沿用每段 3 秒。檔案放在 `%USERPROFILE%\.realtime-audio\exports\subtitles`；也可按「清除本機資料」一次清除快取與紀錄。
 9. 預設是自動發話；勾選「虛擬麥克風啟動時靜音」後可用「按住說話」（Push to talk）按住才送出我方翻譯語音，且不影響本機翻譯播放。
 10. 切換到 Google 或 OpenAI 時，工具會先提示語音或文字可能傳送到第三方服務並可能產生費用。
-11. 若提示缺 runtime，按「下載上游 runtime」，從 Faster-Whisper-XXL 上游取得 Windows runtime；CUDA 模式另需 `cuBLAS.and.cuDNN_CUDA12_win_v3.7z`。解壓到同一個暫存資料夾，再於程式內按「手動匯入 runtime」選擇該資料夾；程式會驗證後安裝到：
+11. 若提示缺 runtime，按「下載上游 runtime」，從 Faster-Whisper-XXL 上游取得 Windows runtime；CUDA 模式另需 `cuBLAS.and.cuDNN_CUDA12_win_v3.7z`。解壓到同一個暫存資料夾，再於程式內按「匯入已解壓 runtime」選擇該資料夾；程式會驗證後安裝到：
 
 ```text
 %USERPROFILE%\.realtime-audio\runtime\cuda12
@@ -104,7 +104,7 @@ Argos 套件未完整明示整個 `.argosmodel` 成品的再散布條款，因�
 
 - 沒有字幕：確認「顯示字幕」已開啟，並按「測試字幕」。
 - 聽不到對方聲音：確認喇叭來源選的是 Discord 或遊戲正在播放的裝置，再按「測試喇叭」。
-- 找不到 runtime：從上游下載 Faster-Whisper-XXL 與 CUDA DLL，解壓到同一暫存資料夾，再使用「手動匯入 runtime」完成驗證安裝。
+- 找不到 runtime：從上游下載 Faster-Whisper-XXL 與 CUDA DLL，解壓到同一暫存資料夾，再使用「匯入已解壓 runtime」完成驗證安裝。
 - 找不到模型：在工具內下載模型，或解壓模型 zip 到 `%USERPROFILE%\.realtime-audio\models`。
 - 找不到離線翻譯模型：按「下載離線翻譯模型」直接從 Argos 上游取得。
 - 對方聽不到翻譯語音：確認「播放翻譯語音」與「輸出到虛擬麥克風」已開啟，且「TTS 輸出」選 `CABLE Input`。
