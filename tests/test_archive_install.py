@@ -19,6 +19,7 @@ class ArchiveInstallTests(unittest.TestCase):
             "drive": "C:/escape.txt",
             "unc": r"\\server\share\escape.txt",
             "device": "CON",
+            "nested_device": "package/NUL.txt",
             "trailing": "package/file. ",
         }
         with tempfile.TemporaryDirectory() as tmp:

@@ -1,5 +1,7 @@
 import hashlib
 import json
+import locale
+import ntpath
 import os
 import shutil
 import stat
@@ -14,6 +16,10 @@ INSTALL_MANIFEST = "install_manifest.json"
 MAX_ARCHIVE_FILES = 50_000
 MAX_MEMBER_SIZE = 4 * 1024**3
 MAX_TOTAL_SIZE = 20 * 1024**3
+# PurePath.is_reserved was removed in Python 3.15; ntpath.isreserved exists from 3.13.
+_is_reserved = getattr(ntpath, "isreserved", None) or (lambda name: PureWindowsPath(name).is_reserved())
+# Windows tar prints listings in the ANSI code page, which differs from Python's UTF-8 mode (default in 3.15).
+_TAR_ENCODING = locale.getencoding() if hasattr(locale, "getencoding") else locale.getpreferredencoding(False)
 
 
 def _sha256(path: Path) -> str:
@@ -28,7 +34,7 @@ def _safe_member_parts(name: str) -> tuple[str, ...]:
     normalized = str(name).replace("\\", "/")
     posix = PurePosixPath(normalized)
     windows = PureWindowsPath(str(name))
-    if not normalized or "\0" in normalized or posix.is_absolute() or windows.is_absolute() or windows.drive or windows.is_reserved():
+    if not normalized or "\0" in normalized or posix.is_absolute() or windows.is_absolute() or windows.drive or _is_reserved(str(name)):
         raise RuntimeError(f"封存檔包含不安全路徑：{name}")
     if any(part in ("", ".", "..") or part.endswith((" ", ".")) for part in posix.parts):
         raise RuntimeError(f"封存檔包含不安全路徑：{name}")
@@ -123,7 +129,7 @@ def safe_extract_archive(archive_path: Path, destination: Path) -> None:
     with tempfile.TemporaryFile(dir=destination.parent) as snapshot, archive_path.open("rb") as archive:
         shutil.copyfileobj(archive, snapshot)
         snapshot.seek(0)
-        listing = subprocess.run(["tar", "-tf", "-"], stdin=snapshot, capture_output=True, text=True, check=True)
+        listing = subprocess.run(["tar", "-tf", "-"], stdin=snapshot, capture_output=True, encoding=_TAR_ENCODING, check=True)
         names = listing.stdout.splitlines()
         if not names or len(names) > MAX_ARCHIVE_FILES:
             raise RuntimeError("封存檔沒有內容或超過允許的檔案數")
@@ -134,7 +140,7 @@ def safe_extract_archive(archive_path: Path, destination: Path) -> None:
                 raise RuntimeError(f"封存檔包含重複路徑：{name}")
             seen.add(relative)
         snapshot.seek(0)
-        verbose = subprocess.run(["tar", "-tvf", "-"], stdin=snapshot, capture_output=True, text=True, check=True)
+        verbose = subprocess.run(["tar", "-tvf", "-"], stdin=snapshot, capture_output=True, encoding=_TAR_ENCODING, check=True)
         entries = [line for line in verbose.stdout.splitlines() if line.strip()]
         if len(entries) != len(names) or any(line.lstrip()[:1] not in ("-", "d") for line in entries):
             raise RuntimeError("封存檔包含連結或無法驗證的特殊檔案")
