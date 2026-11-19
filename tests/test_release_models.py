@@ -363,7 +363,7 @@ class ReleaseModelsTests(unittest.TestCase):
         self.assertIn("pull_request:", ci)
         self.assertGreaterEqual(ci.count("- master"), 2)
         self.assertIn('cache: "pip"', ci)
-        self.assertIn('python-version: ["3.10", "3.13"]', ci)
+        self.assertIn('python-version: ["3.10", "3.13", "3.14", "3.15"]', ci)
         self.assertIn("python-version: ${{ matrix.python-version }}", ci)
         self.assertIn("python -m pip install -e .", ci)
         self.assertIn("python -m pip install --require-hashes -r requirements-release.txt", ci)
@@ -379,7 +379,7 @@ class ReleaseModelsTests(unittest.TestCase):
         metadata = Path("pyproject.toml").read_text(encoding="utf-8")
         build = Path("scripts/build.ps1").read_text(encoding="utf-8")
 
-        self.assertIn('requires-python = ">=3.10,<3.14"', metadata)
+        self.assertIn('requires-python = ">=3.10,<3.16"', metadata)
         self.assertIn('[project.gui-scripts]', metadata)
         self.assertIn('realtime-audio-translator = "realtime_audio_translator.gui:main"', metadata)
         self.assertIn('python -m pip install -e ".[build]"', build)

@@ -969,13 +969,16 @@ class ProvidersTests(unittest.TestCase):
             stdout = "Microsoft Jenny Desktop\r\n\r\nMicrosoft Haruka Desktop\r\n"
 
         original_run = tts_module.subprocess.run
-        tts_module.subprocess.run = lambda *args, **kwargs: Result()
+        calls = []
+        tts_module.subprocess.run = lambda *args, **kwargs: calls.append((args, kwargs)) or Result()
         try:
             voices = tts_module.list_windows_sapi_voices()
         finally:
             tts_module.subprocess.run = original_run
 
         self.assertEqual(voices, ["Microsoft Jenny Desktop", "Microsoft Haruka Desktop"])
+        self.assertIn("[Console]::OutputEncoding = [Text.Encoding]::UTF8", calls[0][0][0][-1])
+        self.assertEqual(calls[0][1]["encoding"], "utf-8")
 
     def test_google_translate_auto_source_omits_source_language(self):
         request = build_google_translate_request("hello", "zh", "auto", "project")

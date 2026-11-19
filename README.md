@@ -135,7 +135,7 @@ http://127.0.0.1:5000/translate
 
 ## 開發
 
-支援 Python 3.10 至 3.13；正式版目前使用 Python 3.10 建置，CI 同時驗證 3.10 與下一個建置版本 3.13。
+支援 Python 3.10 至 3.15；正式版目前使用 Python 3.10 建置，CI 驗證 3.10、3.13、3.14 與 3.15。
 
 ```powershell
 python -m venv .venv

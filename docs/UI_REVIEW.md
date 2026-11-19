@@ -1,5 +1,20 @@
 # 介面與操作流程改善紀錄
 
+## 2026-11-19 Python 3.14／3.15 支援
+
+支援範圍由 3.10–3.13 擴大為 3.10–3.15（`requires-python = ">=3.10,<3.16"`），CI 矩陣加入 3.14 與 3.15。所有相依套件（ctranslate2、PyAudioWPatch、sentencepiece、numpy、Pillow、sounddevice、PyInstaller）皆已有 cp314／cp315 Windows wheel。
+
+| 新版問題 | 修正 |
+| --- | --- |
+| 3.15 移除 `PurePath.is_reserved`，封存與 runtime 驗證全部失敗 | 3.13 起改用 `ntpath.isreserved`，舊版沿用原方法 |
+| 3.15 預設 UTF-8 模式，Windows `tar -tv` 以 ANSI 字碼頁輸出，解碼失敗而誤判封存檔 | tar 清單固定以系統 ANSI 字碼頁解碼 |
+| TTS 聲音清單依主控台字碼頁輸出，UTF-8 模式下中文聲音名稱會解碼失敗 | PowerShell 改以 UTF-8 輸出並以 UTF-8 解碼；ffmpeg 版本與 CUDA 檢查遇到無效位元組改為替換而非讓輸出變成 `None` |
+| 3.14 起內建 Tcl/Tk 9，程式庫位於 `//zipfs:` 內，冒煙測試以 `pathlib` 檢查而回報資源缺失 | 改由 Tcl 的 `file isfile` 檢查 |
+
+驗證：`scripts/test.ps1` 在 3.13、3.14、3.15 各 503 項通過；3.15 下無 DeprecationWarning；3.15 PyInstaller 建置的執行檔 `--smoke-test` 回報 `ok`；Tk 9.0.4 實際截圖確認深色主題、語言名稱與 ✓ 勾選框正常。
+
+限制：正式版仍以 Python 3.10.11 建置（`release-lock.json`），未變更。3.14 是由 uv 安裝的 CPython 3.14.7 測試。
+
 ## 2026-10-24 部署、效能與操作細節
 
 基準 `f958ab3`，497 項測試通過。
@@ -33,7 +48,7 @@
 
 驗證：Python 3.13 `scripts/test.ps1` 503 項通過，compileall 與 `git diff --check` 通過。
 
-限制：安裝程式的 runtime 線上下載元件（約 2.3 GB）與簽章未在本機測試。耳機拔插、實際音訊裝置與雲端 API 驗收待實機測試。系統預設 `python` 若為 3.15 會有 `PurePath.is_reserved` 已移除的錯誤，專案宣告支援 `<3.14`，未處理。開始流程仍會雜湊兩次（啟動檢查與載入 DLL 前各一次），刻意保留作為載入前的完整性防護。
+限制：安裝程式的 runtime 線上下載元件（約 2.3 GB）與簽章未在本機測試。耳機拔插、實際音訊裝置與雲端 API 驗收待實機測試。Python 3.15 相容問題已於 2026-11-19 修正。開始流程仍會雜湊兩次（啟動檢查與載入 DLL 前各一次），刻意保留作為載入前的完整性防護。
 
 ## 2026-10-23 介面重構
 

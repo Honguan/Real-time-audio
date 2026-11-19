@@ -48,7 +48,9 @@ def _play_wav(path: Path, device_name: str, cancel_event=None) -> None:
 
 
 def list_windows_sapi_voices() -> list[str]:
+    # Pipe UTF-8 so non-ASCII voice names decode the same under any console code page or Python UTF-8 mode.
     script = r"""
+[Console]::OutputEncoding = [Text.Encoding]::UTF8
 $voice = New-Object -ComObject SAPI.SpVoice
 foreach ($candidate in $voice.GetVoices()) {
     $candidate.GetDescription()
@@ -59,7 +61,8 @@ foreach ($candidate in $voice.GetVoices()) {
         ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script],
         check=True,
         capture_output=True,
-        text=True,
+        encoding="utf-8",
+        errors="replace",
         creationflags=creationflags,
     )
     return [line.strip() for line in result.stdout.splitlines() if line.strip()]

@@ -47,7 +47,7 @@ class RuntimeService:
         failed = False
         if status["ready"]:
             try:
-                result = subprocess.run([str(target / "ffmpeg.exe"), "-version"], capture_output=True, text=True, timeout=2, check=False)
+                result = subprocess.run([str(target / "ffmpeg.exe"), "-version"], capture_output=True, text=True, errors="replace", timeout=2, check=False)
                 failed = result.returncode != 0
             except Exception:
                 failed = True

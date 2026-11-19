@@ -47,11 +47,11 @@ def run_smoke_test(config_root: Path | None = None, require_frozen: bool = True)
         window = tkinter.Tk()
         window.withdraw()
         window.update_idletasks()
-        tcl_library = Path(window.tk.eval("info library"))
-        tk_library = Path(window.tk.eval("set tk_library"))
+        # Ask Tcl itself: Tcl/Tk 9 (Python 3.14+) keeps its library inside a //zipfs: mount that pathlib cannot read.
+        resources_found = window.tk.eval("expr {[file isfile [file join [info library] init.tcl]] && [file isfile [file join $tk_library tk.tcl]]}") == "1"
         window.destroy()
         result["checks"].append("tk")
-        if not (tcl_library / "init.tcl").is_file() or not (tk_library / "tk.tcl").is_file():
+        if not resources_found:
             raise RuntimeError("bundled Tcl/Tk resources are unavailable")
         result["checks"].append("resources")
 

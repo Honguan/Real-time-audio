@@ -28,7 +28,7 @@ def whisper_exe(root: Path = DEFAULT_RUNTIME_DIR) -> Path:
 
 def _cuda_probe(root: Path) -> tuple[bool, str]:
     try:
-        result = subprocess.run([str(whisper_exe(root)), "--checkcuda"], capture_output=True, text=True, timeout=5, check=False)
+        result = subprocess.run([str(whisper_exe(root)), "--checkcuda"], capture_output=True, text=True, errors="replace", timeout=5, check=False)
     except Exception as exc:
         return False, str(exc)
     output = (result.stdout + result.stderr).strip()
