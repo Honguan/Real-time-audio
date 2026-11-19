@@ -23,6 +23,7 @@
 - 建置時圖示像素相同就不重寫，避免 Pillow 重新編碼造成工作目錄出現無意義變更。
 - `build_installer.ps1` 缺少 Inno Setup 繁中語言檔時先給出明確錯誤；`install_inno_setup.ps1` 在本機沒有 `RUNNER_TEMP` 時改用系統暫存資料夾。
 - 部署實測：`build.ps1` 隔離環境（Python 3.13、PyInstaller 6.22.3）約 45 秒完成；打包後 `--smoke-test` 全部通過（匯入、PortAudio、Tk、資源、設定、bundle）；`package.ps1` 產生 54 MB zip、SBOM 與 SHA256SUMS。
+- 安裝程式實測（Inno Setup 7.1.0，release-lock.json 雜湊驗證）：依 release 流程產生 zip、RELEASE_MANIFEST、37 秒編譯出 36.5 MB `setup.exe` 與 SHA256SUMS；以「只安裝 App」靜默安裝到暫存資料夾（1,076 個檔案），安裝版 `--smoke-test` 回報 `status=ok`、`frozen=true`，靜默解除安裝後程式與解除安裝登錄項皆已移除。
 - 以真實 Tk 視窗、替身服務逐一按下繁中與英文介面的全部 44 個工具按鈕（含失敗情境）：無例外、無卡住的背景工作。依結果修正：
   - 內部重新整理清單會覆蓋剛完成的結果訊息（例如「模型下載完成」被「已重新整理」蓋掉），改為不覆蓋呼叫端狀態。
   - TTS、虛擬麥克風與喇叭測試失敗只彈窗、狀態列無訊息，改為同時顯示在狀態列；英文介面使用英文冒號。
@@ -32,7 +33,7 @@
 
 驗證：Python 3.13 `scripts/test.ps1` 503 項通過，compileall 與 `git diff --check` 通過。
 
-限制：本機 Inno Setup 為 7.0.1-beta，缺少繁中語言檔，未編譯安裝程式（CI 固定 7.1.0）。耳機拔插、實際音訊裝置與雲端 API 驗收待實機測試。系統預設 `python` 若為 3.15 會有 `PurePath.is_reserved` 已移除的錯誤，專案宣告支援 `<3.14`，未處理。開始流程仍會雜湊兩次（啟動檢查與載入 DLL 前各一次），刻意保留作為載入前的完整性防護。
+限制：安裝程式的 runtime 線上下載元件（約 2.3 GB）與簽章未在本機測試。耳機拔插、實際音訊裝置與雲端 API 驗收待實機測試。系統預設 `python` 若為 3.15 會有 `PurePath.is_reserved` 已移除的錯誤，專案宣告支援 `<3.14`，未處理。開始流程仍會雜湊兩次（啟動檢查與載入 DLL 前各一次），刻意保留作為載入前的完整性防護。
 
 ## 2026-10-23 介面重構
 

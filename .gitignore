@@ -6,6 +6,7 @@ dist/
 *.spec
 installer-output/
 release-output/
+dist-release/
 .pytest_cache/
 
 /.realtime-audio/
