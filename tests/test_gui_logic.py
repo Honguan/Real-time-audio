@@ -306,6 +306,46 @@ class GuiLogicTests(unittest.TestCase):
         self.assertIn("button.grid(row=counts[group] // columns", gui_source)
         self.assertIn("self.overlay.ensure_visible()", gui_source)
 
+    def test_app_log_cleanup_always_asks_before_deleting(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            logs = root / "logs"
+            logs.mkdir()
+            (logs / "session.jsonl").write_text("{}\n", encoding="utf-8")
+            app = TranslatorApp.__new__(TranslatorApp)
+            app.config = {"log_dir": str(logs)}
+            app._save = lambda: True
+            app.status = Mock()
+
+            with patch("realtime_audio_translator.gui.APP_DIR", root), patch("realtime_audio_translator.gui.log_files_to_clear", return_value=[logs / "session.jsonl"]), patch("realtime_audio_translator.gui.messagebox.askyesno", return_value=False) as confirm:
+                self.assertIsNone(app._confirm_log_cleanup())
+                self.assertIn("無法復原", confirm.call_args.args[1])
+                self.assertIsNone(app._confirm_log_cleanup(include_cache=True))
+                self.assertIn("快取", confirm.call_args.args[1])
+                confirm.return_value = True
+                self.assertEqual(app._confirm_log_cleanup(), logs)
+
+            with patch("realtime_audio_translator.gui.APP_DIR", root), patch("realtime_audio_translator.gui.log_files_to_clear", return_value=[]), patch("realtime_audio_translator.gui.messagebox.askyesno") as confirm:
+                self.assertIsNone(app._confirm_log_cleanup())
+                confirm.assert_not_called()
+                app.status.set.assert_called_with("沒有可清除的紀錄")
+
+    def test_internal_list_refresh_keeps_the_callers_status(self):
+        from realtime_audio_translator.app_controller import TaskResult
+
+        app = TranslatorApp.__new__(TranslatorApp)
+        app.config = DEFAULT_CONFIG.copy()
+        app.status = Mock()
+        app._model_download_cancel = object()
+        app._refresh_lists = Mock()
+
+        app._model_downloaded(TaskResult(error=RuntimeError("network down")))
+
+        app.status.set.assert_called_once_with("network down")
+        app._refresh_lists.assert_called_once_with(announce=False)
+        gui_source = (Path(__file__).parents[1] / "realtime_audio_translator" / "gui.py").read_text(encoding="utf-8")
+        self.assertIn('        if announce:\n            self.status.set(self._t("裝置與模型已更新"))', gui_source)
+
     def test_gui_import_does_not_load_requests(self):
         import subprocess
         import sys

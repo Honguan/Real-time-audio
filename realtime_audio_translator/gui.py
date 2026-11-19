@@ -941,8 +941,10 @@ class TranslatorApp(tk.Tk):
             else:
                 group.grid_remove()
 
-    def _refresh_lists(self) -> None:
-        self.status.set(self._t("正在重新整理裝置與模型"))
+    def _refresh_lists(self, announce: bool = True) -> None:
+        """announce=False keeps the caller's status message (e.g. a download or import result)."""
+        if announce:
+            self.status.set(self._t("正在重新整理裝置與模型"))
         config = self._config_from_vars()
         generation = self._list_generation + 1
 
@@ -955,12 +957,12 @@ class TranslatorApp(tk.Tk):
             compute_types = command_choices(commands, "compute_type") or sorted(SETTING_CHOICES["compute_type"])
             return raw_devices, models, asr_devices, compute_types
 
-        if self.controller.submit(work, lambda result: self._lists_ready(generation, result), name="refresh_lists"):
+        if self.controller.submit(work, lambda result: self._lists_ready(generation, result, announce), name="refresh_lists"):
             self._list_generation = generation
         else:
             self.status.set(self._t("裝置與模型重新整理已在進行"))
 
-    def _lists_ready(self, generation: int, result: TaskResult) -> None:
+    def _lists_ready(self, generation: int, result: TaskResult, announce: bool = True) -> None:
         if generation != self._list_generation:
             return
         if result.error is not None:
@@ -1012,7 +1014,8 @@ class TranslatorApp(tk.Tk):
                 if current_label not in devices:
                     devices.append(current_label)
                 widget.configure(values=devices)
-        self.status.set(self._t("裝置與模型已更新"))
+        if announce:
+            self.status.set(self._t("裝置與模型已更新"))
         self._refresh_runtime_status()
 
     def _list_tts_voices(self) -> None:
@@ -1029,7 +1032,8 @@ class TranslatorApp(tk.Tk):
         source, target = swap_language_values(language_value(self.vars["source_language"].get()), language_value(self.vars["target_language"].get()))
         self.vars["source_language"].set(self._language_label(source))
         self.vars["target_language"].set(self._language_label(target))
-        self._save()
+        if self._save():
+            self.status.set(self._t("已交換語言：{source} → {target}", source=self._language_label(source), target=self._language_label(target)))
 
     def _config_from_vars(self) -> dict:
         config = self.config.copy()
@@ -1368,7 +1372,7 @@ class TranslatorApp(tk.Tk):
         if not result.status["ready"]:
             messagebox.showerror(self._t("runtime 不完整"), self._t("缺少：{missing}", missing=", ".join(result.status["missing"])))
             return
-        self._refresh_lists()
+        self._refresh_lists(announce=False)
         self.status.set(self._t("runtime 已匯入；commands.json 已更新"))
 
     def _refresh_runtime_status(self) -> None:
@@ -1665,7 +1669,7 @@ class TranslatorApp(tk.Tk):
             self.status.set(str(result.error))
         else:
             self.status.set(self._t("模型下載完成：{model}；版本與 SHA 完整性已驗證", model=result.value.name))
-        self._refresh_lists()
+        self._refresh_lists(announce=False)
 
     def _cancel_model_download(self) -> None:
         cancel = self.__dict__.get("_model_download_cancel")
@@ -1686,6 +1690,7 @@ class TranslatorApp(tk.Tk):
             self._t("下載離線翻譯模型"),
             self._t("將下載 {source} 與 {target} 的雙向 Argos Translate 模型。\n模型會儲存在程式資料夾的 models\\translation。", source=source_language, target=target_language),
         ):
+            self.status.set(self._t("已取消下載離線翻譯模型"))
             return
         self.status.set(self._t("正在下載離線翻譯模型"))
 
@@ -1703,8 +1708,8 @@ class TranslatorApp(tk.Tk):
         runtime = runtime_dir(self._config_from_vars())
         self._submit(
             "正在更新 commands.json",
-            lambda: self.runtime_service.refresh_commands(runtime),
-            lambda _value: (self._refresh_lists(), self.status.set(self._t("commands.json 已更新"))),
+            lambda: self.runtime_service.refresh_commands(runtime, self.config.get("app_language", "zh-TW")),
+            lambda _value: (self._refresh_lists(announce=False), self.status.set(self._t("commands.json 已更新"))),
             "commands.json 更新失敗",
         )
 
@@ -1727,6 +1732,7 @@ class TranslatorApp(tk.Tk):
         self.config["last_tts_failed"] = result.error is not None
         save_config_state(APP_DIR, self.config, {"last_tts_failed"})
         if result.error is not None:
+            self.status.set(self._t("TTS 測試失敗：{error}", error=result.error))
             messagebox.showerror(self._t("TTS 測試失敗"), str(result.error))
         else:
             self.status.set(self._t("TTS 輸出測試完成"))
@@ -1742,6 +1748,7 @@ class TranslatorApp(tk.Tk):
         self.config["last_virtual_mic_failed"] = not active
         save_config_state(APP_DIR, self.config, {"last_virtual_mic_failed"})
         if result.error is not None:
+            self.status.set(self._t("虛擬麥克風測試失敗：{error}", error=result.error))
             messagebox.showerror(self._t("虛擬麥克風測試失敗"), str(result.error))
         else:
             self.status.set(self._t("虛擬麥克風已偵測到聲音" if active else "虛擬麥克風沒有偵測到聲音"))
@@ -1754,6 +1761,7 @@ class TranslatorApp(tk.Tk):
 
     def _speaker_tested(self, config: dict, result: TaskResult[bool]) -> None:
         if result.error is not None:
+            self.status.set(self._t("喇叭測試失敗：{error}", error=result.error))
             messagebox.showerror(self._t("喇叭測試失敗"), str(result.error))
             return
         active = bool(result.value)
@@ -1966,21 +1974,21 @@ class TranslatorApp(tk.Tk):
         subprocess.Popen(["explorer", str(path)])
 
     def _clear_logs(self) -> None:
-        target = self._confirm_log_cleanup()
+        target = self._confirm_log_cleanup(include_cache=False)
         if target is None:
             return
         clear_logs(APP_DIR, target)
         self.status.set(self._t("紀錄已清除"))
 
     def _clear_local_data(self) -> None:
-        target = self._confirm_log_cleanup()
+        target = self._confirm_log_cleanup(include_cache=True)
         if target is None:
             return
         clear_cache(APP_DIR, Path(self.config.get("translation_cache_path") or APP_DIR / "cache" / "translation_cache.db"))
         clear_logs(APP_DIR, target)
         self.status.set(self._t("本機快取與紀錄已清除"))
 
-    def _confirm_log_cleanup(self) -> Path | None:
+    def _confirm_log_cleanup(self, include_cache: bool = False) -> Path | None:
         self._save()
         target = Path(self.config.get("log_dir") or APP_DIR / "logs")
         try:
@@ -1988,10 +1996,18 @@ class TranslatorApp(tk.Tk):
         except ValueError as exc:
             messagebox.showerror(self._t("無法清除紀錄"), str(exc))
             return None
-        if not target.resolve().is_relative_to(APP_DIR.resolve()) and not messagebox.askyesno(
-            self._t("確認清除外部紀錄"),
-            self._t("將從以下資料夾清除 {count} 個本程式紀錄檔：\n{path}\n\n其他檔案與子資料夾不會刪除。是否繼續？", count=sum(path.parent == target.resolve() for path in files), path=target.resolve()),
-        ):
+        if not target.resolve().is_relative_to(APP_DIR.resolve()):
+            title = self._t("確認清除外部紀錄")
+            message = self._t("將從以下資料夾清除 {count} 個本程式紀錄檔：\n{path}\n\n其他檔案與子資料夾不會刪除。是否繼續？", count=sum(path.parent == target.resolve() for path in files), path=target.resolve())
+        else:
+            if not files and not include_cache:
+                self.status.set(self._t("沒有可清除的紀錄"))
+                return None
+            title = self._t("確認清除紀錄")
+            message = self._t("將清除 {count} 個紀錄檔：\n{path}\n\n此動作無法復原。是否繼續？", count=len(files), path=target.resolve())
+        if include_cache:
+            message += "\n" + self._t("翻譯與音訊快取也會一併清除。")
+        if not messagebox.askyesno(title, message):
             return None
         return target
 

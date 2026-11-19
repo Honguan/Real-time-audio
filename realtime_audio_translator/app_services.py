@@ -53,10 +53,10 @@ class RuntimeService:
                 failed = True
         return RuntimeCheckResult(status, failed)
 
-    def refresh_commands(self, target: Path) -> None:
+    def refresh_commands(self, target: Path, language: str = "zh-TW") -> None:
         status = runtime_status(target, "cpu", verify_hashes=True)
         if not status["ready"]:
-            raise RuntimeError("找不到可用的 runtime：" + ", ".join(status["missing"]))
+            raise RuntimeError(translate(language, "找不到可用的 runtime：{missing}", missing=", ".join(status["missing"])))
         refresh_commands(whisper_exe(target), self.commands_path)
 
 

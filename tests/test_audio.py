@@ -1005,7 +1005,7 @@ class AudioTests(unittest.TestCase):
         self.assertIn('messagebox.showerror(self._t("runtime 不完整"), self._t("缺少：{missing}", missing=", ".join(result.status["missing"])))', gui_source)
         self.assertIn('if not result.status["ready"]:', gui_source)
         self.assertIn('refresh_commands(whisper_exe(installed), self.commands_path)', service_source)
-        self.assertIn('self._refresh_lists()\n        self.status.set(self._t("runtime 已匯入；commands.json 已更新"))', gui_source)
+        self.assertIn('self._refresh_lists(announce=False)\n        self.status.set(self._t("runtime 已匯入；commands.json 已更新"))', gui_source)
         self.assertIn('refresh_commands(whisper_exe(target), self.commands_path)', service_source)
         self.assertIn('self.status.set(self._t("commands.json 已更新"))', gui_source)
         self.assertIn('"commands.json 更新失敗"', gui_source)
