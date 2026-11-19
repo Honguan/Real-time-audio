@@ -302,7 +302,7 @@ class AudioDiagnosticsServiceTests(unittest.TestCase):
 
         with TemporaryDirectory() as tmp:
             config = {"provider": "local", "local_translate_url": "http://localhost/translate",
-                      "translation_cache_enabled": True,
+                      "translation_cache_enabled": True, "record_logs": True,
                       "translation_cache_path": str(Path(tmp) / "cache.db")}
             service = AudioDiagnosticsService(Path(tmp))
             with patch.object(Translator, "_local_translate", return_value="你好"):

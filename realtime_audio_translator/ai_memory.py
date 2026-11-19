@@ -2,11 +2,12 @@ import hashlib
 import json
 import sqlite3
 import threading
+import time
 from contextlib import closing
 from pathlib import Path
 
 
-CACHE_SCHEMA_VERSION = 2
+CACHE_SCHEMA_VERSION = 3
 _CACHE_SCHEMA_LOCK = threading.Lock()
 
 
@@ -19,7 +20,8 @@ def _create_cache(db: sqlite3.Connection) -> None:
             source_language TEXT NOT NULL,
             target_language TEXT NOT NULL,
             source_text TEXT NOT NULL,
-            translated_text TEXT NOT NULL
+            translated_text TEXT NOT NULL,
+            created_at REAL NOT NULL DEFAULT 0
         )
         """
     )
@@ -56,6 +58,9 @@ def _ensure_cache(db_path: Path) -> None:
                     ],
                 )
                 db.execute("DROP TABLE translations_v1")
+            elif "created_at" not in columns:
+                # Rows from before v3 have no write time; 0 lets the next retention pass remove them.
+                db.execute("ALTER TABLE translations ADD COLUMN created_at REAL NOT NULL DEFAULT 0")
             if version < CACHE_SCHEMA_VERSION:
                 db.execute(f"PRAGMA user_version = {CACHE_SCHEMA_VERSION}")
 
@@ -72,19 +77,22 @@ def cached_translation(db_path: Path, request_fingerprint: str) -> str | None:
     return str(row[0]) if row else None
 
 
-def cache_translation(db_path: Path, request_fingerprint: str, provider: str, source_language: str, target_language: str, text: str, translated: str) -> None:
+def cache_translation(db_path: Path, request_fingerprint: str, provider: str, source_language: str, target_language: str, text: str, translated: str, retention_days: int = 0) -> None:
     if not text.strip() or not translated.strip():
         return
     _ensure_cache(db_path)
+    now = time.time()
     with closing(sqlite3.connect(db_path)) as db, db:
         db.execute(
             """
             INSERT OR REPLACE INTO translations
-                (request_fingerprint, provider, source_language, target_language, source_text, translated_text)
-            VALUES (?, ?, ?, ?, ?, ?)
+                (request_fingerprint, provider, source_language, target_language, source_text, translated_text, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (request_fingerprint, provider, source_language, target_language, text.strip(), translated),
+            (request_fingerprint, provider, source_language, target_language, text.strip(), translated, now),
         )
+        if retention_days > 0:
+            db.execute("DELETE FROM translations WHERE created_at < ?", (now - retention_days * 86400,))
 
 
 def add_glossary_term(glossary_path: Path, source: str, target: str) -> None:

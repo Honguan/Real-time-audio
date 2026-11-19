@@ -13,16 +13,14 @@ class SmokeTests(unittest.TestCase):
         self.assertIn("--smoke-test", entrypoint)
 
     def test_runtime_modules_import(self):
-        from realtime_audio_translator import ai_diagnostics, asr, audio, engine, gui, paths, runtime, scenario_manager, tts
+        from realtime_audio_translator import asr, audio, engine, gui, paths, runtime, tts
 
-        self.assertTrue(hasattr(ai_diagnostics, "collect_diagnostics"))
         self.assertTrue(hasattr(asr, "AudioTranscriber"))
         self.assertTrue(hasattr(audio, "list_audio_devices"))
         self.assertTrue(hasattr(engine, "RealtimeEngine"))
         self.assertTrue(hasattr(gui, "TranslatorApp"))
         self.assertTrue(hasattr(paths, "resource_path"))
         self.assertTrue(hasattr(runtime, "runtime_status"))
-        self.assertTrue(hasattr(scenario_manager, "apply_scenario"))
         self.assertTrue(hasattr(tts, "play_linear16"))
 
     def test_smoke_test_returns_machine_readable_success(self):

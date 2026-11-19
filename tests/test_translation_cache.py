@@ -326,6 +326,7 @@ class TranslationCacheTests(unittest.TestCase):
             with tempfile.TemporaryDirectory() as tmp:
                 config = DEFAULT_CONFIG.copy()
                 config["provider"] = "openai"
+                config["record_logs"] = True
                 config["translation_cache_path"] = str(Path(tmp) / "translation_cache.db")
                 http = HttpClient()
                 http.session.post = lambda *args, **kwargs: calls.append((args, kwargs)) or Response()
@@ -341,6 +342,33 @@ class TranslationCacheTests(unittest.TestCase):
         self.assertEqual((fresh.text, cached.text), ("你好", "你好"))
         self.assertIsNone(cached.provider_quality_signal)
         self.assertEqual(cached.heuristic_warning, "快取結果，未重新評分")
+
+    def test_disk_cache_follows_conversation_log_consent(self):
+        for label, record_logs, content in (("logs off", False, "both"), ("no text", True, "none"), ("original only", True, "original")):
+            with self.subTest(label), tempfile.TemporaryDirectory() as tmp:
+                db = Path(tmp) / "translation_cache.db"
+                config = {**DEFAULT_CONFIG, "provider": "local", "record_logs": record_logs, "conversation_log_content": content, "translation_cache_path": str(db)}
+                translator = Translator(config)
+                with patch.object(translator, "_local_translate", return_value="你好"):
+                    self.assertEqual(translator.translate("hello", "en", "zh-TW").text, "你好")
+                self.assertFalse(db.exists())
+
+    def test_cache_writes_prune_rows_older_than_retention(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "translation_cache.db"
+            with sqlite3.connect(db) as connection:
+                connection.execute("CREATE TABLE translations (request_fingerprint TEXT PRIMARY KEY, provider TEXT NOT NULL, source_language TEXT NOT NULL, target_language TEXT NOT NULL, source_text TEXT NOT NULL, translated_text TEXT NOT NULL)")
+                connection.execute("INSERT INTO translations VALUES ('old', 'local', 'en', 'zh', 'old text', '舊')")
+                connection.execute("PRAGMA user_version = 2")
+            connection.close()
+
+            cache_translation(db, "new", "local", "en", "zh", "hello", "你好", retention_days=7)
+
+            self.assertIsNone(cached_translation(db, "old"))
+            self.assertEqual(cached_translation(db, "new"), "你好")
+            with sqlite3.connect(db) as connection:
+                self.assertEqual(connection.execute("PRAGMA user_version").fetchone()[0], CACHE_SCHEMA_VERSION)
+            connection.close()
 
     def test_add_glossary_term_preserves_existing_terms(self):
         with tempfile.TemporaryDirectory() as tmp:

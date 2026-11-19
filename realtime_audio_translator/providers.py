@@ -240,9 +240,11 @@ class Translator:
             heuristic_warning = "翻譯結果與原文相同，請確認語言與模型"
         self._remember_cached(request_fingerprint, translated)
         self._remember_context(text, translated)
-        if persistent_cache_enabled and not (provider == "local" and not self.config.get("local_translate_url", "").strip() and translated == text):
+        # The disk cache holds full sentences, so it follows the user's conversation log consent and retention.
+        store_on_disk = bool(self.config.get("record_logs")) and self.config.get("conversation_log_content", "both") == "both"
+        if persistent_cache_enabled and store_on_disk and not (provider == "local" and not self.config.get("local_translate_url", "").strip() and translated == text):
             try:
-                cache_translation(db_path, request_fingerprint, provider, source_language, target_language, text, translated)
+                cache_translation(db_path, request_fingerprint, provider, source_language, target_language, text, translated, int(self.config.get("conversation_log_retention_days", 7)))
             except (OSError, sqlite3.Error, RuntimeError) as exc:
                 logging.getLogger(__name__).warning("Translation cache write unavailable (%s)", type(exc).__name__)
         return TranslationResult(self._apply_glossary(translated, glossary), heuristic_warning=heuristic_warning)

@@ -604,6 +604,7 @@ class ProvidersTests(unittest.TestCase):
                 db = Path(tmp) / "translation_cache.db"
                 config = DEFAULT_CONFIG.copy()
                 config["provider"] = "local"
+                config["record_logs"] = True
                 config["models_path"] = str(Path(tmp) / "models")
                 config["translation_cache_path"] = str(db)
                 translator = Translator(config)

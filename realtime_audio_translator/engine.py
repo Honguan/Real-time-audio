@@ -19,6 +19,9 @@ from .providers import HttpClient, TextToSpeech, Translator
 from .tts import play_linear16
 
 
+# Spoken text stays in memory for "fix last translation"; it is never written to state.json.
+MEMORY_ONLY_STATE_KEYS = frozenset({"last_source_text", "last_translated_text"})
+
 OverlayCallback = Callable[[str, str], None]
 StatusCallback = Callable[[str], None]
 
@@ -109,6 +112,8 @@ class RealtimeEngine:
         self._metrics_lock = threading.Lock()
         self._health_lock = threading.Lock()
         self._tts_queue_lock = threading.Lock()
+        self._state_write_lock = threading.Lock()
+        self._dirty_state_keys: set[str] = set()
         self._virtual_mic_cancel = threading.Event()
         self._speaker_translation_cancel = threading.Event()
         if self.virtual_mic_muted:
@@ -163,9 +168,10 @@ class RealtimeEngine:
                 if self._session == session:
                     self.status(self._t("離線翻譯模型載入失敗：{error}", error=exc))
                 return
-        session_counters = {"last_provider_error_count": 0, "last_rate_limit_count": 0, "last_max_queue_depth": 0, "last_dropped_segments": 0}
+        session_counters = {"last_provider_error_count": 0, "last_rate_limit_count": 0, "last_max_queue_depth": 0, "last_dropped_segments": 0, "last_source_text": "", "last_translated_text": ""}
         self.config.update(session_counters)
-        self._save_state(set(session_counters))
+        # Writing the cleared text keys also removes spoken text that older versions stored.
+        self._save_state(set(session_counters), include_memory_only=True)
         model_load_started = time.perf_counter()
         try:
             transcriber = AudioTranscriber(
@@ -254,6 +260,10 @@ class RealtimeEngine:
                 thread.join(max(0.0, deadline - time.monotonic()))
         alive = [thread for thread in threads if thread.is_alive()]
         pending_logs = [log for log in logs if not log.close(max(0.0, deadline - time.monotonic()))]
+        try:
+            self._flush_state()
+        except (OSError, ValueError):
+            pass  # Metrics are diagnostics only; a failed final write must not block stopping.
         with self._lifecycle_lock:
             self._retain_pending_logs(pending_logs)
             self.threads = [thread for thread in self.threads if thread not in threads or thread in alive]
@@ -674,6 +684,7 @@ class RealtimeEngine:
                     separator = "; " if config.get("app_language") == "en" else "；"
                     quality = separator + format_quality_status(snapshot, bool(config.get("advanced_mode")), config.get("app_language", "zh-TW"))
                     self._publish(session, self.status, self._t("{source}延遲 {latency:.2f} 秒", source=direction_label(direction, config.get("app_language", "zh-TW")), latency=latency) + quality + self._log_warning())
+                self._flush_state()
             except Exception as exc:
                 self._publish(session, self.status, self._t("{source}：{error}", source=direction_label(direction, config.get("app_language", "zh-TW")), error=exc))
             finally:
@@ -753,7 +764,7 @@ class RealtimeEngine:
             for pipeline in self.pipelines.values():
                 pipeline.metrics["last_tts_queue_depth"] = depth
             self.config["last_tts_queue_depth"] = depth
-            self._save_state({"last_tts_queue_depth"})
+            self._dirty_state_keys.add("last_tts_queue_depth")
 
     def _speak_translation(self, direction: str, translated: str, target: str, tts_device: str, session: str | None, timing: dict, cancel_event: threading.Event) -> float | None:
         tts_started = time.perf_counter()
@@ -865,7 +876,7 @@ class RealtimeEngine:
             values = {"last_provider_error_count": provider_errors, "last_rate_limit_count": rate_limits}
             self._pipeline(direction).metrics.update(values)
             self.config.update(values)
-            self._save_state(set(values))
+            self._dirty_state_keys.update(values)
 
     def _record_metrics(self, direction: str, values: dict, keys: set[str]) -> None:
         with self._metrics_lock:
@@ -876,8 +887,18 @@ class RealtimeEngine:
             if "last_dropped_segments" in keys:
                 updates["last_dropped_segments"] = sum(int(pipeline.metrics.get("last_dropped_segments", 0)) for pipeline in self.pipelines.values())
             self.config.update(updates)
-            self._save_state(keys)
+            self._dirty_state_keys.update(keys)
 
-    def _save_state(self, keys: set[str]) -> None:
+    def _flush_state(self) -> None:
+        # One state.json write per segment instead of one per metric update; disk I/O runs outside the metrics lock.
+        with self._state_write_lock:
+            with self._metrics_lock:
+                keys = self._dirty_state_keys - MEMORY_ONLY_STATE_KEYS
+                self._dirty_state_keys = set()
+                snapshot = dict(self.config)
+            if keys and self.state_root is not None:
+                save_config_state(self.state_root, snapshot, keys)
+
+    def _save_state(self, keys: set[str], include_memory_only: bool = False) -> None:
         if self.state_root is not None:
-            save_config_state(self.state_root, self.config, keys)
+            save_config_state(self.state_root, self.config, keys if include_memory_only else keys - MEMORY_ONLY_STATE_KEYS)

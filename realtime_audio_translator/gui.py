@@ -19,7 +19,7 @@ from .ai_memory import add_glossary_term
 from .ai_orchestrator import plan_session
 from .app_log import append_app_log
 from .commands import command_choices
-from .config import APP_DIR, DEFAULT_CONFIG, SETTING_CHOICES, SETTING_RANGES, clear_cache, clear_logs, ensure_glossary_file, load_config, log_files_to_clear, normalize_config, save_audio_devices, save_config, save_config_state, validate_language_pair
+from .config import APP_DIR, DEFAULT_CONFIG, SETTING_CHOICES, STATE_KEYS, SETTING_RANGES, clear_cache, clear_logs, ensure_glossary_file, load_config, log_files_to_clear, normalize_config, save_audio_devices, save_config, save_config_state, validate_language_pair
 from .engine import RealtimeEngine
 from .logbook import conversation_log_usage
 from .localization import SUPPORTED_LANGUAGES, setup_guide_text, translate, translate_known
@@ -1035,6 +1035,13 @@ class TranslatorApp(tk.Tk):
         if self._save():
             self.status.set(self._t("已交換語言：{source} → {target}", source=self._language_label(source), target=self._language_label(target)))
 
+    def _with_session_state(self, config: dict) -> dict:
+        # The engine updates its own config copy; read its latest metrics and last sentence, even after it stopped.
+        engine = self.engine or self.__dict__.get("_last_engine")
+        if engine is not None:
+            config.update({key: value for key, value in dict(engine.config).items() if key in STATE_KEYS})
+        return config
+
     def _config_from_vars(self) -> dict:
         config = self.config.copy()
         editable_keys = {key for _label, key in SETTING_ROWS}
@@ -1340,11 +1347,12 @@ class TranslatorApp(tk.Tk):
 
     def _fix_last_translation(self) -> None:
         self._save()
-        source = str(self.config.get("last_source_text") or "").strip()
+        latest = self._with_session_state(self.config.copy())
+        source = str(latest.get("last_source_text") or "").strip()
         if not source:
             self.status.set(self._t("沒有可修正的近期翻譯"))
             return
-        target = simpledialog.askstring(self._t("修正上次翻譯"), self._t("請輸入修正翻譯：\n{source}", source=source), initialvalue=str(self.config.get("last_translated_text") or ""))
+        target = simpledialog.askstring(self._t("修正上次翻譯"), self._t("請輸入修正翻譯：\n{source}", source=source), initialvalue=str(latest.get("last_translated_text") or ""))
         if not target:
             return
         if not messagebox.askyesno(self._t("加入術語表？"), self._t("是否將這個修正加入術語表？")):
@@ -1455,7 +1463,7 @@ class TranslatorApp(tk.Tk):
             save_config(APP_DIR, self.config)
 
     def _run_diagnostics(self) -> None:
-        config = self._config_from_vars()
+        config = self._with_session_state(self._config_from_vars())
         self._submit(
             self._t("正在執行診斷"),
             lambda: self.audio_diagnostics.collect(config, self.repo_root),
@@ -1618,7 +1626,7 @@ class TranslatorApp(tk.Tk):
         self.record_logs.set(bool(updated.get("record_logs", self.record_logs.get())))
 
     def _optimize_settings(self) -> None:
-        before = self._config_from_vars()
+        before = self._with_session_state(self._config_from_vars())
         target = runtime_dir(before)
 
         def work():
@@ -1865,6 +1873,7 @@ class TranslatorApp(tk.Tk):
             lambda message: self._post_ui("status", message, engine=engine),
             APP_DIR,
         )
+        self._last_engine = engine
         if not self.controller.start_engine(engine, self._engine_started):
             self.status.set(self._t("啟動工作已在進行"))
         else:

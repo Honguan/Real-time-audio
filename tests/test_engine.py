@@ -1984,5 +1984,19 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(engine.pipelines["me"].metrics["last_provider_quality_signal"], 0.6)
 
 
+class EngineStateWriteTests(unittest.TestCase):
+    def test_metrics_are_written_once_per_flush_and_spoken_text_stays_in_memory(self):
+        config = DEFAULT_CONFIG.copy()
+        engine = RealtimeEngine(Path("."), config, lambda speaker, mine: None, lambda message: None, Path("unused"))
+        with patch("realtime_audio_translator.engine.save_config_state") as save:
+            engine._record_metrics("me", {"last_latency_seconds": 1.0}, {"last_latency_seconds"})
+            engine._record_metrics("me", {"last_source_text": "secret", "last_translated_text": "秘密"}, {"last_source_text", "last_translated_text"})
+            self.assertEqual(save.call_count, 0)
+            engine._flush_state()
+        self.assertEqual(save.call_count, 1)
+        self.assertEqual(save.call_args.args[2], {"last_latency_seconds"})
+        self.assertEqual(engine.config["last_source_text"], "secret")
+
+
 if __name__ == "__main__":
     unittest.main()
