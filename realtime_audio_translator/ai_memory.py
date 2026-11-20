@@ -95,6 +95,14 @@ def cache_translation(db_path: Path, request_fingerprint: str, provider: str, so
             db.execute("DELETE FROM translations WHERE created_at < ?", (now - retention_days * 86400,))
 
 
+def clear_translations(db_path: Path) -> None:
+    if not db_path.exists():
+        return
+    _ensure_cache(db_path)
+    with closing(sqlite3.connect(db_path)) as db, db:
+        db.execute("DELETE FROM translations")
+
+
 def add_glossary_term(glossary_path: Path, source: str, target: str) -> None:
     source = source.strip()
     target = target.strip()

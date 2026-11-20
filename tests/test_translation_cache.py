@@ -353,6 +353,16 @@ class TranslationCacheTests(unittest.TestCase):
                     self.assertEqual(translator.translate("hello", "en", "zh-TW").text, "你好")
                 self.assertFalse(db.exists())
 
+    def test_translator_clears_disk_cache_without_log_consent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "translation_cache.db"
+            cache_translation(db, "old", "local", "en", "zh-TW", "hello", "舊翻譯")
+            config = {**DEFAULT_CONFIG, "provider": "local", "record_logs": False, "translation_cache_path": str(db)}
+            translator = Translator(config)
+            with patch.object(translator, "_local_translate", return_value="你好"):
+                self.assertEqual(translator.translate("hello", "en", "zh-TW").text, "你好")
+            self.assertIsNone(cached_translation(db, "old"))
+
     def test_cache_writes_prune_rows_older_than_retention(self):
         with tempfile.TemporaryDirectory() as tmp:
             db = Path(tmp) / "translation_cache.db"
